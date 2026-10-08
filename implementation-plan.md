@@ -104,7 +104,7 @@ Epics execute in order; within an epic, independent tasks may run together (note
   - After: —
   - Closes: tech-reviewer required finding 12 (second of two ADRs)
 
-- [ ] **T4 — Database schema and first migration**
+- [x] **T4 — Database schema and first migration**
   - Files: `src/db/schema.ts` (new), `drizzle.config.ts` (new), `drizzle/0001_init.sql` (committed)
   - Approach: Declare every table from spec §11's data model: `brand` (unique `slug`, `updated_by`/`updated_at`), `market`, `brand_market` (incl. `ga4_property_id` nullable), `research_instruction` (unique on `brand_id, market_id, version`), `channel` (unique on `type, external_ref`), `insight_route`, `research_run` (status enum incl. `cancelled`; **partial unique index** on `(brand_id, market_id)` where `status in ('queued','running')`), `evidence` (unique on `run_id, source, external_id`; `sensitivity_flag` nullable), `insight` (`delivery_status` enum), `insight_evidence`, `app_user`, `audit_log`. Every foreign key has an explicit `ON DELETE` (`restrict` for brand/market references, `cascade` for child join rows). Generate SQL with `drizzle-kit generate` and commit it; migrations stay forward-compatible (expand/contract) per devops review required finding.
   - Acceptance: Migration applies to an empty database and creates every table with its stated constraints.
@@ -112,7 +112,7 @@ Epics execute in order; within an epic, independent tasks may run together (note
   - After: —
   - Closes: tech-reviewer required findings 7, 9, 10, 11 (DB-level duplicate-run guard, evidence uniqueness, `updated_at`/`updated_by`, other uniqueness constraints)
 
-- [ ] **T5 — Fill in `verify.sh`'s migration + build steps**
+- [x] **T5 — Fill in `verify.sh`'s migration + build steps**
   - Files: `verify.sh` (modified)
   - Approach: Add the migration-check and `pnpm build` steps to the harness so every later epic's gate actually exercises T4's schema.
   - Acceptance: `bash verify.sh` prints `GATE: PASS` against the current (minimal) app.
@@ -407,6 +407,8 @@ One line per completed task, appended by the executor.
 [E1 · 2/33] T3 — ADR 0002 (last30days subprocess) written: decisions/0002-last30days-subprocess.md
 [E10 · 3/33] T31 — Repository gate passed: BetterCollective/better-craft-audience-insights-engine exists, template-derived, pushable. Cloned to /Users/mam/Documents/Projects/audience-insights-engine, chart renamed, spec/plan/ADRs moved to repo root and pushed to branch bettercraft/audience-insights-engine (commit 5e90d8c).
 [E10 · 3/33] ECR terraform-bc entry requested: github.com/BetterCollective/better-craft-audience-insights-engine/issues/1 (blocks first image push, not the code).
+[E1 · 4/33] T4 — Database schema is real: all 12 tables from spec §11 exist, migrated cleanly to an empty Postgres, with the partial unique index preventing two concurrent runs for the same brand+market confirmed live.
+[E1 · 5/33] T5 — Verification harness now checks migrations and builds the app in one command (`bash verify.sh` → `GATE: PASS`); note: T1 (copying `verify.sh` from the template) had not actually been done despite being marked otherwise, so this task also performed that copy as a prerequisite.
 ```
 
 ## Verification summary
