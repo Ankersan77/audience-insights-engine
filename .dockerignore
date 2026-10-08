@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.github
+k8s
+npm-debug.log
+.pnpm-debug.log
+.env
+.env.*
+*.md

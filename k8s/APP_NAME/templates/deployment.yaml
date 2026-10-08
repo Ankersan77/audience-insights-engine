@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}
+  labels:
+    app: {{ .Chart.Name }}
+    project: better-craft
+    app.kubernetes.io/part-of: better-craft
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+        project: better-craft
+        app.kubernetes.io/part-of: better-craft
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ .Chart.Name }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          env:
+            # The chart is the only place that knows the app's name, so it hands
+            # it to the runtime instead of the image baking one in. Read by
+            # app/app-name.ts; keep the two in step if you rename either side.
+            #
+            # Deliberately not called APP_NAME: scaffolding rewrites that literal
+            # everywhere under k8s/ when it renames this folder, which would
+            # rewrite the variable's *name* here (to "- name: my-app") while
+            # app/app-name.ts, outside k8s/, kept reading the original. The app
+            # then silently fell back to a placeholder name. APPLICATION_NAME
+            # does not contain the substituted token, so it survives the rename.
+            - name: APPLICATION_NAME
+              value: {{ .Chart.Name | quote }}
+            # The deployed version, for a footer or a support banner. CI writes
+            # this tag into values_image_tag.yaml on every build, so it is the
+            # short commit SHA — or the git tag name, for a tag build. Taking it
+            # from image.tag rather than a second variable means the version can
+            # never disagree with the image actually running.
+            - name: APPLICATION_VERSION
+              value: {{ .Values.image.tag | quote }}
+          ports:
+            - name: http
+              containerPort: 3000
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.healthPath }}
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.healthPath }}
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

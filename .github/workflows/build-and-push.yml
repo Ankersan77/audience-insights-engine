@@ -1,0 +1,227 @@
+name: Build and push
+
+on:
+  push:
+    branches: [main]
+    tags: ['*']
+    # The image-tag commit this workflow makes lands under k8s/, so ignoring that
+    # path stops the workflow re-triggering itself. Chart-only edits need no
+    # rebuild either — ArgoCD syncs them straight from git.
+    paths-ignore:
+      - 'k8s/**'
+
+permissions:
+  id-token: write # OIDC federation to the AWS role
+  contents: write # commit the resolved image tag back to main
+
+# Serialise: every run ends in a push to main, so overlapping runs would race.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    # Never build the template repository itself. It matches ^better-craft- the
+    # same way app repos do, so the ApplicationSet filter alone is not enough.
+    if: >-
+      github.event.repository.is_template != true
+      && github.repository != 'BetterCollective/better-craft-ts-app-template'
+    runs-on: ubuntu-24.04
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+      app_name: ${{ steps.check.outputs.app_name }}
+      ecr_repository: ${{ steps.check.outputs.ecr_repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: check
+        run: |
+          # Nothing in this file is hand-edited. Two names, both derived:
+          #   APP_NAME   full repo name — the chart folder, because ArgoCD renders
+          #              path k8s/{{repository}}
+          #   SHORT_NAME repo name minus the better-craft- prefix — Chart.yaml
+          #              name, the ECR path and the hostname
+          APP_NAME="${GITHUB_REPOSITORY##*/}"
+          SHORT_NAME="${APP_NAME#better-craft-}"
+          ECR_REPOSITORY="better-craft/$SHORT_NAME/production"
+          echo "app_name=$APP_NAME" >> "$GITHUB_OUTPUT"
+          echo "ecr_repository=$ECR_REPOSITORY" >> "$GITHUB_OUTPUT"
+
+          # Untouched scaffolding from the template. Expected on the first push of
+          # a brand-new repo, so skip quietly rather than failing.
+          if [ -d "k8s/APP_NAME" ]; then
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Skipped — template placeholders not renamed"
+              echo
+              echo "\`k8s/APP_NAME\` is still present, so there is no chart to deploy yet."
+              echo "Run the rename, then push again:"
+              echo
+              echo '```bash'
+              echo "git mv k8s/APP_NAME \"k8s/$APP_NAME\""
+              echo "grep -rl SHORT_NAME \"k8s/$APP_NAME\" | xargs perl -pi -e \"s/SHORT_NAME/$SHORT_NAME/g\""
+              echo '```'
+              echo
+              echo "Then add \`$SHORT_NAME = { registry_name = \"$ECR_REPOSITORY\", retention_days = 7 }\`"
+              echo "to \`local.ecr_repositories\` in terraform-bc."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Rename started but wrong or incomplete — fail rather than ship
+          # something ArgoCD cannot sync.
+          fail=0
+          case "$APP_NAME" in
+            better-craft-?*) ;;
+            *)
+              echo "::error::Repo is named $APP_NAME. The ApplicationSet only discovers repos matching ^better-craft-, so this one would never be deployed."
+              fail=1
+              ;;
+          esac
+          if [ ! -d "k8s/$APP_NAME" ]; then
+            echo "::error::k8s/$APP_NAME does not exist. The ApplicationSet renders path k8s/{{repository}}, so the chart folder must be named exactly after the repo."
+            fail=1
+          else
+            if grep -rIl 'SHORT_NAME' "k8s/$APP_NAME" >/dev/null 2>&1; then
+              echo "::error::SHORT_NAME still appears in: $(grep -rIl 'SHORT_NAME' "k8s/$APP_NAME" | tr '\n' ' ')"
+              fail=1
+            fi
+            # The chart and this workflow must agree on the ECR path, or CI pushes
+            # an image the Deployment never pulls.
+            if ! grep -qE "^ *repository: .*/${ECR_REPOSITORY}[[:space:]]*$" "k8s/$APP_NAME/values.yaml"; then
+              echo "::error::image.repository in k8s/$APP_NAME/values.yaml does not end in $ECR_REPOSITORY — the chart and the build would target different ECR repositories."
+              fail=1
+            fi
+          fi
+          [ "$fail" -eq 0 ] || exit 1
+
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+
+  build-and-push:
+    needs: guard
+    if: needs.guard.outputs.proceed == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      APP_NAME: ${{ needs.guard.outputs.app_name }}
+      ECR_REPOSITORY: ${{ needs.guard.outputs.ecr_repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm has to be on PATH before setup-node, or `cache: pnpm` cannot resolve
+      # the store path. Version comes from packageManager in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Add the app's own lint/test scripts to package.json and they run here
+      # automatically. --if-present goes before the script name; pnpm forwards
+      # anything after it to the script itself.
+      #
+      # Deliberately no `pnpm run build` here: the Dockerfile's builder stage
+      # already runs it, and doing it twice cost ~17s a run for nothing. A broken
+      # build still fails CI, just at the image step instead of this one.
+      - name: Verify application
+        run: |
+          pnpm run --if-present lint
+          pnpm run --if-present test
+
+      - uses: azure/setup-helm@v4
+
+      # Renders the chart exactly the way ArgoCD will.
+      - name: Verify Helm chart
+        run: |
+          helm lint "k8s/$APP_NAME" \
+            -f "k8s/$APP_NAME/values.yaml" \
+            -f "k8s/$APP_NAME/values_image_tag.yaml"
+          helm template "$APP_NAME" "k8s/$APP_NAME" \
+            -f "k8s/$APP_NAME/values.yaml" \
+            -f "k8s/$APP_NAME/values_image_tag.yaml" >/dev/null
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Shared role for every better-craft-* repo. Set
+      # AWS_BETTER_CRAFT_ROLE_TO_ASSUME as an organisation secret so repos created
+      # from this template inherit it — it is never a per-app value.
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_BETTER_CRAFT_ROLE_TO_ASSUME }}
+          aws-region: eu-west-1
+          role-session-name: ${{ env.APP_NAME }}-gha
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr-login
+
+      - name: Resolve image tags
+        id: meta
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$REF_TYPE" = "tag" ]; then
+            TAG="$REF_NAME"
+          else
+            TAG="$(echo "$SHA" | cut -c1-7)"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "tags=$REGISTRY/$ECR_REPOSITORY:$TAG,$REGISTRY/$ECR_REPOSITORY:latest" >> "$GITHUB_OUTPUT"
+          echo "Building $REGISTRY/$ECR_REPOSITORY:$TAG"
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          # linux/amd64 explicitly: the cluster's nodes are overwhelmingly x86,
+          # and an arm64 image (what a build from an Apple Silicon machine
+          # produces) fails to pull with "no match for platform in manifest".
+          platforms: linux/amd64
+          # No provenance attestation. It adds a second, unrunnable
+          # "unknown/unknown" entry to the image index in ECR, which makes the
+          # manifest harder to read when diagnosing exactly that platform error.
+          provenance: false
+          #
+          # No cache-from/cache-to here on purpose. type=gha,mode=max measured at
+          # 58.7s per run — 60% of the whole image step — for zero CACHED layers.
+          # It cannot pay off: `COPY . .` sits above `pnpm run build`, so every
+          # push to main invalidates the build layer by definition, leaving only
+          # the ~13s install layer as a possible hit. The pnpm store cache on
+          # setup-node above is the one that actually earns its keep.
+
+      # GitOps handoff. ArgoCD only redeploys when git changes, so the tag has to
+      # be written back — pinning `latest` in the chart would never resync.
+      # Always committed onto main, including for tag builds.
+      - name: Pin the new image tag in the chart
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          git fetch --depth=1 origin main
+          git checkout -B ci-deploy FETCH_HEAD
+
+          VALUES_FILE="k8s/$APP_NAME/values_image_tag.yaml"
+          {
+            echo "# Written by .github/workflows/build-and-push.yml. Do not edit by hand."
+            echo "image:"
+            echo "  tag: \"$TAG\""
+          } > "$VALUES_FILE"
+
+          git config user.email "devops@bettercollective.com"
+          git config user.name "GitHub Action"
+          git add "$VALUES_FILE"
+
+          if git diff --staged --quiet; then
+            echo "Image tag unchanged — nothing to commit."
+          else
+            git commit -m "chore(deploy): $APP_NAME image tag $TAG"
+            git push origin HEAD:main
+          fi
