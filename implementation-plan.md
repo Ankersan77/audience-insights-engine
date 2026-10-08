@@ -158,7 +158,7 @@ Epics execute in order; within an epic, independent tasks may run together (note
 
 ### E3 — Sign in and see the brand list ← first runnable point
 
-- [ ] **T10 — OneLogin OIDC sign-in**
+- [x] **T10 — OneLogin OIDC sign-in**
   - Files: `src/lib/auth.ts`, `src/app/api/auth/[...route]/route.ts` (new), `.env.example` (modified)
   - Approach: Authorization Code + PKCE against the OneLogin discovery URL read from `process.env.ONELOGIN_DISCOVERY_URL`; client ID/secret from `process.env.ONELOGIN_CLIENT_ID`/`ONELOGIN_CLIENT_SECRET` (SSM `remoteRef`, never committed). Session cookie `HttpOnly`, `Secure`, `SameSite=Lax`. Role (`admin`/`viewer`) mapped from the OIDC `groups`/role claim at sign-in and written to `app_user`; unrecognised users default to `viewer`.
   - Acceptance: An unauthenticated request to `/brands` redirects to OneLogin; a completed sign-in lands back on `/brands` with the session cookie set.
@@ -166,7 +166,7 @@ Epics execute in order; within an epic, independent tasks may run together (note
   - After: T4
   - Closes: Rule 7 (OneLogin, not Firebase, for an internal tool)
 
-- [ ] **T11 — Role-gated navigation and FR22's render rule**
+- [x] **T11 — Role-gated navigation and FR22's render rule**
   - Files: `src/lib/roles.ts` (new), `src/components/AppShell.tsx` (modified)
   - Approach: A `useRole()` hook/server helper; the nav shell and every admin-only control (add brand, edit instructions, connect channel, accept/discard insight) is conditionally **not rendered at all** for a `viewer` — never rendered-then-disabled. `permission-denied` is reserved for a viewer hitting an admin route/API directly.
   - Acceptance: Signed in as a seeded `viewer` user, no admin controls appear anywhere in the UI; a direct `POST` to an admin API route from a viewer session returns 403.
@@ -174,14 +174,14 @@ Epics execute in order; within an epic, independent tasks may run together (note
   - After: T10
   - Closes: UX review required finding 1 (FR22)
 
-- [ ] **T12 — Audit log on every admin write**
+- [x] **T12 — Audit log on every admin write**
   - Files: `src/lib/audit.ts` (new)
   - Approach: One helper, `recordAudit(userId, action, entityType, entityId, before, after)`, called from every mutating API route built from here on (brand, research instruction, channel, insight decision). Append-only; no update/delete path exposed.
   - Acceptance: Creating a brand (T13) inserts one `audit_log` row with the correct `before`/`after`.
   - Check: One integration test or manual DB check after T13's create-brand action.
   - After: T4
 
-- [ ] **T13 — Brand list and create/archive**
+- [x] **T13 — Brand list and create/archive**
   - Files: `src/app/brands/page.tsx`, `src/db/queries/brands.ts` (new)
   - Approach: `DataTable` of brands with a readiness indicator per row ("ready to run" / "not ready — no channel mapped" / "not ready — no research instructions", computed from `research_instruction` and `insight_route` existence). Create-brand form (name, slug, description, markets multi-select from the `market` reference table). Archive/unarchive action, not a delete.
   - Acceptance: `/brands` renders the empty state, then a created brand with a correct readiness reason; archiving removes it from the "ready to run" picker (E6) without deleting history.
@@ -413,6 +413,10 @@ One line per completed task, appended by the executor.
 [E2 · 7/33] T7 — The admin panel now has a shared navigation shell (Brands/Channels/Insights/Runs, placeholder signed-in user) that collapses to a hamburger below 768px and themes via tokens only.
 [E2 · 8/33] T8 — `/showroom` shows the shared `DataTable` (sticky header, sortable numeric column, keyboard-navigable rows) and `AsyncCombobox` (full ARIA combobox/listbox/option pattern, arrow/Enter/Escape keyboard support) in every state — loading, empty, error, success.
 [E2 · 9/33] T9 — `/showroom` also shows a focus-trapping `ConfirmDialog` (default and destructive variants) and a `StatusBadge` pill for every named run/insight status.
+[E3 · 10/33] T10 — OneLogin OIDC sign-in (Authorization Code + PKCE) is written end to end in `src/lib/auth.ts` and `app/api/auth/[...route]/route.ts`, and type-checks cleanly. **Live deferral, as the plan anticipates:** `ONELOGIN_DISCOVERY_URL`/`ONELOGIN_CLIENT_ID`/`ONELOGIN_CLIENT_SECRET` are not provisioned in this environment (pending IT Helpdesk); hitting `/api/auth/login` returns a plain 503 "Sign-in is not available yet" instead of a fake pass. Everything downstream of a session existing (role mapping, app_user upsert, the session cookie) was verified against the live local Postgres database using a hand-crafted, correctly-signed session cookie in place of a real OneLogin round trip.
+[E3 · 11/33] T11 — A viewer signed in locally sees no "Add brand" control or archive/unarchive buttons anywhere on `/brands` (never rendered, not disabled); a direct `POST /api/brands` and `PATCH /api/brands/:id` from a viewer session both returned a live 403, confirmed against the running app and a real Postgres-backed session lookup.
+[E3 · 12/33] T12 — Every brand create/archive/unarchive call now writes one `audit_log` row with the correct before/after JSON, confirmed live: a create produced `{action: "create", before: null, after: {...}}` and an archive produced `{action: "archive", before: {...status:"active"}, after: {...status:"archived"}}`.
+[E3 · 13/33] T13 — `/brands` lists brands from a real Postgres database with a live readiness reason per row ("not ready — no research instructions" for a brand with none yet), a working create-brand form (name/description/markets, seeding US/GR/GB/DK/SE into the `market` table since it was empty), and an archive/unarchive action that flips `status` without deleting the row — all exercised against a locally running Postgres 16 instance, not just type-checked.
 ```
 
 ## Verification summary
@@ -466,6 +470,12 @@ One line per completed task, appended by the executor.
 - `app_user` has no unique constraint on `sso_subject_id` or `email`. Worth adding before relying on either as a natural key for lookups — not in the current plan, not acted on now.
 - T6/T8/T13's file paths say `src/app/...`, but the template this repo was cloned from (T1-T5, pre-dating this plan's app-router pages) already put Next's app router at the repo root (`app/`), not under `src/`. Next.js does not support both `app/` and `src/app/` at once. E2 (T8) built `app/showroom/page.tsx` at the established root location instead; `src/db`, `src/lib`, `src/components` stay under `src/` exactly as the plan says. Future tasks referencing `src/app/...` should read it as `app/...`.
 - **`verify.sh`'s "platform contracts" step fails in a plan-executor subagent's shell with "BetterCraft plugin not found"**, even though the code is correct. The script looks for `better_craft_platform.py` via `$CLAUDE_PLUGIN_ROOT` or under `$HOME/.claude/plugins`; neither resolves in this environment, because the plugin is installed under a session-specific `local-agent-mode-sessions/.../rpm/plugin_<id>/` path, confirmed on the orchestrating session too (`CLAUDE_PLUGIN_ROOT` is empty there as well). **Fix, confirmed working:** export `CLAUDE_PLUGIN_ROOT` to that plugin root before running `bash verify.sh` — with it set, the full gate (including platform contracts) passes cleanly. Every future epic dispatch must export this in its shell before calling `verify.sh`, or its gate will show a false `FAIL` unrelated to the code it wrote.
+- **No files under `src/db/` or `app/api/` existed yet for a shared database client or for mutating API routes**, even though T10 (app_user upsert), T12 (audit inserts), and T13 (brand create/archive) all need one, and T11's own acceptance criterion ("a direct POST to an admin API route from a viewer session returns 403") requires an actual route to test against. Added as necessary plumbing, not a scope change: `src/db/client.ts` (shared Drizzle/`pg` pool, the standard pattern for this ORM), `app/api/brands/route.ts` (POST, admin-gated, used by T13's create form), and `app/api/brands/[id]/route.ts` (PATCH, admin-gated, used by T13's archive/unarchive). All three are exercised live in the T10–T13 verification, not just type-checked.
+- **`app/brands/page.tsx` needed a second, small client-component file** (`app/brands/BrandsTable.tsx`) that was not in T13's file list. Next.js's server/client boundary does not allow passing function props (e.g. `DataTable`'s per-column `render`) from a Server Component across to a Client Component, so the interactive half of the brands screen (the table, the create form, the archive button) has to live in its own `"use client"` file; the page itself stays a Server Component purely for `requireSession()` and the initial data fetch. Same category as the `src/db/client.ts` note above — framework-forced plumbing, not an added feature.
+- **`openid-client` (v6.8.8) was added as a new dependency for T10**, per the plan's own allowance ("an OIDC client library needed for T10 - e.g. 'openid-client' is a reasonable standard choice if nothing exists"); nothing else in `node_modules` covered Authorization Code + PKCE against an OIDC discovery document. No other dependency was added.
+- **A `SESSION_SECRET` environment variable was introduced** (added to `.env.example`) to HMAC-sign the session cookie. The plan specifies the cookie's transport properties (`HttpOnly`/`Secure`/`SameSite=Lax`) but not its signing mechanism; since there is no session table in the schema, the cookie itself carries the signed `app_user` payload, and a secret is unavoidable plumbing for that — not a new technology choice (plain Node `crypto`, no new library).
+- **`.pnpm-store/` was created locally** (by `pnpm add openid-client`) and was not in `.gitignore`; added it, since it is build-tool cache, not product source.
+- **A stale `.next/` build cache from the initial repo scaffold caused a spurious Turbopack `TurbopackInternalError` ("Operation not permitted" binding to a port)** on the first `pnpm build` of this epic — unrelated to any code in this epic. `rm -rf .next` before rebuilding resolved it; worth remembering for future epics if `pnpm build` ever fails with the same port-binding error immediately after a long-idle `.next/` directory.
 
 ## Open questions
 

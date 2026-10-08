@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
+import type { Role } from "@/src/lib/auth";
 
 // The four sections of the admin panel (spec epics E4/E5/E7/E6). "Settings" is
-// not a v1 destination — nothing in this plan builds one yet.
+// not a v1 destination — nothing in this plan builds one yet. Every item here
+// is visible to both roles (spec: no per-brand access restriction); it is the
+// admin-only controls *inside* each page (add brand, edit instructions, ...)
+// that are role-gated, at the page level — see src/lib/roles.ts.
 const NAV_ITEMS = [
   { label: "Brands", href: "/brands" },
   { label: "Channels", href: "/channels" },
@@ -13,23 +17,31 @@ const NAV_ITEMS = [
   { label: "Runs", href: "/runs" },
 ] as const;
 
-// Stand-in for the signed-in user until E3 wires up OneLogin sign-in and
-// `useRole()` (T10/T11). Replacing this is an E3 task, not a T7 concern.
-const PLACEHOLDER_USER = { name: "Signed-in user", role: "admin" } as const;
+export type AppShellUser = { name: string; role: Role };
 
-function UserBadge() {
+// Used only where no real session exists yet (e.g. /showroom, which is not
+// behind sign-in). A real page passes its own `user` from `requireSession()`.
+const SHOWROOM_PLACEHOLDER_USER: AppShellUser = { name: "Showroom", role: "admin" };
+
+function UserBadge({ user }: { user: AppShellUser }) {
   return (
     <div className="flex items-center gap-2 text-sm text-[var(--nav-text)]">
       <span
         aria-hidden="true"
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--button-primary-bg)] text-xs font-semibold text-[var(--button-primary-text)]"
       >
-        {PLACEHOLDER_USER.name.charAt(0)}
+        {user.name.charAt(0)}
       </span>
       <span className="flex flex-col leading-tight">
-        <span className="font-medium">{PLACEHOLDER_USER.name}</span>
-        <span className="text-xs text-muted capitalize">{PLACEHOLDER_USER.role}</span>
+        <span className="font-medium">{user.name}</span>
+        <span className="text-xs text-muted capitalize">{user.role}</span>
       </span>
+      <Link
+        href="/api/auth/logout"
+        className="ml-2 text-xs text-muted underline-offset-2 hover:text-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+      >
+        Sign out
+      </Link>
     </div>
   );
 }
@@ -40,7 +52,14 @@ function UserBadge() {
  * only from `src/styles/tokens.css` (via the `--nav-*` custom properties and
  * the existing Tailwind colour utilities); no component-level overrides.
  */
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  user = SHOWROOM_PLACEHOLDER_USER,
+}: {
+  children: ReactNode;
+  /** The signed-in user, from `requireSession()` on the server. Falls back to a showroom placeholder when omitted. */
+  user?: AppShellUser;
+}) {
   const [navOpen, setNavOpen] = useState(false);
   const pathname = usePathname();
 
@@ -72,7 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           </svg>
         </button>
-        <UserBadge />
+        <UserBadge user={user} />
       </header>
 
       <nav
@@ -102,7 +121,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           );
         })}
         <div className="mt-auto hidden pt-4 md:block">
-          <UserBadge />
+          <UserBadge user={user} />
         </div>
       </nav>
 
