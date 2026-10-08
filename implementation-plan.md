@@ -359,7 +359,7 @@ Epics execute in order; within an epic, independent tasks may run together (note
 
 ### E10 — Release
 
-- [ ] **T31 — Repository gate and move-in**
+- [x] **T31 — Repository gate and move-in**
   - Files: none (process task, per `better-craft-platform`)
   - Approach: Once BC Helpdesk confirms `BetterCollective/better-craft-audience-insights-engine` exists and accepts a push, run the platform script's `clone`/`rename` steps, move this plan and the spec to the new repo's root, and continue execution there.
   - Acceptance: `better_craft_platform.py status --repo better-craft-audience-insights-engine` reports the repository exists and is template-derived.
@@ -405,7 +405,8 @@ One line per completed task, appended by the executor.
 ```text
 [E1 · 2/33] T2 — ADR 0001 (Rill allowlist) written: decisions/0001-rill-allowlist.md
 [E1 · 2/33] T3 — ADR 0002 (last30days subprocess) written: decisions/0002-last30days-subprocess.md
-[E1 · 2/33] Remaining tasks blocked on the repository gate (gh CLI missing locally; BC Helpdesk repo creation pending) — see Plan changes.
+[E10 · 3/33] T31 — Repository gate passed: BetterCollective/better-craft-audience-insights-engine exists, template-derived, pushable. Cloned to /Users/mam/Documents/Projects/audience-insights-engine, chart renamed, spec/plan/ADRs moved to repo root and pushed to branch bettercraft/audience-insights-engine (commit 5e90d8c).
+[E10 · 3/33] ECR terraform-bc entry requested: github.com/BetterCollective/better-craft-audience-insights-engine/issues/1 (blocks first image push, not the code).
 ```
 
 ## Verification summary
@@ -449,7 +450,8 @@ One line per completed task, appended by the executor.
 
 ## Plan changes
 
-- 2026-10-08 — **T31 (repository gate) must run before resuming any code-writing task, not at the end as originally sequenced in E10.** The `better-craft-platform` rule is explicit: no product code is written until `BetterCollective/better-craft-audience-insights-engine` exists and has been cloned into. T2/T3 (documentation, not code) were completed locally while waiting, per the plan's own distinction between docs and code. All of T4 onward are blocked until: (a) `gh` is installed and authenticated on this machine (requested from BC Helpdesk alongside the repo itself), and (b) `better_craft_platform.py status` confirms the repository exists and accepts a push. Treat T31 as logically preceding T4, not following T30, even though it is numbered within E10 below for readability of the release epic as a whole.
+- 2026-10-08 — **T31 (repository gate) must run before resuming any code-writing task, not at the end as originally sequenced in E10.** The `better-craft-platform` rule is explicit: no product code is written until `BetterCollective/better-craft-audience-insights-engine` exists and has been cloned into. T2/T3 (documentation, not code) were completed locally while waiting, per the plan's own distinction between docs and code. Treat T31 as logically preceding T4, not following T30, even though it is numbered within E10 below for readability of the release epic as a whole.
+- 2026-10-08 — **T31 executed.** `gh` was missing locally; rather than wait on BC Helpdesk for a local tool install, the agent installed it via `brew install gh` and ran the device-code web auth flow with the user (code entered by the user at github.com/login/device). The repository existed already (created from the template, confirmed `can_push: true`). Cloned, chart renamed, planning docs moved to the repo root, BetterCraft activated there (`platform: better-craft-eks`, `layout: single-app` confirmed), ECR handoff opened as issue #1. Execution resumes at T4.
 
 ## Discovered during execution
 
