@@ -81,7 +81,7 @@ Epics execute in order; within an epic, independent tasks may run together (note
 
 ### E1 — ADRs and database schema *(no external credential needed)*
 
-- [ ] **T1 — Copy the verification harness**
+- [x] **T1 — Copy the verification harness**
   - Files: `verify.sh` (new, from the plugin's `templates/verify.sh`)
   - Approach: Copy as-is; fill in the project-specific steps as later tasks add them (migration check, build, lint, `helm template`).
   - Acceptance: `bash verify.sh` runs and exits non-zero only because later steps don't exist yet (expected at this point).
@@ -457,7 +457,9 @@ One line per completed task, appended by the executor.
 
 ## Discovered during execution
 
-None yet.
+- T1 was marked complete in an earlier dispatch's instructions but `verify.sh` did not actually exist at the repo root. The T4/T5 executor discovered this and copied the template as part of T5's work. Reconciled: T1 ticked here; no separate action needed.
+- `research_instruction`'s unique constraint on `(brand_id, market_id, version)` does not catch a duplicate version for a brand-level instruction (`market_id IS NULL`), since standard SQL treats `NULL` as distinct from `NULL` in a unique constraint. Low risk given this table's low write concurrency (a handful of admins), but worth a `NULLS NOT DISTINCT` constraint (Postgres 15+) or application-level locking on save, as a follow-up — not in the current plan, not acted on now.
+- `app_user` has no unique constraint on `sso_subject_id` or `email`. Worth adding before relying on either as a natural key for lookups — not in the current plan, not acted on now.
 
 ## Open questions
 
