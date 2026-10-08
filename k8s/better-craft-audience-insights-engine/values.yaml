@@ -1,8 +1,8 @@
-# RENAME every SHORT_NAME below: the repo name with the better-craft- prefix
+# RENAME every audience-insights-engine below: the repo name with the better-craft- prefix
 # stripped (better-craft-my-app -> my-app).
 
 image:
-  repository: 227843491785.dkr.ecr.eu-west-1.amazonaws.com/better-craft/SHORT_NAME/production
+  repository: 227843491785.dkr.ecr.eu-west-1.amazonaws.com/better-craft/audience-insights-engine/production
   # Overridden by values_image_tag.yaml, which CI rewrites on every build.
   # This value is only the fallback for a standalone `helm template`.
   tag: latest
@@ -19,7 +19,7 @@ healthPath: /healthz
 ingress:
   enabled: true
   className: better-craft-alb # dedicated better-craft ALB; the default and, for now, the only one
-  host: SHORT_NAME.better-craft.bettercollective.dev
+  host: audience-insights-engine.better-craft.bettercollective.dev
   # Name of the shared better-craft ALB. A platform-wide constant — every app
   # must set the identical value, since they all land on the same load balancer
   # and the first Ingress reconciled is the one that names it. Terraform in

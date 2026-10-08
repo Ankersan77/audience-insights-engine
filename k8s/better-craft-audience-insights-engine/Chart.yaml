@@ -4,7 +4,7 @@ apiVersion: v2
 # name for ArgoCD, while everything this chart renders is named from
 # .Chart.Name, and the IRSA trust policy in the app's per-app Terraform (if it
 # has any) keys off that same ServiceAccount name.
-name: SHORT_NAME
+name: audience-insights-engine
 description: A better-craft application
 type: application
 version: 0.1.0
