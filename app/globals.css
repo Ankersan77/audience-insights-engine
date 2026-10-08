@@ -1,35 +1,8 @@
 @import "tailwindcss";
-
-/* Better Collective brand palette, sampled from bettercollective.com.
-   #00745e is by far the dominant colour on the marketing site; #98e9c9 is its
-   light counterpart and #00c358 the bright accent.
-
-   The teal clears WCAG AA on white (5.74:1) but only reaches 3.45:1 on a
-   near-black background, so dark mode promotes the mint to accent duty
-   (13.99:1) rather than reusing the teal. Keep that swap if you retheme. */
-:root {
-  --brand-teal: #00745e;
-  --brand-mint: #98e9c9;
-  --brand-green: #00c358;
-
-  --background: #ffffff;
-  --foreground: #171717;
-  --muted: #52525b;
-  --surface: #f7f9f8;
-  --border: #e4e7e6;
-  --accent: var(--brand-teal);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --muted: #a1a1aa;
-    --surface: #131615;
-    --border: #26302c;
-    --accent: var(--brand-mint);
-  }
-}
+/* All colour is defined once, in src/styles/tokens.css (semantic tokens,
+   light + dark). Nothing below re-declares a colour value — it only maps the
+   core subset onto Tailwind utility names so existing classes keep working. */
+@import "../src/styles/tokens.css";
 
 @theme inline {
   --color-background: var(--background);

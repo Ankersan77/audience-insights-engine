@@ -124,21 +124,21 @@ Epics execute in order; within an epic, independent tasks may run together (note
 
 ### E2 — Showroom *(no external credential needed)*
 
-- [ ] **T6 — Design tokens**
+- [x] **T6 — Design tokens**
   - Files: `src/styles/tokens.css` (new, copied from the plugin's `ui-design` neutral tokens asset)
   - Approach: Copy as-is. Semantic tokens only from here on; no component ever references a raw colour value.
   - Acceptance: `src/styles/tokens.css` exists and is imported once, at the app root.
   - Check: `pnpm build` succeeds with the import in place.
   - After: T1
 
-- [ ] **T7 — Shared navigation shell and layout primitives**
+- [x] **T7 — Shared navigation shell and layout primitives**
   - Files: `src/components/AppShell.tsx`, `src/components/PageHeader.tsx` (new)
   - Approach: Left nav (Brands, Channels, Insights, Runs, Settings-as-needed), top bar showing the signed-in user. Mobile-first from 320px; nav collapses to a hamburger below 768px. Light/dark via the token file's media query, no component-level colour overrides.
   - Acceptance: `/showroom` renders the shell with all nav items, at 320px and 1280px, light and dark.
   - Check: `pnpm build`; manual resize check in a browser.
   - After: T6
 
-- [ ] **T8 — `DataTable` and `AsyncCombobox` showroom components**
+- [x] **T8 — `DataTable` and `AsyncCombobox` showroom components**
   - Files: `src/components/DataTable.tsx`, `src/components/AsyncCombobox.tsx` (new), `src/app/showroom/page.tsx` (new)
   - Approach: `DataTable` — sticky header, right-aligned numerics, sortable columns, loading/empty/error/success states, keyboard-navigable rows. `AsyncCombobox` — async-searchable list box with its own loading/empty/error states (UX review required finding 6), full keyboard support (arrow keys, Enter to select, Escape to close) and ARIA roles (`combobox`, `listbox`, `option`) — this is the UX review's explicitly flagged highest-risk component for accessibility. Both rendered on `/showroom` with example data covering every state.
   - Acceptance: `/showroom` shows `DataTable` and `AsyncCombobox` in all states (loading, empty, error, populated); keyboard-only navigation reaches and operates both.
@@ -146,7 +146,7 @@ Epics execute in order; within an epic, independent tasks may run together (note
   - After: T7
   - Closes: UX review required finding 6 (FR7a picker states)
 
-- [ ] **T9 — Confirmation dialog and status badge components**
+- [x] **T9 — Confirmation dialog and status badge components**
   - Files: `src/components/ConfirmDialog.tsx`, `src/components/StatusBadge.tsx` (new)
   - Approach: `ConfirmDialog` — modal, traps focus, shows a title, body (will carry the "final text + destination channel" content in E7), Confirm/Cancel. `StatusBadge` — semantic-coloured pill for run/insight statuses (`queued`/`running`/`succeeded`/`failed`/`cancelled`/`pending`/`accepted`/`discarded`/`delivery failed`), colour from semantic tokens, never a raw hex value.
   - Acceptance: Both appear on `/showroom` in every named state.
@@ -409,6 +409,10 @@ One line per completed task, appended by the executor.
 [E10 · 3/33] ECR terraform-bc entry requested: github.com/BetterCollective/better-craft-audience-insights-engine/issues/1 (blocks first image push, not the code).
 [E1 · 4/33] T4 — Database schema is real: all 12 tables from spec §11 exist, migrated cleanly to an empty Postgres, with the partial unique index preventing two concurrent runs for the same brand+market confirmed live.
 [E1 · 5/33] T5 — Verification harness now checks migrations and builds the app in one command (`bash verify.sh` → `GATE: PASS`); note: T1 (copying `verify.sh` from the template) had not actually been done despite being marked otherwise, so this task also performed that copy as a prerequisite.
+[E2 · 6/33] T6 — Semantic design tokens (light + dark) now live in `src/styles/tokens.css` and are the app's single source of colour; the plugin's `neutral-tokens.css` asset wasn't reachable in this environment, so the set was authored from scratch per spec §12, keeping the existing Better Collective brand palette and extending it with button/status/nav tokens.
+[E2 · 7/33] T7 — The admin panel now has a shared navigation shell (Brands/Channels/Insights/Runs, placeholder signed-in user) that collapses to a hamburger below 768px and themes via tokens only.
+[E2 · 8/33] T8 — `/showroom` shows the shared `DataTable` (sticky header, sortable numeric column, keyboard-navigable rows) and `AsyncCombobox` (full ARIA combobox/listbox/option pattern, arrow/Enter/Escape keyboard support) in every state — loading, empty, error, success.
+[E2 · 9/33] T9 — `/showroom` also shows a focus-trapping `ConfirmDialog` (default and destructive variants) and a `StatusBadge` pill for every named run/insight status.
 ```
 
 ## Verification summary
@@ -460,6 +464,7 @@ One line per completed task, appended by the executor.
 - T1 was marked complete in an earlier dispatch's instructions but `verify.sh` did not actually exist at the repo root. The T4/T5 executor discovered this and copied the template as part of T5's work. Reconciled: T1 ticked here; no separate action needed.
 - `research_instruction`'s unique constraint on `(brand_id, market_id, version)` does not catch a duplicate version for a brand-level instruction (`market_id IS NULL`), since standard SQL treats `NULL` as distinct from `NULL` in a unique constraint. Low risk given this table's low write concurrency (a handful of admins), but worth a `NULLS NOT DISTINCT` constraint (Postgres 15+) or application-level locking on save, as a follow-up — not in the current plan, not acted on now.
 - `app_user` has no unique constraint on `sso_subject_id` or `email`. Worth adding before relying on either as a natural key for lookups — not in the current plan, not acted on now.
+- T6/T8/T13's file paths say `src/app/...`, but the template this repo was cloned from (T1-T5, pre-dating this plan's app-router pages) already put Next's app router at the repo root (`app/`), not under `src/`. Next.js does not support both `app/` and `src/app/` at once. E2 (T8) built `app/showroom/page.tsx` at the established root location instead; `src/db`, `src/lib`, `src/components` stay under `src/` exactly as the plan says. Future tasks referencing `src/app/...` should read it as `app/...`.
 
 ## Open questions
 

@@ -1,0 +1,104 @@
+/* Semantic design tokens — Audience Insights Engine
+   Single source of truth for colour. Components reference these custom
+   properties — directly or through the Tailwind utilities `globals.css`
+   derives from the core subset — and never a raw colour value. Light values
+   are the defaults; dark values override under `prefers-color-scheme: dark`
+   (internal tool: system-default, no manual toggle in v1).
+
+   Brand palette sampled from bettercollective.com. The teal clears WCAG AA on
+   white (5.74:1) but only reaches 3.45:1 on a near-black background, so dark
+   mode promotes the mint to accent duty (13.99:1) instead of reusing the teal.
+*/
+
+:root {
+  /* Brand */
+  --brand-teal: #00745e;
+  --brand-mint: #98e9c9;
+  --brand-green: #00c358;
+
+  /* Surfaces */
+  --background: #ffffff;
+  --surface: #f7f9f8;
+  --surface-raised: #ffffff;
+  --border: #e4e7e6;
+  --overlay: rgb(10 10 10 / 0.5);
+
+  /* Text */
+  --foreground: #171717;
+  --muted: #52525b;
+  --text-inverse: #ffffff;
+
+  /* Accent */
+  --accent: var(--brand-teal);
+  --accent-contrast: #ffffff;
+
+  /* Interactive */
+  --button-primary-bg: var(--accent);
+  --button-primary-bg-hover: #00604d;
+  --button-primary-text: #ffffff;
+  --button-secondary-bg: transparent;
+  --button-secondary-text: var(--accent);
+  --button-secondary-border: var(--border);
+  --focus-ring: var(--accent);
+
+  /* Status (StatusBadge, readiness indicators, inline alerts) */
+  --status-neutral-bg: #e4e7e6;
+  --status-neutral-text: #3f3f46;
+  --status-info-bg: #dbeafe;
+  --status-info-text: #1d4ed8;
+  --status-success-bg: #d8f3e3;
+  --status-success-text: #056242;
+  --status-warning-bg: #fef3c7;
+  --status-warning-text: #92400e;
+  --status-danger-bg: #fde0e0;
+  --status-danger-text: #a3150f;
+
+  /* Navigation shell */
+  --nav-bg: #ffffff;
+  --nav-text: #171717;
+  --nav-active-bg: var(--surface);
+  --nav-active-text: var(--accent);
+  --nav-border: var(--border);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --surface: #131615;
+    --surface-raised: #1b1f1d;
+    --border: #26302c;
+    --overlay: rgb(0 0 0 / 0.6);
+
+    --foreground: #ededed;
+    --muted: #a1a1aa;
+    --text-inverse: #0a0a0a;
+
+    --accent: var(--brand-mint);
+    --accent-contrast: #05231a;
+
+    --button-primary-bg: var(--accent);
+    --button-primary-bg-hover: #7fd9af;
+    --button-primary-text: #05231a;
+    --button-secondary-bg: transparent;
+    --button-secondary-text: var(--accent);
+    --button-secondary-border: var(--border);
+    --focus-ring: var(--accent);
+
+    --status-neutral-bg: #26302c;
+    --status-neutral-text: #d4d4d8;
+    --status-info-bg: #1e3a5f;
+    --status-info-text: #93c5fd;
+    --status-success-bg: #0f3d2a;
+    --status-success-text: #86e0b8;
+    --status-warning-bg: #4a3b0f;
+    --status-warning-text: #fcd34d;
+    --status-danger-bg: #4a1414;
+    --status-danger-text: #fca5a5;
+
+    --nav-bg: #131615;
+    --nav-text: #ededed;
+    --nav-active-bg: #1b1f1d;
+    --nav-active-text: var(--accent);
+    --nav-border: var(--border);
+  }
+}
