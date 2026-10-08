@@ -1,0 +1,13 @@
+{
+  "active": true,
+  "mode": "autopilot",
+  "rules_version": "6",
+  "claude_md": "created",
+  "activated_at": "2026-10-08T13:42:55+02:00",
+  "last_activated_at": "2026-10-08T13:42:55+02:00",
+  "platform": "better-craft-eks",
+  "layout": "single-app",
+  "app_name": "better-craft-audience-insights-engine",
+  "short_name": "audience-insights-engine",
+  "renamed": true
+}
