@@ -17,7 +17,7 @@ Every external system this product touches needs its own, not-yet-provisioned cr
 | Epic | Needs | Owner | Requested how |
 |---|---|---|---|
 | E3 (sign-in) | OneLogin OIDC client ID/secret + discovery URL | IT Helpdesk | T7 sends the request (parallel to the GitHub repo request already sent) |
-| E5 (channels) | Slack bot token (`channels:read`, `chat:write`, `files:write`); Google Drive service-account credential (`drive.readonly`; write scope pending separately with IT) | IT Helpdesk / Google Workspace admin | T15/T16 send the requests |
+| E5 (channels) | ~~Slack bot token~~ — **resolved 2026-10-09**, self-provisioned by Martin, live-verified (T18). Google Drive service-account credential (`drive.readonly`; write scope pending separately with IT) — still outstanding. | Google Workspace admin (Drive only) | T16's Drive half still deferred |
 | E6 (runs) | `X_BEARER_TOKEN` or `XAI_API_KEY` for X coverage (Reddit itself is keyless and proves the path without this); optional `SCRAPECREATORS_API_KEY` | Martin | Noted in T19; Reddit-only is sufficient to pass E6's gate |
 | E8 (Rill) | Rill service-account token, scoped at Rill's permission layer to `organic_search_performance` and `playbook_event_stream` only | Rill administrator (Martin/Patrick to identify — spec §16) | T24 sends the request once the administrator is named |
 
@@ -231,15 +231,15 @@ Epics execute in order; within an epic, independent tasks may run together (note
   - After: T15, T16
   - Closes: UX review required finding 7 (FR8a warning tied to a screen)
 
-- [ ] **T18 — Request Slack and Drive credentials**
+- [x] **T18 — Request Slack and Drive credentials (Slack half complete; Drive still pending)**
   - Files: none (process task)
-  - Approach: Send the IT Helpdesk / Google Workspace admin request named in the credential table above, once Martin/Patrick confirm the recipient. Record the sent request's text in `initiatives/better-craft-audience-insights-engine/handoff.md`.
-  - Acceptance: `handoff.md` contains the request text and date sent.
-  - Check: `test -f initiatives/better-craft-audience-insights-engine/handoff.md`
+  - Approach: Rather than route through IT Helpdesk, Martin created the Slack app himself directly (api.slack.com/apps, "Audience Insights" app, installed to the `bettercollective` workspace) with Bot Token Scopes `channels:read`, `chat:write`, `files:write`, `groups:read` (the last one added after a live `missing_scope` error on the first attempt — `conversations.list` needs `groups:read` in addition to `channels:read` to include private channels). Token stored in `.env.local` (gitignored) by Martin directly, never pasted into chat. Google Drive service-account credential is still pending — not yet actioned.
+  - Acceptance (Slack): **Live-verified, 2026-10-09.** `GET /api/channels/slack-search` returned the real `bettercollective` workspace channel list (77 channels) via a real `SLACK_BOT_TOKEN`; `POST /api/channels` successfully saved a real channel (`#general`, `C02BVU1RD`) as a `channel` row. The "Credential-blocked epics" deferral for Slack (top of this file) is resolved.
+  - Check: live curl against the running dev server, documented above; test data deleted after verification.
   - After: T15, T16
 
 **Gate E5:** `bash verify.sh` → `GATE: PASS`; screenshot of channel management with both picker types and the routing map.
-**Manual (deferred):** a real Slack channel list and a real Drive folder search, pending T18's credentials.
+**Manual:** Slack channel list and channel-save — **live-verified** (see T18). Drive folder search remains deferred pending a Google service-account credential.
 **Report to the user:** 3 lines + screenshot, checkpoint question.
 
 ### E6 — Runs produce real evidence
