@@ -59,6 +59,7 @@ GA4 is out of scope for this plan entirely (spec §9 Non-Goals) — the `brand_m
 - A performed, timed Postgres restore test — this is a release-gate item coordinated with `@BetterCollective/devops` (spec §16), not an implementation task; E9 builds the backup *configuration*, not the proof of restore.
 - Legal sign-off for Greek-market data processing — a release gate (spec §16), not a task; E6/E8 build Greece like any other market in schema and code, but a feature flag (`market.processing_enabled`, default `false` for Greece) gates it from actually running until Legal signs off (T20).
 - Anything not named in a task's file list. No "while I'm here" refactors, renames, or added dependencies.
+- **Never use a real, company-wide Slack channel (`#general` explicitly named, and by the same logic any other channel this app did not create for its own testing) as a live test target — for reading, writing, or saving as a `channel` row.** T18's live verification (2026-10-09) used `#general` to confirm the Slack connection worked and was corrected after the fact — no message was ever posted there (only `conversations.list` and a now-deleted `channel` row), but the channel choice itself was wrong regardless of what was actually sent. **Before E7 needs to test real message delivery** (`chat.postMessage`), create one dedicated, clearly-named test channel (e.g. `#audience-insights-test`) for that purpose, and use only that channel for any live-send verification from here on — never an existing real channel, never `#general`.
 
 ## Epic map
 
