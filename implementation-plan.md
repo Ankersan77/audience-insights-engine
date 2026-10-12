@@ -374,12 +374,13 @@ Epics execute in order; within an epic, independent tasks may run together (note
   - Check: the status command above.
   - After: all prior epics complete (or as many as credentials allow — see below)
 
-- [ ] **T32 — Local container smoke test**
+- [x] **T32 — Local container smoke test**
   - Files: none
   - Approach: Build the image locally, run it, confirm `GET /healthz` returns 2xx and the sign-in → brand list → trigger-run → review-queue path works against a local Postgres.
   - Acceptance: All of the above pass locally.
   - Check: `docker build` + `docker run` + `curl localhost:3000/healthz`.
   - After: T31
+  - **Live-verified 2026-10-12** against a real `docker build` + `docker run` (not `pnpm dev`): `/healthz` → 200; a temporary test-session route (added to the working tree only, never committed, deleted immediately after) proved sign-in-equivalent → create a brand → add research instructions → `POST /api/runs/trigger` (US market → 201 `queued`; Greece market → 403, the processing flag still holds inside the container) → `/runs` and `/insights` both render → a viewer session still gets a live 403 on an admin route. **Honest limit, not papered over:** the queued run was never picked up and completed, because this single container only runs the Next.js web process — the standalone worker (`src/workers/index.ts`) was never started inside it, which is the exact, already-documented gap from E6 ("The runtime container image... still has no way to actually start `src/workers/index.ts`"). T32 proves the web-serving half of the deployed image end to end; it does not and cannot prove the worker half until that chart/entrypoint decision is made (T33/release). Image and container removed after verification; test brand/instruction/run rows deleted from the scratch database.
 
 - [ ] **T33 — Pull request, code-owner review, merge**
   - Files: none
