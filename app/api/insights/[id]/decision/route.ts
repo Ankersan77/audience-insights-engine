@@ -12,6 +12,7 @@ import { getScopeView, type RouteChannel } from "@/src/db/queries/insight_routes
 import { getChannelById } from "@/src/db/queries/channels";
 import { sendMessage, SlackNotConfiguredError, SlackSendError } from "@/src/lib/slack";
 import { recordAudit } from "@/src/lib/audit";
+import { checkDeliverySlo, logEvent } from "@/src/lib/metrics";
 
 export const dynamic = "force-dynamic";
 
@@ -44,11 +45,17 @@ async function deliverToChannel(channel: RouteChannel, text: string): Promise<Ch
   if (channel.channelType === "drive_folder") {
     // Known gap (spec FR9, Out of scope for this plan): Drive write delivery
     // is inert until a write-capable credential exists. Recorded, not sent.
+    // Logged as "delivery-skipped", not "delivery-failed" (T29) — this is an
+    // expected, permanent state until a credential lands, not an incident an
+    // alert should fire on; a genuine Slack failure below gets the
+    // "delivery-failed" event instead.
+    logEvent("delivery-skipped", { ...base, reason: DRIVE_NOT_CONNECTED_MESSAGE });
     return { ...base, ok: false, message: DRIVE_NOT_CONNECTED_MESSAGE };
   }
 
   const channelRow = await getChannelById(channel.channelId);
   if (!channelRow) {
+    logEvent("delivery-failed", { ...base, reason: "channel-missing" });
     return { ...base, ok: false, message: "That Slack channel no longer exists." };
   }
 
@@ -57,11 +64,14 @@ async function deliverToChannel(channel: RouteChannel, text: string): Promise<Ch
     return { ...base, ok: true, message: "Delivered to Slack." };
   } catch (error) {
     if (error instanceof SlackNotConfiguredError) {
+      logEvent("delivery-failed", { ...base, reason: "slack-not-configured", message: error.message });
       return { ...base, ok: false, message: error.message };
     }
     if (error instanceof SlackSendError) {
+      logEvent("delivery-failed", { ...base, reason: "slack-rejected", message: error.message });
       return { ...base, ok: false, message: error.message };
     }
+    logEvent("delivery-failed", { ...base, reason: "unexpected" });
     return { ...base, ok: false, message: "Slack delivery failed unexpectedly." };
   }
 }
@@ -214,6 +224,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const final = await markInsightDelivery(insightId, delivery.deliveryStatus);
 
     await recordAudit(session.id, "accept", "insight", insightId, before, { ...final, delivery: delivery.results });
+    // T29: the 30-second accept-to-delivery SLO, timed from the decision
+    // (`reviewed_at`, just set by markInsightDecision above) to delivery
+    // completing (`routed_at`, just set by markInsightDelivery above).
+    checkDeliverySlo(insightId, accepted?.reviewedAt ?? null, final?.routedAt ?? null);
     return NextResponse.json({ insight: final, delivery: delivery.results }, { status: 200 });
   }
 
@@ -229,6 +243,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const final = await markInsightDelivery(insightId, delivery.deliveryStatus);
 
     await recordAudit(session.id, "retry", "insight", insightId, before, { ...final, delivery: delivery.results });
+    // Same SLO timer as accept, above — note that `before.reviewedAt` is the
+    // *original* accept decision, so a retry (by definition, time after a
+    // first failed attempt) will routinely breach 30 seconds measured this
+    // way; that is the literal reviewed_at→routed_at definition this task
+    // specifies, not a bug in how retry is timed.
+    checkDeliverySlo(insightId, before.reviewedAt, final?.routedAt ?? null);
     return NextResponse.json({ insight: final, delivery: delivery.results }, { status: 200 });
   }
 

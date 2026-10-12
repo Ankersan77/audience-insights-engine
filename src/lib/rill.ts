@@ -1,5 +1,6 @@
 import { db } from "@/src/db/client";
 import { auditLog } from "@/src/db/schema";
+import { logEvent } from "@/src/lib/metrics";
 import {
   ALLOWED_RILL_MEASURES,
   isAllowed,
@@ -70,6 +71,15 @@ async function audit(
     beforeJson: { view, requestedFields, ...extra },
     afterJson: null,
   });
+  // T29: the same signal, as a structured log line for the metrics/alerting
+  // layer specifically (not a replacement for the audit_log row above, which
+  // stays the system of record). `action` already distinguishes "rejected
+  // before any field was allowed" (`rill-query-rejected`, reasons
+  // `view-not-allowed`/`field-not-allowed`) from "allowed by the allowlist
+  // but stripped by the word-boundary pattern filter anyway"
+  // (`rill-query-field-stripped`) — these are two genuinely different code
+  // paths in `queryRill` below, not one path described two ways.
+  logEvent(action, { view, requestedFields, runId: context?.runId, ...extra });
 }
 
 export type RillRow = Record<string, unknown>;

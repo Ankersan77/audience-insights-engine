@@ -18,8 +18,22 @@
 import { PgBoss, type Job } from "pg-boss";
 import { runLast30Days, type RunLast30DaysInstruction } from "./runLast30Days";
 import { draftInsightsForRun } from "./draftInsights";
-import { storeEvidenceForRun } from "@/src/db/queries/evidence";
+import { parseCompactReport, storeEvidenceForRun } from "@/src/db/queries/evidence";
 import { markRunFailed, markRunRunning, markRunSucceeded } from "@/src/db/queries/research_runs";
+import { checkRunSlo, logEvent } from "@/src/lib/metrics";
+
+/** Groups parsed report items by source, for the per-Run Evidence-count log
+ * line (T29) — reuses `parseCompactReport` (already exported by
+ * src/db/queries/evidence.ts) rather than re-deriving counts from the
+ * inserted-row count, which `storeEvidenceForRun` only returns as a single
+ * total and which also excludes rows skipped as duplicates. */
+function countBySource(items: { source: string }[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const item of items) {
+    counts[item.source] = (counts[item.source] ?? 0) + 1;
+  }
+  return counts;
+}
 
 export const RUN_QUEUE_NAME = "research-run";
 
@@ -82,10 +96,25 @@ async function processRunJob(payload: RunJobPayload): Promise<void> {
   };
 
   const result = await runLast30Days(instruction);
+  const runSloFields = {
+    runId: payload.runId,
+    brandId: payload.brandId,
+    marketId: payload.marketId,
+    durationMs: result.durationMs,
+  };
 
   if (result.status === "completed" && result.exitCode === 0) {
-    await storeEvidenceForRun(payload.runId, result.stdout);
+    const insertedCount = await storeEvidenceForRun(payload.runId, result.stdout);
+    logEvent("run-evidence-counts", {
+      runId: payload.runId,
+      brandId: payload.brandId,
+      marketId: payload.marketId,
+      insertedCount,
+      perSource: countBySource(parseCompactReport(result.stdout)),
+    });
     await markRunSucceeded(payload.runId);
+    logEvent("run-succeeded", runSloFields);
+    checkRunSlo(runSloFields);
     // T22: draft Insights from this Run's Evidence. Never lets a drafting
     // failure undo the Run's own success — the Run already succeeded; a
     // problem here is logged, not propagated into the Run's status.
@@ -106,6 +135,8 @@ async function processRunJob(payload: RunJobPayload): Promise<void> {
     errorMessage = `last30days exited with code ${result.exitCode}`;
   }
   await markRunFailed(payload.runId, errorMessage, { timedOut: result.status === "timeout" });
+  logEvent("run-failed", { ...runSloFields, errorMessage, timedOut: result.status === "timeout" });
+  checkRunSlo(runSloFields);
 }
 
 /** Subscribes the calling process to the queue. Never auto-retries (queue
