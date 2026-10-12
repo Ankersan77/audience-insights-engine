@@ -79,7 +79,13 @@ if [ -f drizzle.config.ts ]; then
 fi
 
 # pnpm build: the production build is the most expensive step, so it runs last
-# and only in the full (non --fast) pass.
+# and only in the full (non --fast) pass. A stale .next/ cache has produced a
+# spurious Turbopack "binding to a port — Operation not permitted" panic on a
+# long-idle checkout at least three times across this project's epics (each
+# time confirmed unrelated to the code being verified, and each time resolved
+# by clearing the cache) — clear it unconditionally before building so this
+# stops costing a wasted dispatch and a false GATE: FAIL every time it recurs.
+[ "$FAST" = 0 ] && rm -rf .next
 [ "$FAST" = 0 ] && has_script build && run "pnpm build" npm run --silent build
 
 printf '\n==========================\n'
