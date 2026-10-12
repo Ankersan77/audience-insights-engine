@@ -1,0 +1,194 @@
+import { and, desc, eq } from "drizzle-orm";
+import { db } from "@/src/db/client";
+import { brand, evidence, insight, insightEvidence, market } from "@/src/db/schema";
+
+// Necessary plumbing for T22/T23 (same precedent as every prior epic's
+// query modules): nothing yet read or wrote the `insight`/`insight_evidence`
+// tables even though both tasks name files that need to.
+
+export type InsightStatus = "pending" | "accepted" | "discarded";
+export type ShiftOrBlip = "shift" | "blip";
+export type InsightDeliveryStatus = "not_attempted" | "delivered" | "failed";
+
+/**
+ * The global insight queue's filter (T23, spec §17): three review states plus
+ * a fourth, distinct state for "accepted but delivery failed" — which is a
+ * `delivery_status` value, not a `status` value, so it is handled as its own
+ * branch in {@link listInsights} rather than folded into `InsightStatus`.
+ */
+export type QueueFilter = "pending" | "accepted" | "discarded" | "delivery-failed";
+
+export type InsightRow = {
+  id: number;
+  brandId: number;
+  marketId: number | null;
+  runId: number;
+  insightType: string;
+  title: string;
+  summary: string;
+  shiftOrBlip: ShiftOrBlip;
+  confidence: number;
+  status: InsightStatus;
+  reviewedBy: number | null;
+  reviewedAt: Date | null;
+  routedAt: Date | null;
+  deliveryStatus: InsightDeliveryStatus;
+};
+
+export type InsightListRow = InsightRow & {
+  brandName: string;
+  marketCode: string | null;
+};
+
+export type InsightEvidenceDetail = {
+  id: number;
+  source: string;
+  externalId: string;
+  url: string | null;
+  textSnippet: string | null;
+  sensitivityFlag: boolean | null;
+};
+
+function toRow(row: typeof insight.$inferSelect): InsightRow {
+  return {
+    id: row.id,
+    brandId: row.brandId,
+    marketId: row.marketId,
+    runId: row.runId,
+    insightType: row.insightType,
+    title: row.title,
+    summary: row.summary,
+    shiftOrBlip: row.shiftOrBlip as ShiftOrBlip,
+    confidence: row.confidence,
+    status: row.status as InsightStatus,
+    reviewedBy: row.reviewedBy,
+    reviewedAt: row.reviewedAt,
+    routedAt: row.routedAt,
+    deliveryStatus: row.deliveryStatus,
+  };
+}
+
+/**
+ * Creates one `insight` row and its linked `insight_evidence` rows (T22).
+ * Sequential inserts, not a transaction — same style already established by
+ * `createBrand` (brand + brand_market) elsewhere in this codebase.
+ */
+export async function createInsightWithEvidence(input: {
+  brandId: number;
+  marketId: number | null;
+  runId: number;
+  insightType: string;
+  title: string;
+  summary: string;
+  shiftOrBlip: ShiftOrBlip;
+  confidence: number;
+  evidenceIds: number[];
+}): Promise<InsightRow> {
+  const [created] = await db
+    .insert(insight)
+    .values({
+      brandId: input.brandId,
+      marketId: input.marketId,
+      runId: input.runId,
+      insightType: input.insightType,
+      title: input.title,
+      summary: input.summary,
+      shiftOrBlip: input.shiftOrBlip,
+      confidence: input.confidence,
+      status: "pending",
+    })
+    .returning();
+
+  if (input.evidenceIds.length > 0) {
+    await db
+      .insert(insightEvidence)
+      .values(input.evidenceIds.map((evidenceId) => ({ insightId: created.id, evidenceId })));
+  }
+
+  return toRow(created);
+}
+
+/** The global queue (T23): every brand, filterable by status or by the
+ * distinct "delivery failed" state. Newest first. */
+export async function listInsights(filter: {
+  queueFilter?: QueueFilter;
+  brandId?: number;
+}): Promise<InsightListRow[]> {
+  const conditions = [];
+  if (filter.brandId) conditions.push(eq(insight.brandId, filter.brandId));
+  if (filter.queueFilter === "delivery-failed") {
+    conditions.push(eq(insight.deliveryStatus, "failed"));
+  } else if (filter.queueFilter) {
+    conditions.push(eq(insight.status, filter.queueFilter));
+  }
+
+  const rows = await db
+    .select({ insight, brandName: brand.name, marketCode: market.code })
+    .from(insight)
+    .innerJoin(brand, eq(brand.id, insight.brandId))
+    .leftJoin(market, eq(market.id, insight.marketId))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(insight.id));
+
+  return rows.map((r) => ({ ...toRow(r.insight), brandName: r.brandName, marketCode: r.marketCode }));
+}
+
+export async function getInsightById(id: number): Promise<InsightRow | null> {
+  const [row] = await db.select().from(insight).where(eq(insight.id, id));
+  return row ? toRow(row) : null;
+}
+
+/** Evidence linked to one insight (T23: surfaces `sensitivity_flag` per item in the review UI). */
+export async function getInsightEvidence(insightId: number): Promise<InsightEvidenceDetail[]> {
+  return db
+    .select({
+      id: evidence.id,
+      source: evidence.source,
+      externalId: evidence.externalId,
+      url: evidence.url,
+      textSnippet: evidence.textSnippet,
+      sensitivityFlag: evidence.sensitivityFlag,
+    })
+    .from(insightEvidence)
+    .innerJoin(evidence, eq(evidence.id, insightEvidence.evidenceId))
+    .where(eq(insightEvidence.insightId, insightId));
+}
+
+/** Edits an Insight's title/summary before accepting (T23, UX review required finding 4). */
+export async function updateInsightText(
+  id: number,
+  input: { title: string; summary: string },
+): Promise<InsightRow | null> {
+  const [updated] = await db
+    .update(insight)
+    .set({ title: input.title, summary: input.summary })
+    .where(eq(insight.id, id))
+    .returning();
+  return updated ? toRow(updated) : null;
+}
+
+/** Accept/discard decision (T23) — the review state, independent of delivery. */
+export async function markInsightDecision(
+  id: number,
+  input: { status: "accepted" | "discarded"; reviewedBy: number },
+): Promise<InsightRow | null> {
+  const [updated] = await db
+    .update(insight)
+    .set({ status: input.status, reviewedBy: input.reviewedBy, reviewedAt: new Date() })
+    .where(eq(insight.id, id))
+    .returning();
+  return updated ? toRow(updated) : null;
+}
+
+/** Records the outcome of a delivery attempt (accept or retry), separate from the review decision (T23). */
+export async function markInsightDelivery(
+  id: number,
+  deliveryStatus: "delivered" | "failed",
+): Promise<InsightRow | null> {
+  const [updated] = await db
+    .update(insight)
+    .set({ deliveryStatus, routedAt: new Date() })
+    .where(eq(insight.id, id))
+    .returning();
+  return updated ? toRow(updated) : null;
+}

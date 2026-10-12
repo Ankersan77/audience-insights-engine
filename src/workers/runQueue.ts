@@ -17,6 +17,7 @@
 
 import { PgBoss, type Job } from "pg-boss";
 import { runLast30Days, type RunLast30DaysInstruction } from "./runLast30Days";
+import { draftInsightsForRun } from "./draftInsights";
 import { storeEvidenceForRun } from "@/src/db/queries/evidence";
 import { markRunFailed, markRunRunning, markRunSucceeded } from "@/src/db/queries/research_runs";
 
@@ -85,6 +86,14 @@ async function processRunJob(payload: RunJobPayload): Promise<void> {
   if (result.status === "completed" && result.exitCode === 0) {
     await storeEvidenceForRun(payload.runId, result.stdout);
     await markRunSucceeded(payload.runId);
+    // T22: draft Insights from this Run's Evidence. Never lets a drafting
+    // failure undo the Run's own success — the Run already succeeded; a
+    // problem here is logged, not propagated into the Run's status.
+    try {
+      await draftInsightsForRun(payload.runId);
+    } catch (error) {
+      console.error(`[worker] insight drafting failed for run ${payload.runId}`, error);
+    }
     return;
   }
 
