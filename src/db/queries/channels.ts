@@ -43,6 +43,29 @@ export class DuplicateChannelError extends Error {
   }
 }
 
+type PgErrorShape = { code?: string; constraint?: string; message?: string; cause?: unknown } | null;
+
+/**
+ * drizzle-orm 0.45.x wraps the real `pg` error one level down on `.cause` —
+ * checking only the outer error's `.message` (as an earlier draft of this
+ * function did) can miss a real constraint violation. Same fix as
+ * `research_runs.ts`'s `isActiveRunConstraintViolation`, scoped to this
+ * table's unique constraint.
+ */
+function isDuplicateChannelConstraintViolation(error: unknown): boolean {
+  for (const candidate of [error, (error as PgErrorShape)?.cause]) {
+    const pgError = candidate as PgErrorShape;
+    if (!pgError) continue;
+    if (pgError.code === "23505" && pgError.constraint === "channel_type_external_ref_unique") {
+      return true;
+    }
+    if (pgError.message && /channel_type_external_ref_unique/.test(pgError.message)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Saving a Slack/Drive picker selection (T15/T16): `type='slack_channel'|'drive_folder'`, `external_ref` the Slack/Drive id, `display_name` the human-readable name. */
 export async function createChannel(input: {
   type: ChannelType;
@@ -62,9 +85,7 @@ export async function createChannel(input: {
       .returning();
     return toRow(created);
   } catch (error) {
-    // channel_type_external_ref_unique (schema.ts) — the same Slack channel or
-    // Drive folder was already connected.
-    if (error instanceof Error && /unique/i.test(error.message)) {
+    if (isDuplicateChannelConstraintViolation(error)) {
       throw new DuplicateChannelError();
     }
     throw error;
