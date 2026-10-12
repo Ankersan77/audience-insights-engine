@@ -1,0 +1,103 @@
+name: Rill allowlist / schema check
+
+# Two checks, per ADR 0001 (decisions/0001-rill-allowlist.md) and T26:
+#
+#   1. unit-test: the allowlist's own unit test suite
+#      (src/lib/rillAllowlist.test.ts) — release-blocking on every PR that
+#      touches src/lib/rillAllowlist.ts or src/lib/rill.ts. This is a static
+#      fixture: it proves the filter behaves correctly on every
+#      currently-known measure/dimension name, not that nothing new has
+#      slipped into Rill's live schema.
+#
+#   2. live-schema-drift (scheduled only): re-queries Rill's live schema for
+#      `organic_search_performance` and `playbook_event_stream` and ALERTS
+#      (not just logs) if a measure or dimension appears that
+#      ALLOWED_RILL_MEASURES doesn't yet know about.
+#
+# HONEST STATUS (T24/T26): no `RILL_API_TOKEN` has ever been provisioned in
+# this environment — no Rill administrator has been named yet
+# (product-spec.md section 16, open item). The live-schema-drift job below is
+# written in full but can only be exercised once that secret exists in this
+# repository's Actions secrets; until then it no-ops cleanly (prints why and
+# exits 0) rather than faking a passing check. Do not change that into a
+# silent skip once the secret lands — remove the early-exit guard instead.
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/rillAllowlist.ts"
+      - "src/lib/rill.ts"
+      - "src/lib/rillAllowlist.test.ts"
+      - "src/workers/pullRillEvidence.ts"
+  push:
+    branches: [main]
+  schedule:
+    # Daily, independent of any deploy — catches drift between releases, not
+    # only at CI time (spec section 11 / T26).
+    - cron: "17 6 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  unit-test:
+    name: Allowlist unit tests (release-blocking)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run allowlist unit tests
+        run: pnpm test src/lib/rillAllowlist.test.ts
+
+  live-schema-drift:
+    name: Live Rill schema drift check (scheduled)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check for RILL_API_TOKEN
+        id: has-token
+        env:
+          RILL_API_TOKEN: ${{ secrets.RILL_API_TOKEN }}
+        run: |
+          if [ -z "$RILL_API_TOKEN" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: No-op (RILL_API_TOKEN not configured)
+        if: steps.has-token.outputs.configured == 'false'
+        run: |
+          echo "::warning::RILL_API_TOKEN is not set in this repository's secrets — no Rill administrator has been named yet (product-spec.md section 16, T24). The live-schema-drift check cannot run without it, so this job no-ops cleanly instead of faking a pass. This is an open item, not a resolved one."
+          exit 0
+      # --- Live check (runs only once RILL_API_TOKEN exists) ------------------
+      # This step re-queries Rill's live schema for `organic_search_performance`
+      # and `playbook_event_stream` and alerts (fails the job, which should be
+      # wired to a notification channel — not merely logs) if an unrecognised
+      # measure or dimension name appears that src/lib/rillAllowlist.ts does not
+      # yet know about. No such live schema-introspection script exists yet in
+      # this repository (it depends on Rill's actual API contract, which is
+      # unconfirmed without a credential) — writing it is the next step once
+      # T24's credential lands, not before.
+      - name: Live schema drift check
+        if: steps.has-token.outputs.configured == 'true'
+        env:
+          RILL_API_TOKEN: ${{ secrets.RILL_API_TOKEN }}
+        run: |
+          echo "::error::RILL_API_TOKEN is present but no live-schema-introspection script exists yet. Implement the real drift check against Rill's confirmed API contract before relying on this job."
+          exit 1
