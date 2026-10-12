@@ -43,16 +43,28 @@ JOIN evidence e ON e.id = ie.evidence_id
 WHERE e.author_handle = '<handle>';
 ```
 
-**Current honest caveat:** `evidence.author_handle` exists in the schema, but
-the report parser that populates `evidence` rows today
-(`src/db/queries/evidence.ts`, `storeEvidenceForRun`) does not currently
-extract or set it — every row's `author_handle` is `NULL` as of this writing.
-Until that parsing gap is closed, a handle search above will not find rows by
-`author_handle` alone; fall back to the `url ILIKE` search, and to a manual
-`text_snippet` search (`WHERE text_snippet ILIKE '%<handle>%'`) as a second
-pass, since the parser does capture post text/URLs even though it does not
-yet extract the handle into its own column. Whoever closes that gap should
-also update this note.
+**Current honest caveat, updated 2026-10-12 (partially resolved):**
+`evidence.author_handle` is now populated for **creator-driven platforms** —
+TikTok, Instagram, YouTube — where the compact report's stats line actually
+names a creator (`src/lib/parseCompactReport.ts`, unit-tested against real
+report text in `src/lib/parseCompactReport.test.ts`). A handle search above
+will find these.
+
+It is **not** populated for **Reddit** (or Hacker News/GitHub/Polymarket),
+and this is not a parsing bug to fix later — the compact report genuinely
+never states a Reddit post's own submitter at all, only the names of
+separately-listed top commenters (`u/<handle>` lines), which this project
+does not currently store as their own linked records at all (not just
+missing from `author_handle` — there is no row, column, or table for a
+quoted commenter's identity today). A DSR request naming a Reddit handle
+therefore cannot be resolved by `author_handle`; fall back to the
+`url ILIKE` search, and to a manual `text_snippet`/raw-quote search
+(`WHERE text_snippet ILIKE '%<handle>%'`) to find any row whose stored text
+happens to quote that person. **This residual gap (Reddit comment-author
+identities are stored in free text with no structured link) should be
+named explicitly to whoever reviews this procedure for Legal sign-off** —
+it is a real limit on this product's ability to fulfill a Reddit-commenter's
+DSR request today, not a documentation oversight.
 
 ## 2. Delete the rows
 
