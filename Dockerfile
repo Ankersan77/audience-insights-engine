@@ -16,11 +16,23 @@ ENV PORT=3000
 # Bind all interfaces — the default loopback bind is unreachable from a k8s probe.
 ENV HOSTNAME=0.0.0.0
 RUN addgroup -S app && adduser -S app -G app
+# ADR 0002: `last30days` (vendor/last30days) runs as a local Python subprocess
+# of the worker, inside this same image — never a sidecar, since the platform
+# builds exactly one image per release. Alpine 3.2x's python3 package is
+# 3.12+, matching the engine's `requires-python = ">=3.12"`; it has zero pip
+# dependencies of its own for the keyless sources (see pyproject.toml), so no
+# `pip install` step is needed.
+RUN apk add --no-cache python3
 # `output: "standalone"` in next.config.ts emits server.js plus a pruned
 # node_modules, so the runtime stage needs no install of its own.
 COPY --from=builder --chown=app:app /app/.next/standalone ./
 COPY --from=builder --chown=app:app /app/.next/static ./.next/static
 COPY --from=builder --chown=app:app /app/public ./public
+# Vendored submodule (pinned, never patched — ADR 0002), copied from the
+# builder stage's full checkout so `runLast30Days.ts`'s
+# `vendor/last30days/skills/last30days/scripts/last30days.py` resolves at the
+# same relative path it does in local dev, with cwd `/app` either way.
+COPY --from=builder --chown=app:app /app/vendor/last30days ./vendor/last30days
 USER app
 EXPOSE 3000
 # NOTE: /healthz must be a real route in the app. The Kubernetes liveness and

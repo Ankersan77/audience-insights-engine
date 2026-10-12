@@ -17,13 +17,19 @@ export type BrandListRow = {
   readiness: BrandReadiness;
 };
 
-export type MarketOption = { id: number; code: string; name: string };
+export type MarketOption = { id: number; code: string; name: string; processingEnabled: boolean };
 
 // Seeded only if the `market` reference table is empty, per T13's approach
 // ("seed a handful of markets like US, Greece if the table is empty").
-const SEED_MARKETS: Array<{ code: string; name: string }> = [
+// Greece is seeded with `processingEnabled: false` explicitly (T20 / spec
+// §16, compliance blocking finding): on a database that already has a `market`
+// table, drizzle/0002_add_market_processing_enabled.sql's data migration
+// flips the existing Greece row instead; this keeps a brand-new database
+// landing in the same disabled state without waiting on that migration to
+// run against a not-yet-existing row.
+const SEED_MARKETS: Array<{ code: string; name: string; processingEnabled?: boolean }> = [
   { code: "US", name: "United States" },
-  { code: "GR", name: "Greece" },
+  { code: "GR", name: "Greece", processingEnabled: false },
   { code: "GB", name: "United Kingdom" },
   { code: "DK", name: "Denmark" },
   { code: "SE", name: "Sweden" },
@@ -32,10 +38,28 @@ const SEED_MARKETS: Array<{ code: string; name: string }> = [
 export async function listMarkets(): Promise<MarketOption[]> {
   const existing = await db.select().from(market);
   if (existing.length > 0) {
-    return existing.map((m) => ({ id: m.id, code: m.code, name: m.name }));
+    return existing.map((m) => ({
+      id: m.id,
+      code: m.code,
+      name: m.name,
+      processingEnabled: m.processingEnabled,
+    }));
   }
   const seeded = await db.insert(market).values(SEED_MARKETS).returning();
-  return seeded.map((m) => ({ id: m.id, code: m.code, name: m.name }));
+  return seeded.map((m) => ({
+    id: m.id,
+    code: m.code,
+    name: m.name,
+    processingEnabled: m.processingEnabled,
+  }));
+}
+
+/** One market by id — used by the run-trigger API to check `processing_enabled` (T20). */
+export async function getMarketById(marketId: number): Promise<MarketOption | null> {
+  const [row] = await db.select().from(market).where(eq(market.id, marketId));
+  return row
+    ? { id: row.id, code: row.code, name: row.name, processingEnabled: row.processingEnabled }
+    : null;
 }
 
 export async function listBrands(): Promise<BrandListRow[]> {

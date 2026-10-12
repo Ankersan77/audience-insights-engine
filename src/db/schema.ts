@@ -53,6 +53,10 @@ export const market = pgTable("market", {
   id: serial("id").primaryKey(),
   code: text("code").notNull(),
   name: text("name").notNull(),
+  // Compliance review blocking finding (spec §16): a market can be gated off
+  // from actually running research until Legal signs off (Greece, at launch).
+  // Defaults true so every other market keeps working with no extra step.
+  processingEnabled: boolean("processing_enabled").notNull().default(true),
 });
 
 // --- Brand tables ------------------------------------------------------------
