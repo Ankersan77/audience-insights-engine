@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Campaign, Citation, EvidenceItem, IntelligenceRecord, MeasurementPlan, SensingProfile, SolutionProfile, SourceConnection, StudyDesign } from "./contracts.ts";
+import type { Campaign, Citation, EvidenceItem, IntelligenceRecord, MeasurementPlan, ResearchProject, SensingProfile, SolutionProfile, SourceConnection, StudyDesign } from "./contracts.ts";
 import { TenantAccessError, assertTenantReview, assertTenantScope, tenantFilter } from "./tenancy.ts";
 import { TransitionError, assertCampaignTransition, promoteIntelligence } from "./transitions.ts";
-import { validateCampaign, validateCitation, validateEvidenceItem, validateIntelligenceRecord, validateMeasurementPlan, validateSensingProfile, validateSolutionProfile, validateSourceConnection, validateStudyDesign } from "./validation.ts";
+import { validateCampaign, validateCitation, validateEvidenceItem, validateIntelligenceRecord, validateMeasurementPlan, validateResearchProject, validateSensingProfile, validateSolutionProfile, validateSourceConnection, validateStudyDesign } from "./validation.ts";
 
 const applicability = { markets: ["DK"], languages: ["da"], categories: [], audiences: [], campaigns: [] };
 
@@ -89,6 +89,17 @@ test("source connections require an explicit usable policy envelope", () => {
   assert.equal(validateSourceConnection({ ...source, markets: [], languages: [] }).valid, false);
   assert.equal(validateSourceConnection({ ...source, lookbackDays: 0 }).valid, false);
   assert.equal(validateSourceConnection({ ...source, quota: -1 }).valid, false);
+});
+
+test("research projects require bounded decision context and client scope", () => {
+  const project: ResearchProject = {
+    id: "project-1", clientId: "client-a", name: "Category entry", decision: "Decide whether to enter the premium segment.",
+    markets: ["DK"], languages: ["da"], status: "active", createdAt: "2026-10-16T00:00:00.000Z", updatedAt: "2026-10-16T00:00:00.000Z",
+  };
+  assert.equal(validateResearchProject(project).valid, true);
+  assert.equal(validateResearchProject({ ...project, decision: "" }).valid, false);
+  assert.equal(validateResearchProject({ ...project, markets: [] }).valid, false);
+  assert.equal(validateResearchProject({ ...project, status: "unknown" as ResearchProject["status"] }).valid, false);
 });
 
 test("identity-risk verbatim evidence is quarantined and unlicensed evidence cannot go live", () => {

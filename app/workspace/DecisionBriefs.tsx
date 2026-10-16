@@ -9,7 +9,7 @@ function commaList(value: FormDataEntryValue | null): string[] {
   return typeof value === "string" ? value.split(",").map((item) => item.trim()).filter(Boolean) : [];
 }
 
-export function DecisionBriefs({ abilities, evidence, initialBriefs, canResearch }: { abilities: readonly AbilityManifest[]; evidence: CanonicalEvidenceListRow[]; initialBriefs: DecisionBriefArtifact[]; canResearch: boolean }) {
+export function DecisionBriefs({ abilities, evidence, initialBriefs, canResearch, projectId }: { abilities: readonly AbilityManifest[]; evidence: CanonicalEvidenceListRow[]; initialBriefs: DecisionBriefArtifact[]; canResearch: boolean; projectId?: number }) {
   const [briefs, setBriefs] = useState(initialBriefs);
   const [open, setOpen] = useState(false);
   const [selectedEvidence, setSelectedEvidence] = useState<number[]>([]);
@@ -23,6 +23,7 @@ export function DecisionBriefs({ abilities, evidence, initialBriefs, canResearch
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         abilityId: data.get("abilityId"), question: data.get("question"), market: data.get("market"), language: data.get("language"),
+        projectId,
         pointOfView: data.get("pointOfView"), clientRelevance: data.get("clientRelevance"), recommendation: data.get("recommendation"),
         nextDecision: data.get("nextDecision"), claimMode: data.get("claimMode"), evidenceIds: selectedEvidence,
         contradictions: commaList(data.get("contradictions")), uncertainty: commaList(data.get("uncertainty")),
@@ -30,7 +31,7 @@ export function DecisionBriefs({ abilities, evidence, initialBriefs, canResearch
     });
     const payload = await response.json();
     if (!response.ok) { setError(payload.error ?? "Brief could not be created."); return; }
-    const refreshed = await fetch("/api/workspace/briefs");
+    const refreshed = await fetch(projectId ? `/api/workspace/briefs?projectId=${projectId}` : "/api/workspace/briefs");
     setBriefs((await refreshed.json()).briefs ?? []);
     setSelectedEvidence([]);
     setOpen(false);
@@ -45,7 +46,7 @@ export function DecisionBriefs({ abilities, evidence, initialBriefs, canResearch
         <label className="flex flex-col gap-1 text-sm font-medium md:col-span-2">Research question<input required name="question" className="rounded-md border border-border bg-background px-3 py-2 font-normal" /></label>
         <label className="flex flex-col gap-1 text-sm font-medium">Market<input name="market" placeholder="DK" className="rounded-md border border-border bg-background px-3 py-2 font-normal" /></label><label className="flex flex-col gap-1 text-sm font-medium">Language<input name="language" placeholder="da" className="rounded-md border border-border bg-background px-3 py-2 font-normal" /></label>
         <fieldset className="rounded-md border border-border p-3 md:col-span-2"><legend className="px-1 text-sm font-medium">Evidence</legend><div className="mt-2 grid gap-2 md:grid-cols-2">{evidence.map((item) => <label key={item.id} className="flex items-start gap-2 text-sm"><input type="checkbox" checked={selectedEvidence.includes(item.id)} onChange={() => setSelectedEvidence((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id])} /><span>{item.synthesis ?? item.externalReference}<span className="block text-xs text-muted">{item.sourceClass} · {item.grade}</span></span></label>)}</div></fieldset>
-        <p className="text-xs text-muted md:col-span-2">Leave the analysis fields empty to receive an evidence-gap assessment. Supplied analysis is policy-checked; it is never silently treated as truth.</p>
+        <p className="text-xs text-muted md:col-span-2">Leave the analysis fields empty to use an approved synthesis provider. If none is configured, the result stays `needs_context`; supplied human analysis is always policy-checked.</p>
         {(["pointOfView", "clientRelevance", "recommendation", "nextDecision"] as const).map((name) => <label key={name} className="flex flex-col gap-1 text-sm font-medium">{name.replace(/([A-Z])/g, " $1")}<textarea name={name} rows={2} className="rounded-md border border-border bg-background px-3 py-2 font-normal" /></label>)}
         <label className="flex flex-col gap-1 text-sm font-medium">Contradictions<input name="contradictions" placeholder="Comma-separated" className="rounded-md border border-border bg-background px-3 py-2 font-normal" /></label><label className="flex flex-col gap-1 text-sm font-medium">Uncertainty<input name="uncertainty" placeholder="Comma-separated" className="rounded-md border border-border bg-background px-3 py-2 font-normal" /></label>
         {error ? <p className="text-sm text-[var(--status-danger-text)] md:col-span-2">{error}</p> : null}<button className="rounded-md bg-[var(--button-primary-bg)] px-4 py-2 text-sm font-medium text-[var(--button-primary-text)] md:col-span-2">Create governed brief</button>

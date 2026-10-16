@@ -16,7 +16,7 @@ type. Expired evidence automatically presents as `needs_context`.
 | Pilot scope | Named client or approved representative dataset and signed source inventory | Unassigned | `needs_context` | — |
 | Source rights | Permission, licence, terms assessment, purpose, quotation rights, and revocation path per source | Unassigned | `needs_context` | — |
 | Data policy | Approved minimum cohort, suppression, evidence retention, and raw-retention values | Unassigned | `needs_context` | — |
-| Live connectors | Credentials in secret storage plus provider acceptance and failure tests | Unassigned | `needs_context` | — |
+| Live connectors | Registered source and synthesis adapters, credentials in secret storage, data-processing boundaries, provider acceptance and failure tests | Unassigned | `needs_context` | — |
 | Research quality | Named qualified reviewer and scored representative/adversarial decision briefs | Unassigned | `needs_context` | — |
 | Brand Lift | Named methodology reviewer and signed design/output-language review | Unassigned | `needs_context` | — |
 | Monitoring | Shadow-mode signal volume, reviewer scores, noise/dismissal thresholds, and retest | Unassigned | `needs_context` | — |

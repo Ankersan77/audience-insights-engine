@@ -1,6 +1,18 @@
 export type ISODateTime = string;
 export type ClientId = string;
 
+export type ResearchProject = {
+  id: string;
+  clientId: ClientId;
+  name: string;
+  decision: string;
+  markets: readonly string[];
+  languages: readonly string[];
+  status: "active" | "completed" | "archived";
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+};
+
 export type LifecycleState = "candidate" | "live" | "quarantined" | "expired" | "superseded";
 export type ReviewState = "pending" | "accepted" | "rejected" | "revision_requested";
 export type EvidenceGrade = "A" | "B" | "C" | "D" | "ungraded";

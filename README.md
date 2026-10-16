@@ -54,6 +54,11 @@ extraction must be supplied by a verified document adapter; the application neve
 upload as a substitute for that boundary.
 
 The same owned surface provides reviewed Market Twin records and persistent decision briefs.
+`/projects` provides the canonical Ask / Projects experience: tenant-scoped workrooms preserve the
+decision context, market/language scope, status and every linked decision brief. A provider-neutral
+synthesis seam may draft from Core-selected evidence, but deterministic evidence and claim gates
+run both before and after synthesis. With no approved provider configured, the product returns
+`needs_context` instead of invented expert prose.
 `/campaigns` handles campaign revisions, measurement-plan and study review, pre-flight/live/post
 assessments, governed learning, and lifecycle transitions. Requesting Brand Lift never bypasses
 the deterministic causal-design gate. `/monitoring` manages versioned sensing profiles and durable

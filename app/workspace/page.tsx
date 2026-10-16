@@ -4,13 +4,12 @@ import { DECISION_BRIEF_ABILITIES } from "@/src/abilities/catalog";
 import { requireSession } from "@/src/lib/auth";
 import { getWorkspaceReadiness } from "@/src/db/queries/workspace";
 import { listSourceConnections } from "@/src/db/queries/sources";
-import { SourceConnections } from "./SourceConnections";
 import { listCanonicalEvidence } from "@/src/db/queries/canonical_evidence";
 import { EvidenceOnboarding } from "./EvidenceOnboarding";
 import { listDecisionBriefs, listIntelligenceRecords } from "@/src/db/queries/workspace_intelligence";
 import { MarketTwin } from "./MarketTwin";
 import { DecisionBriefs } from "./DecisionBriefs";
-import { canResearch, canReview, isAdmin } from "@/src/lib/roles";
+import { canResearch, canReview } from "@/src/lib/roles";
 import { listValidationGates } from "@/src/db/queries/evaluation";
 import Link from "next/link";
 
@@ -46,6 +45,7 @@ export default async function WorkspacePage() {
     ["Campaigns", readiness.campaigns],
     ["Studies", readiness.studies],
     ["Sensing profiles", readiness.sensingProfiles],
+    ["Research projects", readiness.projects],
   ] as const;
 
   return (
@@ -140,7 +140,6 @@ export default async function WorkspacePage() {
         </div>
       </section>
 
-      <SourceConnections initialSources={sources} isAdmin={isAdmin(session)} />
       <EvidenceOnboarding initialEvidence={evidence} sources={sources} canResearch={canResearch(session)} />
       <MarketTwin initialRecords={intelligence} evidence={evidence} canResearch={canResearch(session)} canReview={canReview(session)} />
       <DecisionBriefs abilities={DECISION_BRIEF_ABILITIES} evidence={evidence} initialBriefs={briefs} canResearch={canResearch(session)} />

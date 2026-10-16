@@ -5,6 +5,7 @@ import {
   canonicalEvidence,
   intelligenceRecord,
   researchArtifact,
+  researchProject,
   sensingProfile,
   sourceConnection,
   study,
@@ -18,6 +19,7 @@ export type WorkspaceReadiness = {
   campaigns: number;
   studies: number;
   sensingProfiles: number;
+  projects: number;
 };
 
 async function tenantCount(
@@ -26,6 +28,7 @@ async function tenantCount(
     | typeof canonicalEvidence
     | typeof intelligenceRecord
     | typeof researchArtifact
+    | typeof researchProject
     | typeof campaign
     | typeof study
     | typeof sensingProfile,
@@ -44,7 +47,7 @@ async function tenantCount(
  */
 export async function getWorkspaceReadiness(clientId: number): Promise<WorkspaceReadiness> {
   if (!Number.isInteger(clientId) || clientId <= 0) throw new Error("invalid-client-scope");
-  const [sources, evidence, intelligence, artifacts, campaigns, studies, sensingProfiles] = await Promise.all([
+  const [sources, evidence, intelligence, artifacts, campaigns, studies, sensingProfiles, projects] = await Promise.all([
     tenantCount(sourceConnection, clientId),
     tenantCount(canonicalEvidence, clientId),
     tenantCount(intelligenceRecord, clientId),
@@ -52,7 +55,8 @@ export async function getWorkspaceReadiness(clientId: number): Promise<Workspace
     tenantCount(campaign, clientId),
     tenantCount(study, clientId),
     tenantCount(sensingProfile, clientId),
+    tenantCount(researchProject, clientId),
   ]);
-  return { sources, evidence, intelligence, artifacts, campaigns, studies, sensingProfiles };
+  return { sources, evidence, intelligence, artifacts, campaigns, studies, sensingProfiles, projects };
 }
 

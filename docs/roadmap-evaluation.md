@@ -78,6 +78,8 @@ The application must display these as `unverified` or `needs_context`, never inf
 The optimized vertical-slice plan is implemented through the repository-verifiable portion of all
 eight phases. The owned application now exposes:
 
+- durable Ask / Projects workrooms that bind decision context, market/language scope and governed
+  research artifacts without weakening tenant boundaries;
 - client-scoped evidence onboarding, Market Twin review and decision briefs;
 - versioned campaigns with a ready pre-flight approval gate, descriptive live readback and
   evidence-linked post-campaign assessment;
@@ -105,6 +107,10 @@ evidence, not a substitute for the open external gates below.
   payloads never enter canonical jobs, receipts, profiles, exports, logs, or artifacts.
 - Model-assisted synthesis may draft, but deterministic policy gates decide whether evidence is
   sufficient and which claim language is allowed.
+- The synthesis seam is provider-neutral. Core resolves the admissible evidence before a provider
+  sees it and re-runs the full brief and causal-language policy over the proposed analysis. Until
+  a provider and its processing boundary have acceptance evidence, production synthesis is absent
+  and requests fail honestly as `needs_context`.
 - External delivery stays optional. The owned product surface is the authoritative MVP output.
 - Campaign approval requires both an accepted measurement plan and a saved `ready` pre-flight
   assessment. Completion-to-learning review requires an accepted learning explicitly scoped to

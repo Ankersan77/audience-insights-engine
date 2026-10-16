@@ -597,11 +597,25 @@ export const abilityManifest = pgTable("ability_manifest", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [unique("ability_manifest_scope_version_unique").on(table.clientId, table.abilityKey, table.version)]);
 
+export const researchProject = pgTable("research_project", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => client.id, { onDelete: "restrict" }),
+  name: text("name").notNull(),
+  decision: text("decision").notNull(),
+  markets: text("markets").array().notNull().default(sql`'{}'::text[]`),
+  languages: text("languages").array().notNull().default(sql`'{}'::text[]`),
+  status: text("status").notNull().default("active"),
+  createdBy: integer("created_by").references(() => appUser.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("research_project_client_status_idx").on(table.clientId, table.status)]);
+
 export const researchArtifact = pgTable("research_artifact", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id")
     .notNull()
     .references(() => client.id, { onDelete: "restrict" }),
+  projectId: integer("project_id").references(() => researchProject.id, { onDelete: "restrict" }),
   artifactKey: text("artifact_key").notNull(),
   artifactType: text("artifact_type").notNull(),
   abilityKey: text("ability_key"),

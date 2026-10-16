@@ -5,20 +5,13 @@ import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import type { Role } from "@/src/lib/auth";
 
-// The three active sections of the product. "Settings" is
-// not a v1 destination — nothing in this plan builds one yet. Every item here
-// is visible to both roles (spec: no per-brand access restriction); it is the
-// admin-only controls *inside* each page (add brand, edit instructions, ...)
-// that are role-gated, at the page level — see src/lib/roles.ts.
 const NAV_ITEMS = [
-  { label: "Workspace", href: "/workspace" },
-  { label: "Brands", href: "/brands" },
-  { label: "Insights", href: "/insights" },
-  { label: "Campaigns", href: "/campaigns" },
-  { label: "Monitoring", href: "/monitoring" },
-  { label: "Configuration", href: "/configuration" },
+  { label: "Ask / Projects", href: "/projects" },
+  { label: "Market Pulse", href: "/monitoring" },
+  { label: "Market Twin", href: "/workspace" },
+  { label: "Campaign Studies", href: "/campaigns" },
+  { label: "Sources & Setup", href: "/configuration" },
   { label: "Quality", href: "/evaluation" },
-  { label: "Legacy runs", href: "/runs" },
 ] as const;
 
 export type AppShellUser = { name: string; role: Role; clientSlug?: string };

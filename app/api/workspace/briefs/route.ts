@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { ClaimMode, ProposedAnalysis } from "@/src/abilities/engine";
 import { runAbility } from "@/src/abilities/engine";
+import { runAbilityWithSynthesis } from "@/src/abilities/synthesis";
+import { getProductionSynthesisProvider } from "@/src/abilities/productionSynthesis";
 import { getDecisionBriefAbility } from "@/src/abilities/catalog";
 import { loadEvidenceItems } from "@/src/db/queries/canonical_evidence";
 import { listDecisionBriefs, saveDecisionBrief } from "@/src/db/queries/workspace_intelligence";
@@ -23,10 +25,13 @@ function safeText(value: unknown): string {
   return typeof value === "string" ? redactIdentifiers(value.trim()).content : "";
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "authentication-required" }, { status: 401 });
-  return NextResponse.json({ briefs: await listDecisionBriefs(session.clientId) });
+  const projectValue = request.nextUrl.searchParams.get("projectId");
+  const projectId = projectValue ? Number(projectValue) : undefined;
+  if (projectId !== undefined && (!Number.isInteger(projectId) || projectId <= 0)) return NextResponse.json({ error: "valid-project-required" }, { status: 400 });
+  return NextResponse.json({ briefs: await listDecisionBriefs(session.clientId, projectId) });
 }
 
 export async function POST(request: NextRequest) {
@@ -38,6 +43,8 @@ export async function POST(request: NextRequest) {
     throw error;
   }
   const body = (await request.json()) as Record<string, unknown>;
+  const projectId = body.projectId === undefined ? undefined : Number(body.projectId);
+  if (projectId !== undefined && (!Number.isInteger(projectId) || projectId <= 0)) return NextResponse.json({ error: "valid-project-required" }, { status: 400 });
   const abilityId = typeof body.abilityId === "string" ? body.abilityId : "";
   const question = safeText(body.question);
   if (!getDecisionBriefAbility(abilityId) || !question) return NextResponse.json({ error: "A decision-brief ability and research question are required." }, { status: 400 });
@@ -60,14 +67,15 @@ export async function POST(request: NextRequest) {
     contradictions: strings(body.contradictions),
     uncertainty: strings(body.uncertainty),
   } : undefined;
-  const brief = runAbility({
+  const abilityInput = {
     clientId: String(session.clientId), abilityId, question, analysis, evidence,
     market: typeof body.market === "string" ? body.market.trim() : undefined,
     language: typeof body.language === "string" ? body.language.trim() : undefined,
     now: new Date().toISOString(),
-  });
+  };
+  const brief = analysis ? runAbility(abilityInput) : await runAbilityWithSynthesis({ ...abilityInput, provider: getProductionSynthesisProvider() });
   assertPeopleBlind(brief);
-  const artifact = await saveDecisionBrief({ clientId: session.clientId, brief, createdBy: session.id });
+  const artifact = await saveDecisionBrief({ clientId: session.clientId, brief, createdBy: session.id, projectId });
   await recordGovernanceAudit({
     clientId: session.clientId, actorUserId: session.id, action: "run_ability", entityType: "research_artifact", entityId: String(artifact.id),
     after: { artifactKey: artifact.artifactKey, abilityId, status: brief.status, evidenceIds: brief.evidenceIds },

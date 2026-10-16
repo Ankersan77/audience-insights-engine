@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Applicability, DecisionBrief, IntelligenceKind, IntelligenceRecord, ReviewState } from "@/src/core/contracts";
 import { validateDecisionBrief, validateIntelligenceRecord } from "@/src/core/validation";
 import { db } from "@/src/db/client";
-import { canonicalEvidence, campaign, citation, intelligenceRecord, intelligenceRelationship, researchArtifact } from "@/src/db/schema";
+import { canonicalEvidence, campaign, citation, intelligenceRecord, intelligenceRelationship, researchArtifact, researchProject } from "@/src/db/schema";
 import { promoteIntelligence } from "@/src/core/transitions";
 import type { CampaignAssessment } from "@/src/campaigns/analysis";
 
@@ -261,13 +261,14 @@ export type DecisionBriefArtifact = {
   status: string;
   brief: DecisionBrief;
   createdAt: Date;
+  projectId: number | null;
 };
 
-export async function listDecisionBriefs(clientId: number): Promise<DecisionBriefArtifact[]> {
+export async function listDecisionBriefs(clientId: number, projectId?: number): Promise<DecisionBriefArtifact[]> {
   const rows = await db
     .select()
     .from(researchArtifact)
-    .where(and(eq(researchArtifact.clientId, clientId), eq(researchArtifact.artifactType, "decision_brief")))
+    .where(and(eq(researchArtifact.clientId, clientId), eq(researchArtifact.artifactType, "decision_brief"), projectId ? eq(researchArtifact.projectId, projectId) : undefined))
     .orderBy(desc(researchArtifact.id));
   return rows.map((row) => ({
     id: row.id,
@@ -276,6 +277,7 @@ export async function listDecisionBriefs(clientId: number): Promise<DecisionBrie
     status: row.status,
     brief: row.payloadJson as DecisionBrief,
     createdAt: row.createdAt,
+    projectId: row.projectId,
   }));
 }
 
@@ -283,6 +285,7 @@ export async function saveDecisionBrief(input: {
   clientId: number;
   brief: DecisionBrief;
   createdBy: number;
+  projectId?: number;
 }): Promise<DecisionBriefArtifact> {
   const validation = validateDecisionBrief(input.brief);
   if (!validation.valid) throw new Error(`invalid-decision-brief:${validation.errors.join(";")}`);
@@ -294,9 +297,16 @@ export async function saveDecisionBrief(input: {
     throw new Error("decision-brief-citation-scope-mismatch");
   }
   await assertOwnedEvidence(input.clientId, evidenceIds);
+  if (input.projectId) {
+    const [ownedProject] = await db.select({ id: researchProject.id }).from(researchProject).where(and(
+      eq(researchProject.id, input.projectId), eq(researchProject.clientId, input.clientId), eq(researchProject.status, "active"),
+    )).limit(1);
+    if (!ownedProject) throw new Error("active-project-scope-mismatch");
+  }
   return db.transaction(async (tx) => {
     const [created] = await tx.insert(researchArtifact).values({
       clientId: input.clientId,
+      projectId: input.projectId,
       artifactKey: input.brief.id,
       artifactType: "decision_brief",
       abilityKey: input.brief.abilityId,
@@ -331,7 +341,7 @@ export async function saveDecisionBrief(input: {
         expiresAt: item.expiresAt ? new Date(item.expiresAt) : null,
       })));
     }
-    return { id: row.id, artifactKey: row.artifactKey, version: row.version, status: row.status, brief: row.payloadJson as DecisionBrief, createdAt: row.createdAt };
+    return { id: row.id, artifactKey: row.artifactKey, version: row.version, status: row.status, brief: row.payloadJson as DecisionBrief, createdAt: row.createdAt, projectId: row.projectId };
   });
 }
 

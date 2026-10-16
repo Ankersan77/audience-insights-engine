@@ -8,6 +8,7 @@ import type {
   MeasurementPlan,
   QualitativeTheme,
   QuantitativeObservation,
+  ResearchProject,
   SensingProfile,
   SolutionProfile,
   SourceConnection,
@@ -47,6 +48,18 @@ export function validateSourceConnection(value: SourceConnection): ValidationRes
   if (value.credentialRef && (!value.credentialRef.provider || !value.credentialRef.key)) {
     errors.push("credentialRef must be opaque and complete");
   }
+  return result(errors);
+}
+
+export function validateResearchProject(value: ResearchProject): ValidationResult {
+  const errors: string[] = [];
+  required(value.id, "id", errors);
+  required(value.clientId, "clientId", errors);
+  required(value.name, "name", errors);
+  required(value.decision, "decision", errors);
+  if (value.markets.length === 0) errors.push("at least one market is required");
+  if (value.languages.length === 0) errors.push("at least one language is required");
+  if (!["active", "completed", "archived"].includes(value.status)) errors.push("unsupported project status");
   return result(errors);
 }
 
