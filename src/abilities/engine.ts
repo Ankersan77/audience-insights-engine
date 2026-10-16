@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Citation, DecisionBrief, EvidenceItem } from "../core/contracts.ts";
 import { getDecisionBriefAbility } from "./catalog.ts";
 import { resolveEvidence } from "../market-twin/resolver.ts";
+import { CONTEXT_EVIDENCE_REQUIREMENTS } from "./context.ts";
 
 export type ClaimMode = "attitude" | "behavior" | "demand_proxy" | "causal" | "descriptive";
 
@@ -40,6 +41,7 @@ export function runAbility(input: {
   question: string;
   analysis?: ProposedAnalysis;
   evidence: readonly EvidenceItem[];
+  contextEvidence?: readonly EvidenceItem[];
   market?: string;
   language?: string;
   now: string;
@@ -54,8 +56,10 @@ export function runAbility(input: {
     market: input.market,
     language: input.language,
   });
-  const selectedIds = new Set(resolution.selected.map((item) => item.id));
-  const analysisEvidenceMissing = input.analysis?.evidenceIds.some((id) => !selectedIds.has(id)) ?? false;
+  const contextSelection = resolveEvidence({ ...input, requirements: CONTEXT_EVIDENCE_REQUIREMENTS, evidence: input.contextEvidence ?? [] });
+  const selected = [...new Map([...resolution.selected, ...contextSelection.selected].map((item) => [item.id, item])).values()];
+  const selectedIds = new Set(selected.map((item) => item.id));
+  const analysisEvidenceMissing = input.analysis ? input.analysis.evidenceIds.length === 0 || input.analysis.evidenceIds.some((id) => !selectedIds.has(id)) : false;
   const analysisIncomplete = Boolean(input.analysis) && [
     input.analysis!.pointOfView,
     input.analysis!.clientRelevance,
@@ -89,8 +93,8 @@ export function runAbility(input: {
     question: input.question,
     pointOfView: status === "ready" ? input.analysis!.pointOfView : "Evidence is not yet sufficient for a responsible point of view.",
     clientRelevance: input.analysis?.clientRelevance ?? "Relevance cannot be resolved until the evidence gap is closed.",
-    evidenceIds: resolution.selected.map((item) => item.id),
-    citations: resolution.selected.map(citation),
+    evidenceIds: selected.map((item) => item.id),
+    citations: selected.map(citation),
     contradictions: input.analysis?.contradictions ?? [],
     uncertainty: [...(input.analysis?.uncertainty ?? []), ...resolution.gaps],
     recommendation: status === "ready" ? input.analysis!.recommendation : "Collect or approve the missing evidence before acting.",

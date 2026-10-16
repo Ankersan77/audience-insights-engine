@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { ClaimMode, ProposedAnalysis } from "@/src/abilities/engine";
-import { runAbility } from "@/src/abilities/engine";
-import { runAbilityWithSynthesis } from "@/src/abilities/synthesis";
+import { runContextualResearch } from "@/src/abilities/synthesis";
 import { getProductionSynthesisProvider } from "@/src/abilities/productionSynthesis";
 import { getDecisionBriefAbility } from "@/src/abilities/catalog";
 import { loadEvidenceItems } from "@/src/db/queries/canonical_evidence";
 import { listDecisionBriefs, saveDecisionBrief } from "@/src/db/queries/workspace_intelligence";
+import { loadResearchContextSources } from "@/src/db/queries/research_context";
 import { assertPeopleBlind, redactIdentifiers } from "@/src/evidence/policy";
 import { recordGovernanceAudit } from "@/src/lib/audit";
 import { getSession } from "@/src/lib/auth";
@@ -67,15 +67,26 @@ export async function POST(request: NextRequest) {
     contradictions: strings(body.contradictions),
     uncertainty: strings(body.uncertainty),
   } : undefined;
-  const abilityInput = {
-    clientId: String(session.clientId), abilityId, question, analysis, evidence,
+  const sources = await loadResearchContextSources({ clientId: session.clientId, projectId, evidenceIds });
+  if (projectId && !sources.project) return NextResponse.json({ error: "project-not-found" }, { status: 404 });
+  if (projectId && sources.project?.status !== "active") return NextResponse.json({ error: "active-project-required" }, { status: 409 });
+  const brief = await runContextualResearch({
+    clientId: String(session.clientId), abilityId, question, analysis, sources, projectId: projectId ? String(projectId) : undefined,
     market: typeof body.market === "string" ? body.market.trim() : undefined,
     language: typeof body.language === "string" ? body.language.trim() : undefined,
     now: new Date().toISOString(),
-  };
-  const brief = analysis ? runAbility(abilityInput) : await runAbilityWithSynthesis({ ...abilityInput, provider: getProductionSynthesisProvider() });
+    provider: getProductionSynthesisProvider(),
+  });
   assertPeopleBlind(brief);
-  const artifact = await saveDecisionBrief({ clientId: session.clientId, brief, createdBy: session.id, projectId });
+  let artifact;
+  try {
+    artifact = await saveDecisionBrief({ clientId: session.clientId, brief, createdBy: session.id, projectId });
+  } catch (error) {
+    if (error instanceof Error && ["research-context-changed", "active-project-scope-mismatch"].includes(error.message)) {
+      return NextResponse.json({ error: "Research context changed during analysis. Refresh and run again." }, { status: 409 });
+    }
+    throw error;
+  }
   await recordGovernanceAudit({
     clientId: session.clientId, actorUserId: session.id, action: "run_ability", entityType: "research_artifact", entityId: String(artifact.id),
     after: { artifactKey: artifact.artifactKey, abilityId, status: brief.status, evidenceIds: brief.evidenceIds },

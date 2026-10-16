@@ -101,9 +101,13 @@ evidence, not a substitute for the open external gates below.
   cases verify both completion/revocation orders, cancellation, current rights, scope, tenant
   isolation and credential-reference projection. All migrations were applied to an empty
   PostgreSQL 16 test database; production migration and recovery remain unverified.
-- Production synthesis still returns no provider. The orchestration input also lacks resolved
-  Market Twin strategy, project decision context and active solution configuration. A provider
-  interface alone does not satisfy the expert-research requirement.
+- Research orchestration now resolves the active tenant solution, project decision and scope,
+  bound sensing configuration and applicable reviewed Market Twin records with current supporting
+  evidence. Briefs retain versioned context references and record digests; changed project or
+  solution versions are rejected at persistence. Context evidence cannot substitute for an
+  ability's primary evidence requirements. Invalid provider output and self-approved causal
+  classifications fail closed. Production synthesis still returns no provider: a provider
+  interface and fixture tests alone do not satisfy the expert-research requirement.
 - Weekly/monthly/quarterly briefing descriptions exist, but durable scheduled briefing production
   and its review workflow still require implementation and end-to-end proof.
 - Quota and cost checks currently validate returned receipts. They do not reserve a shared

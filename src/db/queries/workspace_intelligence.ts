@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Applicability, DecisionBrief, IntelligenceKind, IntelligenceRecord, ReviewState } from "@/src/core/contracts";
 import { validateDecisionBrief, validateIntelligenceRecord } from "@/src/core/validation";
 import { db } from "@/src/db/client";
-import { canonicalEvidence, campaign, citation, intelligenceRecord, intelligenceRelationship, researchArtifact, researchProject } from "@/src/db/schema";
+import { canonicalEvidence, campaign, citation, intelligenceRecord, intelligenceRelationship, researchArtifact, researchProject, solutionProfile } from "@/src/db/schema";
 import { promoteIntelligence } from "@/src/core/transitions";
 import type { CampaignAssessment } from "@/src/campaigns/analysis";
 
@@ -297,13 +297,23 @@ export async function saveDecisionBrief(input: {
     throw new Error("decision-brief-citation-scope-mismatch");
   }
   await assertOwnedEvidence(input.clientId, evidenceIds);
-  if (input.projectId) {
-    const [ownedProject] = await db.select({ id: researchProject.id }).from(researchProject).where(and(
-      eq(researchProject.id, input.projectId), eq(researchProject.clientId, input.clientId), eq(researchProject.status, "active"),
-    )).limit(1);
-    if (!ownedProject) throw new Error("active-project-scope-mismatch");
-  }
   return db.transaction(async (tx) => {
+    const basis = input.brief.contextBasis;
+    if (basis && basis.projectId !== (input.projectId ? String(input.projectId) : undefined)) throw new Error("research-context-changed");
+    if (input.projectId) {
+      const [ownedProject] = await tx.select().from(researchProject).where(and(
+        eq(researchProject.id, input.projectId), eq(researchProject.clientId, input.clientId), eq(researchProject.status, "active"),
+      )).limit(1).for("share");
+      if (!ownedProject) throw new Error("active-project-scope-mismatch");
+      if (basis && ownedProject.updatedAt.toISOString() !== basis.projectUpdatedAt) throw new Error("research-context-changed");
+    }
+    if (basis) {
+      const [activeSolution] = await tx.select({ id: solutionProfile.id }).from(solutionProfile).where(and(
+        eq(solutionProfile.id, Number(basis.solutionProfileId)), eq(solutionProfile.clientId, input.clientId),
+        eq(solutionProfile.version, basis.solutionVersion), eq(solutionProfile.status, "active"),
+      )).limit(1).for("share");
+      if (!activeSolution) throw new Error("research-context-changed");
+    }
     const [created] = await tx.insert(researchArtifact).values({
       clientId: input.clientId,
       projectId: input.projectId,

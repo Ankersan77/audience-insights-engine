@@ -218,6 +218,21 @@ export type DecisionBrief = {
   nextDecision: string;
   status: "ready" | "needs_context" | "blocked";
   createdAt: ISODateTime;
+  contextBasis?: ResearchContextBasis;
+  synthesisProvider?: { id: string; version: string };
+};
+
+export type ResearchContextBasis = {
+  projectId?: string;
+  projectUpdatedAt?: string;
+  solutionProfileId: string;
+  solutionVersion: number;
+  sensingProfileId?: string;
+  sensingVersion?: number;
+  market: string;
+  language: string;
+  intelligence: readonly { id: string; reviewedAt?: string; evidenceIds: readonly string[]; contentDigest: string }[];
+  excludedRecordCount: number;
 };
 
 export type CampaignState =

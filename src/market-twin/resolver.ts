@@ -48,7 +48,9 @@ export function resolveEvidence(input: {
     if (item.clientId !== input.clientId) reasons.push("different-client");
     if (item.lifecycle !== "live" && item.lifecycle !== "candidate") reasons.push(`lifecycle-${item.lifecycle}`);
     if (!item.rights.commercialUse) reasons.push("rights-do-not-permit-use");
-    if (new Date(item.expiresAt) <= new Date(input.now)) reasons.push("expired");
+    if (!Number.isFinite(Date.parse(item.expiresAt)) || !Number.isFinite(Date.parse(input.now))) reasons.push("invalid-expiry");
+    else if (new Date(item.expiresAt) <= new Date(input.now)) reasons.push("expired");
+    if (item.rights.expiresAt && (!Number.isFinite(Date.parse(item.rights.expiresAt)) || Date.parse(item.rights.expiresAt) <= Date.parse(input.now))) reasons.push("rights-expired-or-invalid");
     if (item.sensitive || item.identityRisk) reasons.push("sensitive-or-identity-risk");
     if (item.citationLevel === "verbatim") reasons.push("verbatim-requires-explicit-citation-review");
     if (input.market && item.applicability.markets.length > 0 && !item.applicability.markets.includes(input.market)) {

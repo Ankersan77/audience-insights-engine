@@ -4,7 +4,7 @@ import test from "node:test";
 import { Pool } from "pg";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { and, eq } from "drizzle-orm";
-import { client, canonicalEvidence, sourceConnection, sourceAcquisitionJob, sourceAcquisitionReceipt } from "../src/db/schema";
+import { appUser, client, canonicalEvidence, researchProject, intelligenceRecord, sourceConnection, sourceAcquisitionJob, sourceAcquisitionReceipt } from "../src/db/schema";
 import { PublicWebEvidenceAdapter } from "../src/evidence/adapters";
 import type { SourceConnectionPolicy } from "../src/core/contracts";
 
@@ -19,6 +19,10 @@ const { db } = await import("../src/db/client");
 const { createSourceConnection, listSourceConnections, revokeSourceConnection } = await import("../src/db/queries/sources");
 const { persistAcquisition, completeExistingAcquisition, failExistingAcquisition } = await import("../src/db/queries/canonical_evidence");
 const { claimAcquisitionJob, cancelAcquisitionJob } = await import("../src/db/queries/acquisition_execution");
+const { loadResearchContextSources } = await import("../src/db/queries/research_context");
+const { createActiveSolutionProfile } = await import("../src/db/queries/solution_profiles");
+const { saveDecisionBrief } = await import("../src/db/queries/workspace_intelligence");
+const { runContextualResearch } = await import("../src/abilities/synthesis");
 const probe = new Pool({ connectionString: url });
 const rights = { basis: "public_permitted" as const, commercialUse: true, quotationAllowed: false, restrictions: [] };
 const policy: SourceConnectionPolicy = {
@@ -26,9 +30,9 @@ const policy: SourceConnectionPolicy = {
   markets: ["DK"], languages: ["da"], cadence: "manual", lookbackDays: 30, quota: 5, costLimit: 0,
 };
 
-async function fixture() {
+async function fixture(existingTenant?: typeof client.$inferSelect) {
   const key = randomUUID();
-  const [tenant] = await db.insert(client).values({ name: "Synthetic integration tenant", slug: `integration-${key}` }).returning();
+  const tenant = existingTenant ?? (await db.insert(client).values({ name: "Synthetic integration tenant", slug: `integration-${key}` }).returning())[0];
   const source = await createSourceConnection({ clientId: tenant.id, connectorId: `source-${key}`, connectorVersion: "1.0.0",
     sourceClass: "official_or_public", rights, policy, retentionDays: 30, rawRetentionHours: 0, credentialRef: "secret-store/test/reference",
   });
@@ -145,6 +149,47 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       assert.equal(await failExistingAcquisition({ clientId: f.tenant.id, sourceConnectionId: f.source.id, jobId: job.id, errorCode: "late-worker", now: new Date() }), false);
       const [source] = await db.select().from(sourceConnection).where(eq(sourceConnection.id, f.source.id));
       assert.equal(source.health, "unavailable");
+    });
+
+    await t.test("research loads tenant context and rejects changed project or solution snapshots", async () => {
+      const first = await fixture();
+      const second = await fixture(first.tenant);
+      const outsider = await fixture();
+      const one = await persistAcquisition(first.input);
+      const two = await persistAcquisition(second.input);
+      const [user] = await db.insert(appUser).values({ email: "researcher@example.invalid", name: "Synthetic researcher", role: "researcher", ssoSubjectId: randomUUID() }).returning();
+      const now = new Date();
+      const [project] = await db.insert(researchProject).values({ clientId: first.tenant.id, name: "Synthetic decision", decision: "Choose the next bounded category study.", markets: ["DK"], languages: ["da"], createdBy: user.id, updatedAt: now }).returning();
+      const [record] = await db.insert(intelligenceRecord).values({ clientId: first.tenant.id, kind: "fact", title: "Reviewed category context", statement: "A descriptive category pattern warrants research.", lifecycle: "live", reviewState: "accepted", evidenceIds: [...one.evidenceIds], contradictionIds: [], dependencyIds: [], applicabilityJson: first.input.applicability, confidence: 0.8, uncertainty: ["Synthetic fixture only."], synthesisBy: "human", reviewedBy: user.id, reviewedAt: now }).returning();
+      const profile = { enabledAbilities: [{ id: "market-category-diagnosis", version: "1.0.0" }], providerBindings: { first: first.source.connectorId, second: second.source.connectorId }, markets: ["DK"], languages: ["da"], reviewRoles: { research: ["reviewer"] }, retention: { evidenceDays: 30, rawHours: 0, auditDays: 365 } };
+      const solution = await createActiveSolutionProfile({ clientId: first.tenant.id, createdBy: user.id, profile });
+      const sources = await loadResearchContextSources({ clientId: first.tenant.id, projectId: project.id, evidenceIds: two.evidenceIds });
+      assert.equal(sources.project?.decision, project.decision);
+      assert.equal(sources.solution?.id, String(solution.databaseId));
+      assert.deepEqual(sources.intelligence.map((item) => item.id), [String(record.id)]);
+      assert.deepEqual(sources.evidence.map((item) => Number(item.id)).sort(), [...one.evidenceIds, ...two.evidenceIds].sort());
+      const foreign = await loadResearchContextSources({ clientId: outsider.tenant.id, projectId: project.id });
+      assert.equal(foreign.project, null);
+      assert.equal(foreign.solution, null);
+      assert.equal(foreign.intelligence.length, 0);
+      const brief = await runContextualResearch({ clientId: String(first.tenant.id), abilityId: "market-category-diagnosis", question: project.decision, projectId: String(project.id), now: new Date().toISOString(), sources,
+        analysis: { pointOfView: "The category merits a bounded study.", clientRelevance: "Supports the selected category decision.", recommendation: "Validate with independent research.", nextDecision: "Choose the study scope.", claimMode: "descriptive", evidenceIds: [...one.evidenceIds, ...two.evidenceIds].map(String), contradictions: [], uncertainty: ["Synthetic descriptive evidence."] },
+      });
+      assert.equal(brief.status, "ready");
+      const input = { clientId: first.tenant.id, createdBy: user.id, projectId: project.id, brief };
+      const saved = await saveDecisionBrief(input);
+      assert.deepEqual(saved.brief.contextBasis, JSON.parse(JSON.stringify(brief.contextBasis)));
+      await assert.rejects(saveDecisionBrief({ ...input, projectId: undefined }), /research-context-changed/);
+      await db.update(researchProject).set({ updatedAt: new Date(now.getTime() + 1000) }).where(eq(researchProject.id, project.id));
+      await assert.rejects(saveDecisionBrief(input), /research-context-changed/);
+      await db.update(researchProject).set({ updatedAt: now }).where(eq(researchProject.id, project.id));
+      await createActiveSolutionProfile({ clientId: first.tenant.id, createdBy: user.id, profile });
+      await assert.rejects(saveDecisionBrief(input), /research-context-changed/);
+      await db.update(researchProject).set({ status: "archived" }).where(eq(researchProject.id, project.id));
+      await assert.rejects(saveDecisionBrief(input), /active-project-scope-mismatch/);
+      await revokeSourceConnection({ clientId: first.tenant.id, id: first.source.id, now: new Date() });
+      const revoked = await loadResearchContextSources({ clientId: first.tenant.id, projectId: project.id });
+      assert.equal(revoked.sourceBindings[first.source.connectorId], undefined);
     });
   } finally {
     await probe.end();

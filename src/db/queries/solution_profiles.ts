@@ -6,6 +6,11 @@ import { sensingProfile, solutionProfile } from "@/src/db/schema";
 
 export type SolutionProfileRow = { databaseId: number; profile: SolutionProfile; createdBy: number | null };
 
+export async function getActiveSolutionProfile(clientId: number): Promise<SolutionProfile | null> {
+  const [row] = await db.select().from(solutionProfile).where(and(eq(solutionProfile.clientId, clientId), eq(solutionProfile.status, "active"))).orderBy(desc(solutionProfile.version)).limit(1);
+  return row ? { ...row.profileJson as SolutionProfile, id: String(row.id), clientId: String(row.clientId), version: row.version, status: "active" } : null;
+}
+
 export async function listSolutionProfiles(clientId: number): Promise<SolutionProfileRow[]> {
   const rows = await db.select().from(solutionProfile).where(eq(solutionProfile.clientId, clientId)).orderBy(desc(solutionProfile.version));
   return rows.map((row) => ({ databaseId: row.id, profile: row.profileJson as SolutionProfile, createdBy: row.createdBy }));
