@@ -65,6 +65,11 @@ the deterministic causal-design gate. `/monitoring` manages versioned sensing pr
 tenant-scoped runs; `/configuration` manages portable solution-profile versions and redacted
 exports.
 
+Market Pulse also provides opt-in weekly/monthly/quarterly review packets with closed UTC windows,
+restart-safe scheduling and human accept/reject gates. These are traceable indexes of available
+research, not autonomous expert synthesis. Missing source coverage stays explicit. Enable rhythms
+only after binding a sensing profile to the active solution.
+
 `/evaluation` records rubric-scored human benchmark evidence, remediation/retests, and the eight
 expiry-aware external validation gates. Method, monitoring, and operations gates cannot be marked
 verified without a passing scorecard of the matching type.

@@ -6,6 +6,7 @@ import { listSensingProfiles } from "@/src/db/queries/monitoring";
 import { recordGovernanceAudit } from "@/src/lib/audit";
 import { getSession } from "@/src/lib/auth";
 import { assertAdmin, PermissionDeniedError } from "@/src/lib/roles";
+import type { BriefingCadence } from "@/src/monitoring/briefings";
 
 function strings(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : []; }
 
@@ -19,6 +20,8 @@ export async function POST(request: NextRequest) {
   try { assertAdmin(session); } catch (error) { if (error instanceof PermissionDeniedError) return NextResponse.json({ error: "permission-denied" }, { status: 403 }); throw error; }
   const body = (await request.json()) as Record<string, unknown>;
   const enabledIds = strings(body.enabledAbilities);
+  const briefingCadences = strings(body.briefingCadences);
+  if (briefingCadences.some((item) => !["weekly", "monthly", "quarterly"].includes(item))) return NextResponse.json({ error: "Unsupported briefing cadence." }, { status: 400 });
   const enabledAbilities = ABILITY_CATALOG.filter((ability) => enabledIds.includes(ability.id)).map(({ id, version }) => ({ id, version }));
   const sourceIds = strings(body.sourceConnectionIds);
   const sources = await listSourceConnections(session.clientId);
@@ -40,6 +43,7 @@ export async function POST(request: NextRequest) {
       reviewRoles: { market_twin: ["reviewer"], measurement: ["reviewer"], brand_lift: ["reviewer"], learning: ["reviewer"] },
       retention: { evidenceDays, rawHours, auditDays },
       sensingProfileId,
+      briefingCadences: briefingCadences as BriefingCadence[],
     } });
     await recordGovernanceAudit({ clientId: session.clientId, actorUserId: session.id, action: "activate", entityType: "solution_profile", entityId: String(created.databaseId), after: { version: created.profile.version, enabledAbilities: created.profile.enabledAbilities, providerBindingKeys: Object.keys(created.profile.providerBindings) } });
     return NextResponse.json({ profile: created }, { status: 201 });

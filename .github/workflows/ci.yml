@@ -56,10 +56,11 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Apply migrations and test PostgreSQL governance
+      - name: Build
+        run: pnpm build
+
+      - name: Apply migrations and test PostgreSQL governance and authenticated HTTP
         run: pnpm test:integration
         env:
           TEST_DATABASE_URL: postgresql://postgres:isolated-test-only@127.0.0.1:5432/market_research_test
-
-      - name: Build
-        run: pnpm build
+          TEST_HTTP: "1"

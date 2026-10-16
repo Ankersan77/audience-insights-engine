@@ -108,13 +108,20 @@ evidence, not a substitute for the open external gates below.
   ability's primary evidence requirements. Invalid provider output and self-approved causal
   classifications fail closed. Production synthesis still returns no provider: a provider
   interface and fixture tests alone do not satisfy the expert-research requirement.
-- Weekly/monthly/quarterly briefing descriptions exist, but durable scheduled briefing production
-  and its review workflow still require implementation and end-to-end proof.
+- Weekly/monthly/quarterly review packets now have opt-in solution configuration, closed UTC
+  windows, bounded restart catch-up, durable idempotent artifacts, tenant-scoped owned-surface
+  delivery and atomic accept/reject audit. Missing coverage is not no-change, and unavailable
+  evidence prevents acceptance. The packets deliberately index existing evidence and work; they
+  do not yet provide expert narrative synthesis. Urgent alert delivery, late-evidence revision
+  workflows and live shadow-mode quality proof remain open.
 - Quota and cost checks currently validate returned receipts. They do not reserve a shared
   budget or prevent provider spend before collection. Provider cost units, preflight budgets,
   pagination and quota accounting still need a defined and exercised execution contract.
-- The deterministic reference pilot does not exercise authenticated HTTP requests or rendered
-  user flows. Broader database, tenant-boundary and browser verification remains open.
+- The PostgreSQL suite now exercises actual authenticated HTTP briefing reads/reviews and the
+  server-rendered Market Pulse with synthetic signed sessions. This does not exercise external
+  OIDC login or interactive browser flows; broader product and browser verification remains open.
+- Session cookies currently rely on browser expiry and a signed role snapshot. Server-side
+  session expiry, membership changes and revocation need enforcement and adversarial HTTP proof.
 
 These are implementation gaps, additional to the external validation register. They may not be
 closed merely by naming an adapter, adding a manifest or passing the existing unit suite.

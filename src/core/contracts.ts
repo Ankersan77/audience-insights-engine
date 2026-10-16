@@ -354,6 +354,8 @@ export type SolutionProfile = {
   reviewRoles: Readonly<Record<string, readonly string[]>>;
   retention: { evidenceDays: number; rawHours: number; auditDays: number };
   sensingProfileId?: string;
+  /** Opt-in owned-surface briefing rhythms; omitted means disabled. */
+  briefingCadences?: readonly ("weekly" | "monthly" | "quarterly")[];
   createdAt: ISODateTime;
 };
 

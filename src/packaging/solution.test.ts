@@ -57,6 +57,7 @@ test("solution configuration exports tenant-neutral data and verifies on import"
   for (const forbidden of ["apiKey", "password", "bearer", "client content"]) assert.equal(serialized.includes(forbidden), false);
   for (const tenantField of ["client-a", "clientId", "createdAt", "sensingProfileId"]) assert.equal(serialized.includes(tenantField), false);
   assert.deepEqual(importSolutionProfile(exported), exported.profile);
+  assert.deepEqual(importSolutionProfile(JSON.parse(serialized)), exported.profile);
   assert.throws(() => importSolutionProfile({ ...exported, checksum: "tampered" }), /checksum/);
 });
 
@@ -71,9 +72,10 @@ test("a second client uses the same profile contract without a Core code branch"
 
 test("portable packages carry tenant-neutral sensing policy and require the matching binding", () => {
   const source = sensing("client-a");
-  const configured = { ...profile("client-a"), sensingProfileId: source.id };
+  const configured = { ...profile("client-a"), sensingProfileId: source.id, briefingCadences: ["weekly", "monthly", "quarterly"] as const };
   const exported = exportSolutionProfile(configured, "2026-10-16T01:00:00.000Z", source);
-  const imported = importSolutionPackage(exported);
+  const imported = importSolutionPackage(JSON.parse(JSON.stringify(exported)));
+  assert.deepEqual(imported.profile.briefingCadences, ["weekly", "monthly", "quarterly"]);
   assert.equal(exported.formatVersion, 3);
   assert.equal(imported.sensingProfile?.lookbackDays, 30);
   assert.deepEqual(imported.sensingProfile?.sourceConnectionIds, ["official-statistics"]);

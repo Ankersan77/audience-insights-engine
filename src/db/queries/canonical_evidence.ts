@@ -84,7 +84,11 @@ export async function loadEvidenceItems(clientId: number, evidenceIds?: readonly
       ),
     )
     .where(and(...conditions));
-  return rows.map(({ evidence: row, sourceClass }) => ({
+  return rows.map(canonicalEvidenceItem);
+}
+
+export function canonicalEvidenceItem({ evidence: row, sourceClass }: { evidence: typeof canonicalEvidence.$inferSelect; sourceClass: string }): EvidenceItem {
+  return {
     id: String(row.id),
     clientId: String(row.clientId),
     collectionId: String(row.collectionId),
@@ -109,7 +113,7 @@ export async function loadEvidenceItems(clientId: number, evidenceIds?: readonly
     identityRisk: row.identityRisk,
     redactions: row.redactions,
     contentHash: row.contentHash,
-  }));
+  };
 }
 
 export type PersistAcquisitionInput = {

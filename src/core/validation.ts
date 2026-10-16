@@ -173,6 +173,8 @@ export function validateStudyDesign(value: StudyDesign): ValidationResult {
 
 export function validateSolutionProfile(value: SolutionProfile): ValidationResult {
   const errors: string[] = [];
+  if (value.briefingCadences !== undefined && (!Array.isArray(value.briefingCadences) || value.briefingCadences.some((item) => !["weekly", "monthly", "quarterly"].includes(item)) || new Set(value.briefingCadences).size !== value.briefingCadences.length)) errors.push("briefing cadences must be unique supported rhythms");
+  if (value.briefingCadences?.length && !value.sensingProfileId) errors.push("scheduled briefings require a bound sensing profile");
   required(value.clientId, "clientId", errors);
   if (value.version < 1) errors.push("version must be positive");
   if (value.retention.evidenceDays <= 0) errors.push("evidence retention must be positive");

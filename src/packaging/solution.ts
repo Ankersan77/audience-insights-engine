@@ -2,7 +2,7 @@ import type { SensingProfile, SolutionProfile } from "../core/contracts.ts";
 import { validateSensingProfile, validateSolutionProfile } from "../core/validation.ts";
 
 export type PortableSolutionProfile = Pick<SolutionProfile,
-  "enabledAbilities" | "providerBindings" | "markets" | "languages" | "reviewRoles" | "retention"
+  "enabledAbilities" | "providerBindings" | "markets" | "languages" | "reviewRoles" | "retention" | "briefingCadences"
 >;
 
 export type PortableSensingProfile = Omit<SensingProfile, "id" | "clientId" | "version">;
@@ -30,6 +30,7 @@ function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
   if (value && typeof value === "object") {
     return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
       .join(",")}}`;
@@ -56,6 +57,7 @@ export function exportSolutionProfile(profile: SolutionProfile, exportedAt: stri
     languages: structuredClone(profile.languages),
     reviewRoles: structuredClone(profile.reviewRoles),
     retention: structuredClone(profile.retention),
+    ...(profile.briefingCadences ? { briefingCadences: [...profile.briefingCadences] } : {}),
   };
   if (profile.sensingProfileId && (!sensingProfile || sensingProfile.id !== profile.sensingProfileId || sensingProfile.clientId !== profile.clientId)) {
     throw new Error("solution sensing profile is required and must match the client binding");
@@ -90,6 +92,7 @@ export function importSolutionPackage(value: unknown): { profile: PortableSoluti
     version: 1,
     status: "draft",
     createdAt: packageValue.exportedAt,
+    sensingProfileId: packageValue.formatVersion === 3 && packageValue.sensingProfile ? "portable-validation" : undefined,
   };
   const validation = validateSolutionProfile(candidate);
   if (!validation.valid) throw new Error(`invalid-solution-profile:${validation.errors.join(";")}`);

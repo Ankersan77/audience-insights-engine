@@ -91,6 +91,9 @@ The implementation column is an inventory, not a completion declaration. The fol
 pre-acquisition budget enforcement and broader runtime verification. Those repository tasks remain
 open alongside the external gates. Source-policy persistence and revocation concurrency now have
 dedicated PostgreSQL integration coverage in `integration/source-governance.integration.ts`.
+Scheduled review packets now persist and support owned-surface review; narrative synthesis, urgent
+alert delivery and explicit late-evidence revisions are still open. Briefing HTTP authorization
+and viewer server rendering are covered with synthetic sessions; this is not a full browser pilot.
 
 ## Phase 0 — Product reset and legacy isolation
 

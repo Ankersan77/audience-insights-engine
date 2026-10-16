@@ -43,6 +43,34 @@ Run `TEST_DATABASE_URL=... pnpm test:integration` against a dedicated database w
 It exercises actual PostgreSQL locks and both revocation/completion orderings. CI supplies an
 isolated PostgreSQL 16 service. These tests do not certify production backup or restore.
 
+After building, run `TEST_HTTP=1 TEST_DATABASE_URL=... pnpm test:integration` to exercise the actual
+web server as well. The suite starts a temporary loopback-only production-build process against
+the test database with a synthetic signing key. It verifies briefing authentication, role checks,
+tenant isolation, review transitions and the server-rendered viewer surface, then stops the
+process. CI runs this variant after the production build. This is not an external OIDC login test.
+
+## Scheduled review packets
+
+An administrator enables weekly, monthly and/or quarterly rhythms under Market Pulse. A bound
+sensing profile is required; saving creates a new immutable solution version. Portable packages
+carry these rhythms without tenant IDs. Omitted rhythms are disabled, including in older packages.
+
+The canonical scheduler generates packets every 15 minutes, after monitoring reconciliation and
+qualification. Windows are UTC, end-exclusive and closed before generation. The first window
+begins at solution activation; later windows follow Monday/month/quarter boundaries. Each tick
+catches up at most 12 windows per cadence and active solution. A persisted window end is the
+restart checkpoint, and concurrent deliveries cannot duplicate its artifact. Superseded solutions
+stop scheduling: a new version does not reconstruct missing history under old configuration.
+
+Packets contain references and bounded coverage summaries, not copied source excerpts. Monthly
+reviews require current audience and positioning briefs; quarterly reviews expose stale context
+and pending learning. They are deterministic review indexes, not expert narrative synthesis.
+Missing/failed/pending monitoring and absent receipts produce explicit gaps. One receipt proves
+a source check, not continuous coverage or representativeness. Reviews are owned-surface only,
+have named reviewers, reject incomplete/unavailable evidence and never promote a signal or learning.
+Historical acceptance remains visible when source availability later changes. Late evidence does
+not silently rewrite a packet; explicit revised-packet generation remains an open work item.
+
 ## Quality and release evidence
 
 Use `/evaluation` to record human scorecards and per-client external validation evidence. A

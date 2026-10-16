@@ -55,7 +55,7 @@ export function DecisionBriefs({ abilities, evidence, initialBriefs, canResearch
       <div className="mt-4 grid gap-3">
         {briefs.map(({ id, brief }) => {
           const ability = abilities.find((item) => item.id === brief.abilityId && item.version === brief.abilityVersion);
-          return <article key={id} className="rounded-md border border-border p-4">
+          return <article key={id} id={`brief-${id}`} className="rounded-md border border-border p-4">
             <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-xs font-medium text-muted uppercase">{brief.abilityId} · v{brief.abilityVersion}</p><h3 className="font-medium">{brief.question}</h3></div><span className={`rounded-full px-2 py-1 text-xs ${brief.status === "ready" ? "bg-[var(--status-success-bg)] text-[var(--status-success-text)]" : "bg-[var(--status-warning-bg)] text-[var(--status-warning-text)]"}`}>{brief.status}</span></div>
             <p className="mt-3 text-sm font-medium">{brief.pointOfView}</p>
             <p className="mt-2 text-sm text-muted">{brief.recommendation}</p>

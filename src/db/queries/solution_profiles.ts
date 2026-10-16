@@ -13,7 +13,7 @@ export async function getActiveSolutionProfile(clientId: number): Promise<Soluti
 
 export async function listSolutionProfiles(clientId: number): Promise<SolutionProfileRow[]> {
   const rows = await db.select().from(solutionProfile).where(eq(solutionProfile.clientId, clientId)).orderBy(desc(solutionProfile.version));
-  return rows.map((row) => ({ databaseId: row.id, profile: row.profileJson as SolutionProfile, createdBy: row.createdBy }));
+  return rows.map((row) => ({ databaseId: row.id, profile: { ...row.profileJson as SolutionProfile, status: row.status as SolutionProfile["status"] }, createdBy: row.createdBy }));
 }
 
 export async function getSolutionProfile(clientId: number, id: number): Promise<SolutionProfileRow | null> {
@@ -24,10 +24,15 @@ export async function getSolutionProfile(clientId: number, id: number): Promise<
 export async function createActiveSolutionProfile(input: {
   clientId: number;
   createdBy: number;
+  expectedActiveId?: number;
   profile: Omit<SolutionProfile, "id" | "clientId" | "version" | "status" | "createdAt">;
 }): Promise<SolutionProfileRow> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(73001, ${input.clientId})`);
+    if (input.expectedActiveId !== undefined) {
+      const [active] = await tx.select({ id: solutionProfile.id }).from(solutionProfile).where(and(eq(solutionProfile.clientId, input.clientId), eq(solutionProfile.status, "active"))).limit(1);
+      if (active?.id !== input.expectedActiveId) throw new Error("active-solution-changed");
+    }
     const [versionRow] = await tx.select({ value: max(solutionProfile.version) }).from(solutionProfile).where(eq(solutionProfile.clientId, input.clientId));
     const version = Number(versionRow?.value ?? 0) + 1;
     const now = new Date();
