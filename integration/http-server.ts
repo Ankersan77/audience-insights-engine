@@ -14,7 +14,9 @@ export async function startTestHttpServer(databaseUrl: string) {
   await new Promise<void>((resolve, reject) => allocator.close((error) => error ? reject(error) : resolve()));
   const secret = "synthetic-http-integration-signing-key-not-for-production";
   const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", String(port)], {
-    env: { ...process.env, NODE_ENV: "production", DATABASE_URL: databaseUrl, SESSION_SECRET: secret, APP_ORIGIN: `http://127.0.0.1:${port}` }, stdio: ["ignore", "pipe", "pipe"],
+    env: { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("MARKET_RESEARCH_MODEL_KEY_"))),
+      MARKET_RESEARCH_SYNTHESIS_BINDINGS_JSON: "", ENABLE_ENV_CREDENTIAL_RESOLVER: "false",
+      NODE_ENV: "production", DATABASE_URL: databaseUrl, SESSION_SECRET: secret, APP_ORIGIN: `http://127.0.0.1:${port}` }, stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";
   child.stdout.on("data", (chunk) => { output = (output + chunk.toString()).slice(-4000); });

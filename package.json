@@ -15,6 +15,7 @@
     "access": "tsx scripts/client-access.ts",
     "budget": "tsx scripts/acquisition-budget.ts",
     "synthesis:budget": "tsx scripts/synthesis-budget.ts",
+    "synthesis:check": "tsx scripts/synthesis-config.ts",
     "test": "node scripts/run-tests.mjs",
     "test:integration": "tsx --test integration/*.integration.ts",
     "check:source-of-truth": "node scripts/check-source-of-truth.mjs"

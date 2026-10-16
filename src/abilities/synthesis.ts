@@ -22,6 +22,14 @@ export interface ResearchSynthesisProvider {
   synthesize(input: ResearchSynthesisInput): Promise<unknown>;
 }
 
+/** Shared projection for synthesis and dispatch-time snapshot verification. */
+export function synthesisEvidenceItem(item: EvidenceItem): ResearchSynthesisInput["evidence"][number] {
+  return { id: item.id, sourceClass: item.sourceClass, externalReference: item.externalReference,
+    sourceContent: item.sourceContent, synthesis: item.synthesis, method: item.method,
+    applicability: item.applicability, confidence: item.confidence, grade: item.grade,
+    observedAt: item.observedAt, publishedAt: item.publishedAt };
+}
+
 /** Provider output is untrusted data even when a TypeScript adapter promises a shape. */
 function proposedAnalysis(value: unknown): ProposedAnalysis {
   if (!value || typeof value !== "object") throw new Error("invalid-synthesis-output");
@@ -65,14 +73,8 @@ export async function runAbilityWithSynthesis(input: {
   if (selectionGaps.length > 0) return preliminary;
   if (!input.provider) return { ...preliminary, researchGaps: [...preliminary.researchGaps, "No research synthesis provider is configured."] };
   const selected = new Set(preliminary.evidenceIds);
-  const evidence = [...new Map([...input.evidence, ...(input.contextEvidence ?? [])].map((item) => [item.id, item])).values()].filter((item) => selected.has(item.id)).map((item) => ({
-    id: item.id, sourceClass: item.sourceClass, externalReference: item.externalReference,
-    // Never hide a report's later caveats by silently clipping the selected text.
-    // A bounded adapter must reject oversized input or request a reviewed extract.
-    sourceContent: item.sourceContent, synthesis: item.synthesis, method: item.method,
-    applicability: item.applicability, confidence: item.confidence, grade: item.grade,
-    observedAt: item.observedAt, publishedAt: item.publishedAt,
-  }));
+  // Preserve full selected text; bounded adapters must reject rather than clip it.
+  const evidence = [...new Map([...input.evidence, ...(input.contextEvidence ?? [])].map((item) => [item.id, item])).values()].filter((item) => selected.has(item.id)).map(synthesisEvidenceItem);
   try {
     const payload: ResearchSynthesisInput = { clientId: input.clientId, abilityId: input.abilityId, question: input.question,
       market: input.market, language: input.language, evidence, context: input.context };

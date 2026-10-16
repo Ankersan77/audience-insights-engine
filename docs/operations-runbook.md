@@ -17,10 +17,12 @@ references to Core.
 6. Confirm `/workspace` shows the expected tenant and canonical record counts.
 7. Activate live connectors only if their external-validation entries are verified.
 
-Research synthesis is still disabled in the production factory. The optional Responses adapter
-does not automatically use any environment API key or authorize model spend. Follow
-`docs/synthesis-provider-acceptance.md` before integrating a provider; source acquisition budgets
-are not synthesis budgets, and synthetic transport tests are not live provider acceptance.
+Research synthesis defaults to disabled. The production factory now resolves explicit server-owned
+client bindings, but requires exact, unexpired processing/quality acceptance, approved current
+sources and a separate synthesis budget before credential access. Follow
+`docs/synthesis-provider-acceptance.md` for the binding template and `synthesis:check` command;
+source acquisition budgets are not synthesis budgets, and synthetic transport tests are not live
+provider acceptance. No real client binding, budget or key is enabled by shipping this code.
 
 ### Synthesis budget admission
 

@@ -13,7 +13,7 @@ import type { CampaignAssessmentArtifact, CampaignRevisionPayload } from "./camp
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** Caller holds campaign → measurement advisory locks. Configuration follows sensing → solution. */
-export async function lockedContext(tx: Transaction, clientId: number, market?: string, language?: string): Promise<() => ResearchContextSources> {
+export async function lockedContext(tx: Transaction, clientId: number, market?: string, language?: string): Promise<(now?: string) => ResearchContextSources> {
   const [candidate] = await tx.select().from(solutionProfile).where(and(eq(solutionProfile.clientId, clientId), eq(solutionProfile.status, "active"))).orderBy(desc(solutionProfile.version)).limit(1);
   const sensingId = (candidate?.profileJson as SolutionProfile | undefined)?.sensingProfileId;
   const [sensing] = sensingId ? await tx.select().from(sensingProfile).where(and(eq(sensingProfile.clientId, clientId), eq(sensingProfile.id, Number(sensingId)))).for("share") : [];
@@ -25,8 +25,7 @@ export async function lockedContext(tx: Transaction, clientId: number, market?: 
   const profile = solution ? { ...solution.profileJson as SolutionProfile, id: String(solution.id), clientId: String(clientId), version: solution.version, status: "active" as const } : null;
   const scopedMarket = market?.trim() || (profile?.markets.length === 1 ? profile.markets[0] : undefined);
   const scopedLanguage = language?.trim() || (profile?.languages.length === 1 ? profile.languages[0] : undefined);
-  return () => {
-  const now = new Date().toISOString();
+  return (now = new Date().toISOString()) => {
   const permitted = sources.filter((source) => !sourcePolicyFailure({ health: source.health, rights: source.rightsJson as RightsDeclaration,
     policy: readSourceConnectionPolicy(source.configurationJson), dataClassification: sourceClassification(source.sourceClass as SourceClass), request: { operation: "research", filters: {
       ...(scopedMarket ? { markets: [scopedMarket] } : {}), ...(scopedLanguage ? { languages: [scopedLanguage] } : {}),

@@ -3,10 +3,11 @@
 ## Implemented boundary
 
 `ResearchSynthesisProvider` remains the provider-neutral Core interface. The optional
-`OpenAIResearchSynthesisProvider` implements it using the Responses API. It is not imported by
-the production factory and does not select OpenAI as the deployment's vendor. There is no new
-environment switch or automatic use of an existing API key. All verification so far uses an
-injected synthetic HTTP transport, not a paid request or a real provider acceptance run.
+`OpenAIResearchSynthesisProvider` implements it using the Responses API. The server composition
+root (`src/lib/productionSynthesis.ts`) can now resolve an explicitly configured client binding,
+but defaults to no provider. Shipping this adapter does not select OpenAI for any client. It never
+automatically uses a generic API key. All verification so far uses an injected synthetic HTTP
+transport, not a paid request or a real provider acceptance run.
 
 The versioned prompt and output schema live in `src/abilities/synthesisPrompt.ts`; the connector
 owns transport only. The prompt uses the installed ability's intent, method, rubric and human
@@ -60,19 +61,101 @@ Normal ingestion, rights, minimization, reviewed excerpts and current source pol
    currency-tagged upper bound and the adapter must perform only the bounded single request;
    this trusted-code contract is not a network sandbox or a proof of provider pricing. Actual
    provider usage/invoice reconciliation and live cost-bound acceptance still need implementation.
-4. Resolve bindings from trusted server configuration, not request JSON. Recheck current source
-   processing permission and binding approval at dispatch; persist only normalized metadata.
+4. Supply the trusted server configuration described below, not request JSON. Production now
+   rechecks the exact binding, current acceptance gates, approved source inventory, source rights,
+   selected evidence/methods and reviewed Market Twin at reservation, dispatch and result release.
+   These checks use database locks and repeat time/configuration checks after audit writes.
 5. Run representative and adversarial tasks through the actual selected model with approved pilot
    data. Record human scorecards for evidence accuracy, methodological fidelity, contradiction
    handling, client relevance, privacy and decision usefulness. Record requested/actual model,
    prompt/adapter versions, processing acceptance and usage without retaining raw provider payloads.
-6. Only after these checks, replace `getProductionSynthesisProvider()`'s absent-provider result with
-   the governed adapter resolution. Exercise the authenticated HTTP path, expiry/revocation races,
-   durable spend limits and failure recovery before enabling it for a client.
+6. Only after these checks, configure the reviewed binding, acceptance gates, secret reference and
+   synthesis allowance in the selected deployment. The production factory is wired; missing or
+   invalid configuration still returns no provider, and missing authority fails before credentials.
+   Complete the real-provider HTTP/pilot, metering and deployment evidence before launch.
 
 This is aligned with the blueprint's separation of Core, abilities and connectors, not a claim
 that the Python D4WN service has been integrated or that its acceptance transfers to this product.
 There is no runtime dependency on another local repository.
+
+## Deployment binding and acceptance scopes
+
+`MARKET_RESEARCH_SYNTHESIS_BINDINGS_JSON` is server-only configuration with `schemaVersion: 1` and a
+`bindings` array (maximum 100 clients / 64 KB). One exact numeric database `clientId` per binding;
+no default/fallback tenant. Unknown fields, duplicate clients, arbitrary endpoint overrides and
+embedded credential values are rejected. The current adapter catalog contains `openai-responses`;
+other providers require their own reviewed adapter, not a change to research logic.
+
+Example **template**, deliberately invalid until every replacement value is supplied:
+
+```json
+{
+  "schemaVersion": 1,
+  "bindings": [{
+    "clientId": "REPLACE_WITH_CLIENT_ID",
+    "adapterId": "openai-responses",
+    "model": "REPLACE_WITH_APPROVED_MODEL",
+    "abilityIds": ["market-category-diagnosis"],
+    "markets": ["DK"],
+    "languages": ["da"],
+    "allowedSourceClasses": ["official_or_public"],
+    "sourceConnectionIds": ["REPLACE_WITH_APPROVED_SOURCE_ID"],
+    "approvalReference": "processing:REPLACE_WITH_EVIDENCE",
+    "qualityApprovalReference": "quality:REPLACE_WITH_EVIDENCE",
+    "expiresAt": "REPLACE_WITH_REVIEW_EXPIRY",
+    "retention": "standard_api_store_false",
+    "credentialEnv": "MARKET_RESEARCH_MODEL_KEY_CLIENT",
+    "currency": "DKK",
+    "maxCostMicros": "REPLACE_WITH_INTEGER_MICROS",
+    "maxInputBytes": 100000,
+    "maxOutputTokens": 2000,
+    "maxResponseBytes": 100000,
+    "timeoutMs": 60000
+  }]
+}
+```
+
+Use approved markets/languages/classes, enough separately permitted sources, a future ISO expiry,
+and a **number**, not a string, for `maxCostMicros`. The example retention choice is not an approval
+to use standard retention. Provider/account/data-class acceptance must establish the actual policy;
+`zero_data_retention` remains an externally verified account property, not a request parameter.
+
+Validate a non-secret config file and calculate the exact acceptance scope with:
+
+```sh
+npm run synthesis:check -- --file ./deployment-synthesis.json --client-id 123
+```
+
+This read-only command prints the model, source inventory, cost ceiling, evidence references and
+scope; it does not read a credential, approve a gate, create a budget or call a provider. The
+`live_connectors` and `research_quality` gates must both be `verified`, have a named reviewer/owner,
+future expiry, and exactly match the printed `research-synthesis:<configuration-digest>` scope and
+their respective evidence references. Record real review evidence through Evaluation. A copied
+hash or template reference is not that evidence. Existing quality-scorecard requirements still
+apply. Changing the model, source list, retention, key reference, limits or any other binding field
+requires matching new acceptance. Retain the reviewed configuration revision with its acceptance
+evidence so the digest in the spend ledger is historically reproducible.
+
+Install the JSON in the server environment, and the actual key separately under the binding's
+dedicated `MARKET_RESEARCH_MODEL_KEY_*` variable in the deployment secret store. The existing
+`ENABLE_ENV_CREDENTIAL_RESOLVER=true` is also required. There is no `OPENAI_API_KEY` fallback, and
+the reference cannot select unrelated secrets such as `DATABASE_URL`. Keys are resolved only
+after the durable reservation and one-use dispatch. These bindings and budgets are intentionally
+not copied in portable client solution packages; each destination needs its own approval.
+
+The Ask/Projects brief route supplies the authenticated tenant and request cancellation signal;
+request JSON cannot choose a provider, binding or key. Analyst-authored briefs do not instantiate
+a provider. Removing configuration, disabling credential resolution, changing the synthesis
+budget, withdrawing either acceptance gate, or withdrawing source permission stops new admitted
+work and suppresses later result authorization. A dispatch already committed cannot be undone;
+deploy/restart all workers when changing environment configuration, and use database gate/budget
+revocation for immediate cross-process enforcement. No network call runs inside a database lock.
+
+Database tests exercise the actual configured factory plus Responses adapter with a synthetic
+HTTP transport, persisted briefs, stale context/methods, source exclusion, acceptance/configuration
+withdrawal and lock contention. Real authenticated HTTP tests prove absent configuration stays
+`needs_context` and client-supplied credentials are ignored. Test HTTP processes explicitly clear
+model bindings/keys. A fully configured **live-provider** HTTP journey remains unverified.
 
 ## Durable admission implementation
 

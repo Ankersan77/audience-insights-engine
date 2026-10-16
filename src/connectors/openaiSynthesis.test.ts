@@ -3,7 +3,6 @@ import test from "node:test";
 import { OpenAIResearchSynthesisProvider, SynthesisAdapterError, type OpenAISynthesisBinding } from "./openaiSynthesis.ts";
 import type { ResearchSynthesisInput } from "../abilities/synthesis.ts";
 import { runContextualResearch } from "../abilities/synthesis.ts";
-import { getProductionSynthesisProvider } from "../abilities/productionSynthesis.ts";
 import { RESEARCH_SYNTHESIS_SCHEMA } from "../abilities/synthesisPrompt.ts";
 import type { ResearchContextSources } from "../abilities/context.ts";
 import type { EvidenceItem } from "../core/contracts.ts";
@@ -223,6 +222,21 @@ test("an approval that expires during a provider call cannot release its respons
   await assert.rejects(adapter(async () => { now += 1000; return Response.json(envelope()); }, config, () => now).synthesize(input()), errorCode("binding-expired"));
 });
 
+test("outer admission cancellation aborts the actual transport and suppresses its result", async () => {
+  const external = new AbortController(); let signal: AbortSignal | null | undefined;
+  const provider = new OpenAIResearchSynthesisProvider({ binding: binding(), apiKey: KEY, now: () => NOW, signal: external.signal,
+    transport: async (_url, options) => { signal = options?.signal; external.abort(); return Response.json(envelope()); },
+  });
+  await assert.rejects(provider.synthesize(input()), (error: unknown) => error instanceof SynthesisAdapterError);
+  assert.equal(signal?.aborted, true);
+  let calls = 0;
+  const alreadyCancelled = new OpenAIResearchSynthesisProvider({ binding: binding(), apiKey: KEY, now: () => NOW, signal: external.signal,
+    transport: async () => { calls++; return Response.json(envelope()); },
+  });
+  await assert.rejects(alreadyCancelled.synthesize(input()), errorCode("cancelled"));
+  assert.equal(calls, 0);
+});
+
 test("optional transport runs through real Core orchestration; structured output does not bypass claim gates", async (t) => {
   const request = input();
   const sources: ResearchContextSources = {
@@ -241,5 +255,4 @@ test("optional transport runs through real Core orchestration; structured output
   for (const [index, value] of invalid.entries()) await t.test(String(index), async () => {
     assert.equal((await execute(value)).status, "needs_context");
   });
-  assert.equal(getProductionSynthesisProvider(), undefined, "shipping a transport must not enable paid calls");
 });

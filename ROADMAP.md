@@ -101,10 +101,14 @@ limits, strict response-envelope handling and synthetic HTTP/Core tests. It is n
 activation or live model acceptance. Separate synthesis budget admission now has a provider-neutral
 wrapper, daily client-wide currency/request limits, single-use dispatch, budget-version revocation,
 deadline/expiry checks, atomic audit and operator crash reconciliation (migration `0015`). Synthetic
-PostgreSQL tests exercise contention and late-result suppression. Selected-provider factory wiring,
-trusted binding/processing acceptance, actual usage reconciliation, scheduled reconciliation,
-owned-surface budget administration and human benchmarks remain open; the production factory still
-returns no provider. See `docs/synthesis-provider-acceptance.md`.
+PostgreSQL tests exercise contention and late-result suppression. Production factory wiring now
+resolves exact client bindings from server configuration and requires matching unexpired
+processing/quality gates, approved current source IDs and locked evidence/Market Twin revalidation
+at reservation, dispatch and completion. Synthetic transport/database tests cover the actual
+factory; authenticated HTTP proves absent configuration remains disabled. No real client is enabled.
+Live acceptance, actual usage reconciliation, scheduled reconciliation, owned-surface budget
+administration, live-provider HTTP proof and human benchmarks remain open. See
+`docs/synthesis-provider-acceptance.md`.
 
 New decision briefs preserve fingerprints of their used evidence/methods and reviewed Market Twin
 records as well as their project, solution and bound sensing versions. Saving revalidates and locks

@@ -26,7 +26,7 @@ export type OpenAISynthesisBinding = {
   timeoutMs: number;
 };
 
-export type SynthesisAdapterErrorCode = "binding-invalid" | "binding-expired" | "scope-denied" | "input-invalid" | "input-too-large" | "response-too-large" | "provider-failed" | "response-invalid" | "timeout";
+export type SynthesisAdapterErrorCode = "binding-invalid" | "binding-expired" | "scope-denied" | "input-invalid" | "input-too-large" | "response-too-large" | "provider-failed" | "response-invalid" | "timeout" | "cancelled";
 
 /** Never surface provider response bodies, request contents or credential values. */
 export class SynthesisAdapterError extends Error {
@@ -49,7 +49,7 @@ function strings(value: unknown): value is string[] {
 }
 function integer(value: number, min: number, max: number) { return Number.isSafeInteger(value) && value >= min && value <= max; }
 
-function validateBinding(binding: OpenAISynthesisBinding) {
+export function validateOpenAISynthesisBinding(binding: OpenAISynthesisBinding) {
   if (!binding || typeof binding.clientId !== "string" || !binding.clientId.trim() || binding.clientId.length > 200
     || typeof binding.model !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(binding.model)
     || !strings(binding.abilityIds) || binding.abilityIds.some((id) => !getDecisionBriefAbility(id))
@@ -61,6 +61,8 @@ function validateBinding(binding: OpenAISynthesisBinding) {
     || !integer(binding.maxInputBytes, 1_024, 1_000_000) || !integer(binding.maxOutputTokens, 256, 32_768)
     || !integer(binding.maxResponseBytes, 1_024, 2_000_000) || !integer(binding.timeoutMs, 1, 120_000)) fail("binding-invalid");
 }
+
+export function openAISynthesisVersion(model: string) { return `1.0.0:${SYNTHESIS_PROMPT_VERSION}:${model}`; }
 
 async function readBoundedResponse(response: Response, limit: number, signal: AbortSignal): Promise<unknown> {
   const length = response.headers.get("content-length");
@@ -106,7 +108,7 @@ function analysisFromResponse(value: unknown): unknown {
   return JSON.parse(part.text);
 }
 
-/** Optional transport, not installed by getProductionSynthesisProvider.
+/** Optional transport, resolved only through an explicitly approved deployment binding.
  * Call only behind Core's evidence, permission and durable spend authorization.
  * No implicit environment keys, model defaults, tools, retries or fallback clients.
  */
@@ -117,21 +119,26 @@ export class OpenAIResearchSynthesisProvider implements ResearchSynthesisProvide
   #apiKey: string;
   #fetch: typeof fetch;
   #now: () => number;
+  #signal?: AbortSignal;
 
-  constructor(input: { binding: OpenAISynthesisBinding; apiKey: string; transport?: typeof fetch; now?: () => number }) {
-    validateBinding(input.binding);
+  constructor(input: { binding: OpenAISynthesisBinding; apiKey: string; transport?: typeof fetch; now?: () => number; signal?: AbortSignal }) {
+    validateOpenAISynthesisBinding(input.binding);
     if (typeof input.apiKey !== "string" || !input.apiKey || /\s/.test(input.apiKey)) fail("binding-invalid");
     this.#binding = structuredClone(input.binding);
     this.#apiKey = input.apiKey;
     this.#fetch = input.transport ?? fetch;
     this.#now = input.now ?? Date.now;
-    this.version = `1.0.0:${SYNTHESIS_PROMPT_VERSION}:${this.#binding.model}`;
+    this.#signal = input.signal;
+    this.version = openAISynthesisVersion(this.#binding.model);
   }
 
   async synthesize(input: ResearchSynthesisInput): Promise<unknown> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const controller = new AbortController();
+    const cancel = () => controller.abort();
+    this.#signal?.addEventListener("abort", cancel, { once: true });
     try {
+      if (this.#signal?.aborted) fail("cancelled");
       const binding = this.#binding;
       const now = this.#now();
       if (!Number.isFinite(now) || Date.parse(binding.expiresAt) <= now) fail("binding-expired");
@@ -169,6 +176,7 @@ export class OpenAIResearchSynthesisProvider implements ResearchSynthesisProvide
         if (controller.signal.aborted) { void response.body?.cancel().catch(() => {}); fail("timeout"); }
         if (!response.ok) { void response.body?.cancel().catch(() => {}); fail("provider-failed"); }
         const result = analysisFromResponse(await readBoundedResponse(response, binding.maxResponseBytes, controller.signal));
+        if (controller.signal.aborted) fail("cancelled");
         const completedAt = this.#now();
         if (!Number.isFinite(completedAt) || Date.parse(binding.expiresAt) <= completedAt) fail("binding-expired");
         return result;
@@ -178,6 +186,6 @@ export class OpenAIResearchSynthesisProvider implements ResearchSynthesisProvide
       controller.abort();
       if (error instanceof SynthesisAdapterError) throw error;
       fail("provider-failed");
-    } finally { if (timer !== undefined) clearTimeout(timer); }
+    } finally { if (timer !== undefined) clearTimeout(timer); this.#signal?.removeEventListener("abort", cancel); }
   }
 }

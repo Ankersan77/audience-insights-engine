@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { ClaimMode, ProposedAnalysis } from "@/src/abilities/engine";
 import { runContextualResearch } from "@/src/abilities/synthesis";
-import { getProductionSynthesisProvider } from "@/src/abilities/productionSynthesis";
+import { getProductionSynthesisProvider } from "@/src/lib/productionSynthesis";
 import { getDecisionBriefAbility } from "@/src/abilities/catalog";
 import { loadEvidenceItems } from "@/src/db/queries/canonical_evidence";
 import { listDecisionBriefs, saveDecisionBrief } from "@/src/db/queries/workspace_intelligence";
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     market: typeof body.market === "string" ? body.market.trim() : undefined,
     language: typeof body.language === "string" ? body.language.trim() : undefined,
     now: new Date().toISOString(),
-    provider: getProductionSynthesisProvider(),
+    provider: analysis ? undefined : getProductionSynthesisProvider(session.clientId, { signal: request.signal }),
   });
   assertPeopleBlind(brief);
   let artifact;

@@ -118,10 +118,14 @@ evidence, not a substitute for the open external gates below.
   silently clipped before synthesis. Durable, separate synthesis spend admission is now implemented
   through a provider-neutral wrapper and PostgreSQL ledger: finite currency/request reservations,
   one-use dispatch, versioned budget revocation, deadline checks, atomic audit and operator crash
-  reconciliation have synthetic unit/database coverage. Production synthesis still returns no
-  provider: trusted binding/permission resolution, actual metering and the selected factory's
-  integration remain open, alongside approved processing, live provider acceptance and qualified
-  human benchmarks remain open. See `docs/synthesis-provider-acceptance.md`; adapter code and
+  reconciliation have synthetic unit/database coverage. The production composition root now binds
+  the authenticated tenant to explicit server configuration, exact processing/quality acceptance
+  scopes, approved source IDs and the budget wrapper. Locked checks repeat at reservation, dispatch
+  and completion; current rights, evidence/methods, reviewed context and revoked configuration/gates
+  can stop release. Synthetic factory/adapter/database tests and absent-binding HTTP tests pass.
+  Unconfigured clients still have no provider. Actual metering and live-provider HTTP verification
+  remain open, alongside approved processing, live provider acceptance and qualified
+  human benchmarks. See `docs/synthesis-provider-acceptance.md`; adapter code and
   synthetic tests alone do not satisfy the expert-research requirement.
 - Weekly/monthly/quarterly review packets now have opt-in solution configuration, closed UTC
   windows, bounded restart catch-up, durable idempotent artifacts, tenant-scoped owned-surface
@@ -237,10 +241,10 @@ open. A human-authored workflow is not evidence of an autonomous expert capabili
   payloads never enter canonical jobs, receipts, profiles, exports, logs, or artifacts.
 - Model-assisted synthesis may draft, but deterministic policy gates decide whether evidence is
   sufficient and which claim language is allowed.
-- The synthesis seam is provider-neutral. Core resolves the admissible evidence before a provider
-  sees it and re-runs the full brief and causal-language policy over the proposed analysis. Until
-  a provider and its processing boundary have acceptance evidence, production synthesis is absent
-  and requests fail honestly as `needs_context`.
+- The synthesis seam is provider-neutral. Core resolves admissible evidence before a provider
+  sees it and re-runs brief and causal-language policy over the proposal. The production root can
+  compose an explicitly accepted client adapter; absent bindings or authority still return
+  `needs_context`. Runtime configuration is not independent proof of quality or permitted processing.
 - External delivery stays optional. The owned product surface is the authoritative MVP output.
 - Campaign approval requires both an accepted measurement plan and a saved `ready` pre-flight
   assessment. Completion-to-learning review requires an accepted learning explicitly scoped to

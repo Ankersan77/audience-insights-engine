@@ -4,6 +4,8 @@ import { client, governanceAudit, synthesisAuthorization, synthesisBudget } from
 import { validateSynthesisAttempt, validateSynthesisBudget, type SynthesisBudgetPolicy, type SynthesisAttempt, type SynthesisPermit, type SynthesisOutcome, type SynthesisSpendLedger } from "@/src/abilities/synthesisBudget";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+/** Trusted dispatch-time authority; lock its rows and return a time/config recheck. */
+export type SynthesisAuthorityGuard = (tx: Tx) => Promise<(now: Date) => void>;
 const terminal = new Set(["succeeded", "failed", "cancelled", "unknown"]);
 function id(value: string) {
   if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value))) throw new Error("synthesis-permit-invalid");
@@ -44,7 +46,7 @@ export async function setSynthesisBudget(clientSlug: string, policy: SynthesisBu
   });
 }
 
-export async function reserveSynthesisAttempt(input: SynthesisAttempt): Promise<SynthesisPermit> {
+export async function reserveSynthesisAttempt(input: SynthesisAttempt, guard?: SynthesisAuthorityGuard): Promise<SynthesisPermit> {
   // Projection prevents raw prompts, keys and arbitrary fields reaching the ledger.
   input = { clientId: input.clientId, attemptKey: input.attemptKey, abilityId: input.abilityId, inputDigest: input.inputDigest, plan: { ...input.plan } };
   validateSynthesisAttempt(input);
@@ -56,7 +58,9 @@ export async function reserveSynthesisAttempt(input: SynthesisAttempt): Promise<
     if (!budget?.enabled) throw new Error("synthesis-budget-not-enabled");
     validateSynthesisBudget(budget);
     if (budget.currency !== plan.currency) throw new Error("synthesis-budget-currency-mismatch");
+    const recheck = await guard?.(tx);
     const now = await clock(tx); // After lock acquisition, including UTC midnight contention.
+    recheck?.(now);
     const bindingExpiresAt = new Date(plan.bindingExpiresAt);
     if (bindingExpiresAt <= now) throw new Error("synthesis-binding-expired");
     const { start, end } = window(now);
@@ -76,13 +80,15 @@ export async function reserveSynthesisAttempt(input: SynthesisAttempt): Promise<
     await audit(tx, clientId, row.id, "reserve_synthesis", { attemptKey: row.attemptKey, inputDigest: row.inputDigest,
       abilityId: row.abilityId, providerId: row.providerId, providerVersion: row.providerVersion, model: row.model,
       approvalReference: row.approvalReference, currency: row.currency, maxCostMicros: row.maxCostMicros, budgetVersion: row.budgetVersion });
-    if (row.dispatchBy <= await clock(tx)) throw new Error("synthesis-permit-expired");
+    const completedAt = await clock(tx);
+    recheck?.(completedAt);
+    if (row.dispatchBy <= completedAt) throw new Error("synthesis-permit-expired");
     return { clientId: String(clientId), id: String(row.id) };
   });
 }
 
 /** Single-use dispatch claim, before credential access. A lost response cannot be replayed. */
-export async function dispatchSynthesisAttempt(permit: SynthesisPermit): Promise<{ expiresAt: string }> {
+export async function dispatchSynthesisAttempt(permit: SynthesisPermit, guard?: SynthesisAuthorityGuard): Promise<{ expiresAt: string }> {
   const clientId = id(permit.clientId); const authorizationId = id(permit.id);
   return db.transaction(async (tx) => {
     await lock(tx, clientId);
@@ -90,7 +96,9 @@ export async function dispatchSynthesisAttempt(permit: SynthesisPermit): Promise
     const [row] = await tx.select().from(synthesisAuthorization).where(and(eq(synthesisAuthorization.clientId, clientId), eq(synthesisAuthorization.id, authorizationId))).for("update");
     if (!row || row.status !== "reserved") throw new Error("synthesis-permit-not-dispatchable");
     if (!budget?.enabled || budget.version !== row.budgetVersion) throw new Error("synthesis-budget-changed");
+    const recheck = await guard?.(tx);
     const now = await clock(tx);
+    recheck?.(now);
     if (row.dispatchBy <= now || row.bindingExpiresAt <= now) throw new Error("synthesis-permit-expired");
     const executionDeadline = new Date(Math.min(now.getTime() + row.maxDurationMs, row.bindingExpiresAt.getTime()));
     await tx.update(synthesisAuthorization).set({ status: "dispatched", dispatchedAt: now,
@@ -98,12 +106,13 @@ export async function dispatchSynthesisAttempt(permit: SynthesisPermit): Promise
     }).where(eq(synthesisAuthorization.id, row.id));
     await audit(tx, clientId, row.id, "dispatch_synthesis", { status: "dispatched", budgetVersion: row.budgetVersion });
     const completedAt = await clock(tx);
+    recheck?.(completedAt);
     if (row.dispatchBy <= completedAt || executionDeadline <= completedAt) throw new Error("synthesis-permit-expired");
     return { expiresAt: executionDeadline.toISOString() };
   });
 }
 
-export async function finishSynthesisAttempt(permit: SynthesisPermit, outcome: SynthesisOutcome): Promise<{ accepted: boolean }> {
+export async function finishSynthesisAttempt(permit: SynthesisPermit, outcome: SynthesisOutcome, guard?: SynthesisAuthorityGuard): Promise<{ accepted: boolean }> {
   if (!terminal.has(outcome)) throw new Error("synthesis-outcome-invalid");
   const clientId = id(permit.clientId); const authorizationId = id(permit.id);
   return db.transaction(async (tx) => {
@@ -113,15 +122,22 @@ export async function finishSynthesisAttempt(permit: SynthesisPermit, outcome: S
     if (!row) throw new Error("synthesis-permit-not-found");
     if (terminal.has(row.status)) return { accepted: false }; // Metadata retry is harmless, never a new result authorization.
     if (row.status !== "dispatched" && outcome === "succeeded") throw new Error("synthesis-not-dispatched");
+    let recheck: ((now: Date) => void) | undefined;
+    let authorityValid = true;
+    if (outcome === "succeeded") {
+      try { recheck = await guard?.(tx); } catch { authorityValid = false; }
+    }
     const now = await clock(tx);
-    let accepted = outcome === "succeeded" && row.status === "dispatched" && Boolean(budget?.enabled)
+    try { recheck?.(now); } catch { authorityValid = false; }
+    let accepted = authorityValid && outcome === "succeeded" && row.status === "dispatched" && Boolean(budget?.enabled)
       && budget!.version === row.budgetVersion && row.bindingExpiresAt > now && Boolean(row.executionDeadline && row.executionDeadline > now);
     const status = outcome === "succeeded" && !accepted ? "unknown" : outcome;
     await tx.update(synthesisAuthorization).set({ status, finishedAt: now }).where(eq(synthesisAuthorization.id, row.id));
     const auditId = await audit(tx, clientId, row.id, "finish_synthesis", { status, resultAuthorized: accepted });
     // Audit/table contention may outlive the grant even while row locks are held.
     const completedAt = await clock(tx);
-    if (accepted && (row.bindingExpiresAt <= completedAt || row.executionDeadline! <= completedAt)) {
+    try { recheck?.(completedAt); } catch { authorityValid = false; }
+    if (accepted && (!authorityValid || row.bindingExpiresAt <= completedAt || row.executionDeadline! <= completedAt)) {
       accepted = false;
       await tx.update(synthesisAuthorization).set({ status: "unknown", finishedAt: completedAt }).where(eq(synthesisAuthorization.id, row.id));
       await tx.update(governanceAudit).set({ redactedAfterJson: { status: "unknown", resultAuthorized: false } }).where(eq(governanceAudit.id, auditId));
