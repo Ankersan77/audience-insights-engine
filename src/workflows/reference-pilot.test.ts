@@ -165,6 +165,6 @@ test("reference pilot proves the repository-verifiable roadmap as one governed v
     sensingProfileId: "sensing-1", createdAt: now,
   };
   const exported = exportSolutionProfile(profile, now);
-  assert.deepEqual(importSolutionProfile(exported, clientId), profile);
+  assert.deepEqual(importSolutionProfile(exported), exported.profile);
 });
 
