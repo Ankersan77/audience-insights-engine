@@ -3,6 +3,7 @@ import type { AdapterRuntimeContext } from "@/src/connectors/contracts";
 import { claimAcquisitionJob, isAcquisitionCancelled, listQueuedAcquisitionJobIds, listStaleRunningAcquisitions, type ClaimedAcquisition } from "@/src/db/queries/acquisition_execution";
 import { completeExistingAcquisition, failExistingAcquisition } from "@/src/db/queries/canonical_evidence";
 import { AcquisitionAdapterRegistry, runRegisteredAdapter } from "@/src/evidence/registry";
+import { acquisitionLimitFailure } from "@/src/connectors/sourcePolicy";
 import { classifyAcquisitionError } from "@/src/evidence/executionPolicy";
 import { logEvent } from "@/src/lib/metrics";
 import { retryDelay, shouldRetry, type RetryPolicy } from "@/src/operations/resilience";
@@ -35,8 +36,13 @@ export async function processAcquisitionJob(input: {
   now?: Date;
 }): Promise<"completed" | "failed" | "cancelled" | "already-claimed"> {
   const now = input.now ?? new Date();
-  const claimed = await claimAcquisitionJob(input.databaseJobId, now);
-  if (!claimed) return "already-claimed";
+  const claim = await claimAcquisitionJob(input.databaseJobId, now);
+  if (claim.kind === "unavailable") return "already-claimed";
+  if (claim.kind === "blocked") {
+    logEvent("canonical-acquisition-policy-blocked", { jobId: input.databaseJobId, errorCode: claim.errorCode });
+    return "failed";
+  }
+  const claimed = claim.value;
   const abortController = new AbortController();
   const cancellationPoll = setInterval(() => {
     void isAcquisitionCancelled(claimed.databaseJobId).then((cancelled) => { if (cancelled) abortController.abort(); }).catch(() => undefined);
@@ -53,6 +59,8 @@ export async function processAcquisitionJob(input: {
         policy: { minimumCohortSize: Number(process.env.MINIMUM_COHORT_SIZE ?? 10), retainedEvidenceDays: claimed.retentionDays, allowVerbatim: false, sensitiveTerms: [] },
       });
       if (result.evidence.some((item) => item.sourceClass !== claimed.sourceClass)) throw new Error("source-class-mismatch");
+      const limitFailure = acquisitionLimitFailure(claimed.policy, result.receipt);
+      if (limitFailure) throw new Error(limitFailure);
       const metadata = collectionMetadata(claimed, now);
       await completeExistingAcquisition({ clientId: Number(claimed.job.clientId), sourceConnectionId: claimed.sourceConnectionId, jobId: claimed.databaseJobId, rights: claimed.rights, result, ...metadata });
       logEvent("canonical-acquisition-succeeded", { jobId: claimed.databaseJobId, clientId: claimed.job.clientId, connectorId: claimed.connectorId, acquiredCount: result.receipt.acquiredCount, rejectedCount: result.receipt.rejectedCount, attempt });

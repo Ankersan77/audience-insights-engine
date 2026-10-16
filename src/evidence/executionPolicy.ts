@@ -6,6 +6,6 @@ export function classifyAcquisitionError(error: unknown): string {
   if (message.includes("adapter-unavailable")) return "adapter-unavailable";
   if (message.includes("credential")) return "credential-unavailable";
   if (message.includes("cancel")) return "cancelled";
-  if (message.includes("rights") || message.includes("policy")) return "policy-rejected";
+  if (message.includes("rights") || message.includes("policy") || message.includes("quota") || message.includes("cost-limit") || message.includes("cost-unreported")) return "policy-rejected";
   return "adapter-failed";
 }

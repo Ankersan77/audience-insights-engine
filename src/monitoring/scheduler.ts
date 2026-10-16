@@ -32,6 +32,7 @@ export function planMonitoringAcquisitions(input: {
   monitoringRunId: string;
 }): SourceAcquisitionJob[] {
   const scheduleKey = monitoringScheduleKey(input.profile, input.now);
+  const since = new Date(new Date(input.now).getTime() - input.profile.lookbackDays * 86_400_000).toISOString();
   return input.profile.sourceConnectionIds.map((sourceId) => ({
     id: `${input.monitoringRunId}:${sourceId}`,
     clientId: input.profile.clientId,
@@ -40,11 +41,21 @@ export function planMonitoringAcquisitions(input: {
     dataClassification: "licensed",
     request: {
       operation: "monitor",
+      since,
+      until: input.now,
       filters: {
         themes: input.profile.themes,
         markets: input.profile.markets,
         competitors: input.profile.competitors,
         products: input.profile.products,
+        audiences: input.profile.audiences,
+        occasions: input.profile.occasions,
+        risks: input.profile.risks,
+        decisionContexts: input.profile.decisionContexts,
+        suppressionRules: input.profile.suppressionRules,
+        downRankingRules: input.profile.downRankingRules,
+        noveltyThreshold: String(input.profile.noveltyThreshold),
+        deduplicationWindowDays: String(input.profile.deduplicationWindowDays),
       },
     },
     idempotencyKey: `${scheduleKey}:${sourceId}`,

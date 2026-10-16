@@ -35,6 +35,15 @@ export function validateSourceConnection(value: SourceConnection): ValidationRes
   required(value.connectorId, "connectorId", errors);
   if (value.retentionDays < 0) errors.push("retentionDays cannot be negative");
   if (value.rawRetentionHours < 0) errors.push("rawRetentionHours cannot be negative");
+  if (value.permissions.length === 0) errors.push("at least one permission is required");
+  if (value.dataClassifications.length === 0) errors.push("at least one data classification is required");
+  if (value.permittedPurposes.length === 0) errors.push("at least one permitted purpose is required");
+  if (value.markets.length === 0) errors.push("at least one market is required");
+  if (value.languages.length === 0) errors.push("at least one language is required");
+  if (!["manual", "hourly", "daily", "weekly", "monthly", "quarterly"].includes(value.cadence)) errors.push("unsupported cadence");
+  if (!Number.isInteger(value.lookbackDays) || value.lookbackDays <= 0) errors.push("lookbackDays must be a positive integer");
+  if (value.quota !== undefined && (!Number.isFinite(value.quota) || value.quota < 0)) errors.push("quota cannot be negative");
+  if (value.costLimit !== undefined && (!Number.isFinite(value.costLimit) || value.costLimit < 0)) errors.push("costLimit cannot be negative");
   if (value.credentialRef && (!value.credentialRef.provider || !value.credentialRef.key)) {
     errors.push("credentialRef must be opaque and complete");
   }
@@ -221,11 +230,22 @@ export function validateSensingProfile(value: SensingProfile): ValidationResult 
   if (value.version < 1) errors.push("version must be positive");
   confidence(value.confidenceThreshold, "confidenceThreshold", errors);
   if (value.materialityThreshold < 0) errors.push("materialityThreshold cannot be negative");
+  confidence(value.noveltyThreshold, "noveltyThreshold", errors);
+  if (!Number.isInteger(value.lookbackDays) || value.lookbackDays <= 0) errors.push("lookbackDays must be a positive integer");
   if (value.freshnessDays <= 0) errors.push("freshnessDays must be positive");
+  if (!Number.isInteger(value.expiryDays) || value.expiryDays < value.freshnessDays) errors.push("expiryDays must be an integer at least as large as freshnessDays");
   if (value.minimumCorroboration < 1) errors.push("minimumCorroboration must be positive");
+  if (!Number.isInteger(value.deduplicationWindowDays) || value.deduplicationWindowDays <= 0) errors.push("deduplicationWindowDays must be a positive integer");
   if (value.sourceConnectionIds.length === 0) errors.push("at least one source connection is required");
   if (value.themes.length === 0) errors.push("at least one theme is required");
   if (value.markets.length === 0) errors.push("at least one market is required");
+  if (!value.humanReviewRequired) errors.push("monitoring signals require human review");
+  if (value.destinations.length !== 1 || value.destinations[0] !== "owned-product") errors.push("owned-product must be the sole authoritative monitoring destination");
+  if (value.decisionContexts.length === 0) errors.push("at least one decision context is required");
+  if (Object.values(value.seasonalExpectations).some((item) => !Number.isFinite(item))) errors.push("seasonal expectations must be finite");
+  for (const requiredRule of ["duplicate", "bot-heavy", "manipulation-risk", "low-sample", "stale"]) {
+    if (!value.suppressionRules.includes(requiredRule)) errors.push(`required suppression rule missing: ${requiredRule}`);
+  }
   for (const period of value.quietPeriods) {
     const start = Date.parse(period.start);
     const end = Date.parse(period.end);

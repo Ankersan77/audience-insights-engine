@@ -130,4 +130,12 @@ evidence, not a substitute for the open external gates below.
   linkable. Decision-brief citations are validated, tied relationally to their artifact, persisted
   in the same transaction, and shown with the versioned method and uncertainty. Unreviewed
   verbatim evidence is excluded from automatic brief selection.
+- Source administration persists the full policy envelope in the existing versionable JSON
+  boundary: scopes, classifications, purposes, geography/language, cadence/lookback, rights,
+  retention, quota and optional cost limits. Job claim and result persistence fail closed when the
+  envelope is incomplete or exceeded. Revocation cancels outstanding work, marks the source
+  unavailable and routes its retained material through canonical tombstoning.
+- Sensing policy is portable with the solution package rather than silently remaining tenant-local.
+  Version 3 imports sensing and solution versions atomically after validating local connector
+  bindings; the explicit version 2 import path preserves older packages without inventing policy.
 

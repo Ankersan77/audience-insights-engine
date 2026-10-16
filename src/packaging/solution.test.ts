@@ -1,8 +1,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { SolutionProfile } from "../core/contracts.ts";
+import type { SensingProfile, SolutionProfile } from "../core/contracts.ts";
 import { CircuitBreaker, IdempotencyRegistry, retryDelay, shouldRetry } from "../operations/resilience.ts";
-import { exportSolutionProfile, importSolutionProfile } from "./solution.ts";
+import { exportSolutionProfile, importSolutionPackage, importSolutionProfile } from "./solution.ts";
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function legacyChecksum(value: unknown): string {
+  let hash = 2166136261;
+  for (const char of stableJson(value)) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
 
 function profile(clientId: string): SolutionProfile {
   return {
@@ -17,6 +37,17 @@ function profile(clientId: string): SolutionProfile {
     reviewRoles: { learning: ["reviewer"] },
     retention: { evidenceDays: 180, rawHours: 24, auditDays: 365 },
     createdAt: "2026-10-16T00:00:00.000Z",
+  };
+}
+
+function sensing(clientId: string): SensingProfile {
+  return {
+    id: `${clientId}-sensing`, clientId, version: 3, themes: ["category"], markets: ["DK"], competitors: ["competitor-a"], products: ["product-a"],
+    audiences: ["category-buyers"], occasions: ["renovation"], risks: ["price-pressure"], sourceConnectionIds: ["official-statistics"], cadence: "weekly",
+    lookbackDays: 30, materialityThreshold: 0.2, noveltyThreshold: 0.2, confidenceThreshold: 0.7, freshnessDays: 14, expiryDays: 30,
+    minimumCorroboration: 1, deduplicationWindowDays: 30, seasonalExpectations: { category: 100 },
+    suppressionRules: ["duplicate", "bot-heavy", "manipulation-risk", "low-sample", "stale"], downRankingRules: ["seasonal"],
+    destinations: ["owned-product"], humanReviewRequired: true, decisionContexts: ["market-planning"], quietPeriods: [],
   };
 }
 
@@ -36,6 +67,25 @@ test("a second client uses the same profile contract without a Core code branch"
   assert.equal(first.formatVersion, second.formatVersion);
   assert.notEqual(first.checksum, second.checksum);
   assert.deepEqual(importSolutionProfile(first), first.profile);
+});
+
+test("portable packages carry tenant-neutral sensing policy and require the matching binding", () => {
+  const source = sensing("client-a");
+  const configured = { ...profile("client-a"), sensingProfileId: source.id };
+  const exported = exportSolutionProfile(configured, "2026-10-16T01:00:00.000Z", source);
+  const imported = importSolutionPackage(exported);
+  assert.equal(exported.formatVersion, 3);
+  assert.equal(imported.sensingProfile?.lookbackDays, 30);
+  assert.deepEqual(imported.sensingProfile?.sourceConnectionIds, ["official-statistics"]);
+  assert.equal(JSON.stringify(exported).includes("client-a"), false);
+  assert.throws(() => exportSolutionProfile(configured, "2026-10-16T01:00:00.000Z"), /sensing profile is required/i);
+});
+
+test("version two packages migrate on import without inventing sensing policy", () => {
+  const current = exportSolutionProfile(profile("client-a"), "2026-10-16T01:00:00.000Z");
+  const base = { format: current.format, formatVersion: 2 as const, profile: current.profile, exportedAt: current.exportedAt };
+  const legacy = { ...base, checksum: legacyChecksum(base) };
+  assert.deepEqual(importSolutionPackage(legacy), { profile: current.profile, sensingProfile: undefined });
 });
 
 test("retry is bounded, classified, and exponentially backed off", () => {

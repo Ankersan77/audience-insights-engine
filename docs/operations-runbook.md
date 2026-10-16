@@ -24,6 +24,14 @@ atomically, and reconciles stale leases. Unregistered adapters and unavailable c
 closed and mark the source degraded. Queued or running jobs may be cancelled from `/monitoring`;
 any later adapter output is discarded rather than retained.
 
+Source connections are not operational until their policy envelope is complete. Claim-time checks
+enforce health, rights expiry, commercial-use permission, data classification, market/language and
+lookback. Receipt-time checks enforce record quota and, when configured, a reported acquisition
+cost. Missing cost reporting is a failure when a cost limit exists. Revoking a source from
+`/workspace` cancels queued/running jobs, marks evidence and collections due immediately, applies
+canonical tombstoning, and records a tenant-scoped governance audit. Re-activation requires a new
+reviewed source configuration; revocation is not toggled away casually.
+
 ## Quality and release evidence
 
 Use `/evaluation` to record human scorecards and per-client external validation evidence. A

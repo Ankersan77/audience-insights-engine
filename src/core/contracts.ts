@@ -39,7 +39,19 @@ export type RightsDeclaration = {
   restrictions: readonly string[];
 };
 
-export type SourceConnection = {
+export type SourceConnectionPolicy = {
+  permissions: readonly string[];
+  dataClassifications: readonly ("public" | "licensed" | "client-confidential")[];
+  permittedPurposes: readonly string[];
+  markets: readonly string[];
+  languages: readonly string[];
+  cadence: "manual" | "hourly" | "daily" | "weekly" | "monthly" | "quarterly";
+  lookbackDays: number;
+  quota?: number;
+  costLimit?: number;
+};
+
+export type SourceConnection = SourceConnectionPolicy & {
   id: string;
   clientId: ClientId;
   connectorId: string;
@@ -47,17 +59,8 @@ export type SourceConnection = {
   sourceClass: SourceClass;
   credentialRef?: { provider: string; key: string };
   health: "configured" | "verified" | "degraded" | "unavailable" | "producing_evidence";
-  permissions: readonly string[];
-  dataClassifications: readonly string[];
-  permittedPurposes: readonly string[];
-  markets: readonly string[];
-  languages: readonly string[];
   retentionDays: number;
   rawRetentionHours: number;
-  cadence?: string;
-  lookbackDays?: number;
-  quota?: number;
-  costLimit?: number;
   lastSuccessfulReceiptAt?: ISODateTime;
 };
 
@@ -290,12 +293,25 @@ export type SensingProfile = {
   markets: readonly string[];
   competitors: readonly string[];
   products: readonly string[];
+  audiences: readonly string[];
+  occasions: readonly string[];
+  risks: readonly string[];
   sourceConnectionIds: readonly string[];
   cadence: string;
+  lookbackDays: number;
   materialityThreshold: number;
+  noveltyThreshold: number;
   confidenceThreshold: number;
   freshnessDays: number;
+  expiryDays: number;
   minimumCorroboration: number;
+  deduplicationWindowDays: number;
+  seasonalExpectations: Readonly<Record<string, number>>;
+  suppressionRules: readonly string[];
+  downRankingRules: readonly string[];
+  destinations: readonly string[];
+  humanReviewRequired: boolean;
+  decisionContexts: readonly string[];
   quietPeriods: readonly { start: ISODateTime; end: ISODateTime }[];
 };
 

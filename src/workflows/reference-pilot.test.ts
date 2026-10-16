@@ -3,7 +3,7 @@ import test from "node:test";
 import { ABILITY_CATALOG, DECISION_BRIEF_ABILITIES } from "../abilities/catalog.ts";
 import { runAbility } from "../abilities/engine.ts";
 import { assessPreflight } from "../campaigns/analysis.ts";
-import type { Campaign, MeasurementPlan, SolutionProfile } from "../core/contracts.ts";
+import type { Campaign, MeasurementPlan, SensingProfile, SolutionProfile } from "../core/contracts.ts";
 import {
   AggregateMetricEvidenceAdapter,
   DocumentEvidenceAdapter,
@@ -146,12 +146,14 @@ test("reference pilot proves the repository-verifiable roadmap as one governed v
     contaminationRisk: "low",
   }).mayUseBrandLiftTerm, true);
 
+  const monitoringProfile: SensingProfile = {
+      id: "sensing-1", clientId, version: 1, themes: ["category"], markets: ["DK"], competitors: [], products: [], audiences: ["category-buyers"], occasions: [], risks: [],
+      sourceConnectionIds: ["official-statistics", "trade-publication"], cadence: "weekly", lookbackDays: 30, materialityThreshold: 0.2, noveltyThreshold: 0.2,
+      confidenceThreshold: 0.7, freshnessDays: 14, expiryDays: 30, minimumCorroboration: 2, deduplicationWindowDays: 30,
+      seasonalExpectations: {}, suppressionRules: ["duplicate", "bot-heavy", "manipulation-risk", "low-sample", "stale"], downRankingRules: ["seasonal"], destinations: ["owned-product"], humanReviewRequired: true, decisionContexts: ["market-planning"], quietPeriods: [],
+  };
   const monitoring = qualifySignals({
-    profile: {
-      id: "sensing-1", clientId, version: 1, themes: ["category"], markets: ["DK"], competitors: [], products: [],
-      sourceConnectionIds: ["official-statistics", "trade-publication"], cadence: "weekly", materialityThreshold: 0.2,
-      confidenceThreshold: 0.7, freshnessDays: 14, minimumCorroboration: 2, quietPeriods: [],
-    },
+    profile: monitoringProfile,
     candidates: [{ id: "signal-1", clientId, theme: "category", currentValue: 130, baselineValue: 100, confidence: 0.85, observedAt: now, sourceIds: ["official-statistics", "trade-publication"], botRisk: 0, manipulationRisk: 0, sampleSize: 100 }],
     now,
     sourceHealthOk: true,
@@ -164,7 +166,7 @@ test("reference pilot proves the repository-verifiable roadmap as one governed v
     reviewRoles: { learning: ["reviewer"], brand_lift: ["method-reviewer"] }, retention: { evidenceDays: 180, rawHours: 24, auditDays: 365 },
     sensingProfileId: "sensing-1", createdAt: now,
   };
-  const exported = exportSolutionProfile(profile, now);
+  const exported = exportSolutionProfile(profile, now, monitoringProfile);
   assert.deepEqual(importSolutionProfile(exported), exported.profile);
 });
 

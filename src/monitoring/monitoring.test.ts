@@ -12,12 +12,19 @@ const profile: SensingProfile = {
   markets: ["DK"],
   competitors: ["Competitor A"],
   products: ["Product A"],
+  audiences: ["Category buyers"], occasions: ["Planning"], risks: ["Price pressure"],
   sourceConnectionIds: ["source-1", "source-2"],
   cadence: "weekly",
+  lookbackDays: 30,
   materialityThreshold: 0.2,
+  noveltyThreshold: 0.2,
   confidenceThreshold: 0.7,
   freshnessDays: 14,
+  expiryDays: 30,
   minimumCorroboration: 2,
+  deduplicationWindowDays: 30,
+  seasonalExpectations: {}, suppressionRules: ["duplicate", "bot-heavy", "manipulation-risk", "low-sample", "stale"], downRankingRules: ["seasonal"],
+  destinations: ["owned-product"], humanReviewRequired: true, decisionContexts: ["market-planning"],
   quietPeriods: [],
 };
 
@@ -102,6 +109,46 @@ test("a zero baseline is non-comparable without an absolute materiality policy",
   });
   assert.equal(result.outcome, "needs_context");
   assert.ok(result.qualifications[0].reasons.includes("non-comparable-baseline"));
+});
+
+test("profile seasonality, novelty and deduplication windows affect qualification", () => {
+  const seasonal = qualifySignals({
+    profile: { ...profile, seasonalExpectations: { "competitor-price": 120 } },
+    now: "2026-10-16T00:00:00.000Z",
+    sourceHealthOk: true,
+    candidates: [{
+      id: "seasonal", clientId: "client-a", theme: "competitor-price", currentValue: 150, baselineValue: 100,
+      confidence: 0.9, observedAt: "2026-10-15T00:00:00.000Z", sourceIds: ["source-1", "source-2"],
+      botRisk: 0, manipulationRisk: 0, sampleSize: 100,
+    }],
+  });
+  assert.equal(seasonal.outcome, "signals_qualified");
+  assert.equal(seasonal.qualifications[0].materiality, 0.25);
+
+  const lowNovelty = qualifySignals({
+    profile,
+    now: "2026-10-16T00:00:00.000Z",
+    sourceHealthOk: true,
+    candidates: [{
+      id: "known-pattern", clientId: "client-a", theme: "competitor-price", currentValue: 150, baselineValue: 100, novelty: 0.1,
+      confidence: 0.9, observedAt: "2026-10-15T00:00:00.000Z", sourceIds: ["source-1", "source-2"],
+      botRisk: 0, manipulationRisk: 0, sampleSize: 100,
+    }],
+  });
+  assert.ok(lowNovelty.qualifications[0].reasons.includes("low-novelty"));
+
+  const oldDuplicate = qualifySignals({
+    profile,
+    now: "2026-10-16T00:00:00.000Z",
+    sourceHealthOk: true,
+    candidates: [{
+      id: "renewed", clientId: "client-a", theme: "competitor-price", currentValue: 150, baselineValue: 100,
+      confidence: 0.9, observedAt: "2026-10-15T00:00:00.000Z", sourceIds: ["source-1", "source-2"],
+      duplicateOf: "historic", duplicateObservedAt: "2026-08-01T00:00:00.000Z",
+      botRisk: 0, manipulationRisk: 0, sampleSize: 100,
+    }],
+  });
+  assert.equal(oldDuplicate.qualifications[0].reasons.includes("duplicate"), false);
 });
 
 test("quantitative candidates use one latest baseline per source and preserve lineage", () => {

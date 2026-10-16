@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ABILITY_CATALOG } from "@/src/abilities/catalog";
 import { createActiveSolutionProfile, listSolutionProfiles } from "@/src/db/queries/solution_profiles";
 import { listSourceConnections } from "@/src/db/queries/sources";
+import { listSensingProfiles } from "@/src/db/queries/monitoring";
 import { recordGovernanceAudit } from "@/src/lib/audit";
 import { getSession } from "@/src/lib/auth";
 import { assertAdmin, PermissionDeniedError } from "@/src/lib/roles";
@@ -24,6 +25,13 @@ export async function POST(request: NextRequest) {
   const allowedSources = new Set(sources.map((source) => source.connectorId));
   if (sourceIds.some((id) => !allowedSources.has(id))) return NextResponse.json({ error: "A provider binding is outside the client scope." }, { status: 400 });
   const evidenceDays = Number(body.evidenceDays), rawHours = Number(body.rawHours), auditDays = Number(body.auditDays);
+  const sensingProfileId = typeof body.sensingProfileId === "string" && body.sensingProfileId ? body.sensingProfileId : undefined;
+  if (sensingProfileId) {
+    const sensingProfiles = await listSensingProfiles(session.clientId);
+    if (!sensingProfiles.some((row) => row.status === "active" && row.profile.id === sensingProfileId)) {
+      return NextResponse.json({ error: "The sensing profile is not an active profile for this client." }, { status: 400 });
+    }
+  }
   try {
     const created = await createActiveSolutionProfile({ clientId: session.clientId, createdBy: session.id, profile: {
       enabledAbilities,
@@ -31,7 +39,7 @@ export async function POST(request: NextRequest) {
       markets: strings(body.markets), languages: strings(body.languages),
       reviewRoles: { market_twin: ["reviewer"], measurement: ["reviewer"], brand_lift: ["reviewer"], learning: ["reviewer"] },
       retention: { evidenceDays, rawHours, auditDays },
-      sensingProfileId: typeof body.sensingProfileId === "string" && body.sensingProfileId ? body.sensingProfileId : undefined,
+      sensingProfileId,
     } });
     await recordGovernanceAudit({ clientId: session.clientId, actorUserId: session.id, action: "activate", entityType: "solution_profile", entityId: String(created.databaseId), after: { version: created.profile.version, enabledAbilities: created.profile.enabledAbilities, providerBindingKeys: Object.keys(created.profile.providerBindings) } });
     return NextResponse.json({ profile: created }, { status: 201 });

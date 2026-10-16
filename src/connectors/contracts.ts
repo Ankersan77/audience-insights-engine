@@ -40,6 +40,7 @@ export type SourceAcquisitionReceipt = {
   status: AcquisitionStatus;
   acquiredCount: number;
   rejectedCount: number;
+  estimatedCost?: number;
   nextCursor?: string;
   safeArtifactRefs: readonly string[];
   errorCode?: string;

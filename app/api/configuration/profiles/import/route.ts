@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ABILITY_CATALOG } from "@/src/abilities/catalog";
-import { createActiveSolutionProfile } from "@/src/db/queries/solution_profiles";
+import { createActiveSolutionBundle } from "@/src/db/queries/solution_profiles";
 import { listSourceConnections } from "@/src/db/queries/sources";
 import { recordGovernanceAudit } from "@/src/lib/audit";
 import { getSession } from "@/src/lib/auth";
 import { assertAdmin, PermissionDeniedError } from "@/src/lib/roles";
-import { importSolutionProfile } from "@/src/packaging/solution";
+import { importSolutionPackage } from "@/src/packaging/solution";
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -14,18 +14,19 @@ export async function POST(request: NextRequest) {
     throw error;
   }
   try {
-    const portable = importSolutionProfile(await request.json());
+    const portable = importSolutionPackage(await request.json());
     const installed = new Set(ABILITY_CATALOG.map((ability) => `${ability.id}@${ability.version}`));
-    if (portable.enabledAbilities.some((ability) => !installed.has(`${ability.id}@${ability.version}`))) {
+    if (portable.profile.enabledAbilities.some((ability) => !installed.has(`${ability.id}@${ability.version}`))) {
       return NextResponse.json({ error: "The package references an ability version that is not installed." }, { status: 400 });
     }
     const sources = await listSourceConnections(session.clientId);
     const configured = new Set(sources.map((source) => source.connectorId));
-    const missingBindings = Object.values(portable.providerBindings).filter((connectorId) => !configured.has(connectorId));
+    const requiredBindings = [...Object.values(portable.profile.providerBindings), ...(portable.sensingProfile?.sourceConnectionIds ?? [])];
+    const missingBindings = [...new Set(requiredBindings.filter((connectorId) => !configured.has(connectorId)))];
     if (missingBindings.length > 0) {
       return NextResponse.json({ error: `Configure these connector bindings before import: ${missingBindings.join(", ")}` }, { status: 400 });
     }
-    const created = await createActiveSolutionProfile({ clientId: session.clientId, createdBy: session.id, profile: portable });
+    const created = await createActiveSolutionBundle({ clientId: session.clientId, createdBy: session.id, profile: portable.profile, sensing: portable.sensingProfile });
     await recordGovernanceAudit({
       clientId: session.clientId,
       actorUserId: session.id,

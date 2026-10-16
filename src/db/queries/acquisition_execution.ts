@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import type { DataClassification, SourceAcquisitionJob as DomainAcquisitionJob, SourceAcquisitionRequest } from "@/src/connectors/contracts";
-import type { RightsDeclaration, SourceClass } from "@/src/core/contracts";
+import type { RightsDeclaration, SourceClass, SourceConnectionPolicy } from "@/src/core/contracts";
+import { readSourceConnectionPolicy, sourcePolicyFailure } from "@/src/connectors/sourcePolicy";
 import { db } from "@/src/db/client";
 import { sourceAcquisitionJob, sourceAcquisitionReceipt, sourceConnection } from "@/src/db/schema";
 
@@ -17,11 +18,17 @@ export type ClaimedAcquisition = {
   connectorVersion: string;
   sourceClass: SourceClass;
   configuration: Readonly<Record<string, unknown>>;
+  policy: SourceConnectionPolicy;
   rights: RightsDeclaration;
   retentionDays: number;
   rawRetentionHours: number;
   job: DomainAcquisitionJob;
 };
+
+export type AcquisitionClaim =
+  | { kind: "claimed"; value: ClaimedAcquisition }
+  | { kind: "blocked"; errorCode: string }
+  | { kind: "unavailable" };
 
 export async function listQueuedAcquisitionJobIds(limit = 100): Promise<number[]> {
   const rows = await db.select({ id: sourceAcquisitionJob.id }).from(sourceAcquisitionJob).where(eq(sourceAcquisitionJob.status, "queued")).orderBy(asc(sourceAcquisitionJob.id)).limit(Math.min(Math.max(limit, 1), 500));
@@ -35,20 +42,33 @@ export async function listStaleRunningAcquisitions(before: Date, limit = 100): P
     .orderBy(asc(sourceAcquisitionJob.id)).limit(Math.min(Math.max(limit, 1), 500));
 }
 
-export async function claimAcquisitionJob(id: number, now = new Date()): Promise<ClaimedAcquisition | null> {
+export async function claimAcquisitionJob(id: number, now = new Date()): Promise<AcquisitionClaim> {
   return db.transaction(async (tx) => {
-    const [job] = await tx.update(sourceAcquisitionJob).set({ status: "running", startedAt: now }).where(and(eq(sourceAcquisitionJob.id, id), eq(sourceAcquisitionJob.status, "queued"))).returning();
-    if (!job) return null;
+    const [pending] = await tx.select().from(sourceAcquisitionJob).where(and(eq(sourceAcquisitionJob.id, id), eq(sourceAcquisitionJob.status, "queued"))).limit(1);
+    if (!pending) return { kind: "unavailable" } as const;
+    const job = pending;
     const [source] = await tx.select().from(sourceConnection).where(and(eq(sourceConnection.id, job.sourceConnectionId), eq(sourceConnection.clientId, job.clientId))).limit(1);
     if (!source) throw new Error("source-connection-not-found");
     const sourceClass = source.sourceClass as SourceClass;
-    return {
+    const policy = readSourceConnectionPolicy(source.configurationJson);
+    const blocked = sourcePolicyFailure({ health: source.health, rights: source.rightsJson as RightsDeclaration, policy, request: job.requestJson as SourceAcquisitionRequest, dataClassification: classification(sourceClass), now: now.toISOString() });
+    if (blocked) {
+      const [failed] = await tx.update(sourceAcquisitionJob).set({ status: "failed", finishedAt: now }).where(and(eq(sourceAcquisitionJob.id, id), eq(sourceAcquisitionJob.status, "queued"))).returning({ id: sourceAcquisitionJob.id });
+      if (!failed) return { kind: "unavailable" } as const;
+      await tx.insert(sourceAcquisitionReceipt).values({ clientId: job.clientId, jobId: job.id, status: "failed", acquiredCount: 0, rejectedCount: 0, safeArtifactRefs: [], errorCode: blocked, completedAt: now });
+      await tx.update(sourceConnection).set({ health: "unavailable" }).where(and(eq(sourceConnection.id, source.id), eq(sourceConnection.clientId, source.clientId)));
+      return { kind: "blocked", errorCode: blocked } as const;
+    }
+    const [claimed] = await tx.update(sourceAcquisitionJob).set({ status: "running", startedAt: now }).where(and(eq(sourceAcquisitionJob.id, id), eq(sourceAcquisitionJob.status, "queued"))).returning();
+    if (!claimed) return { kind: "unavailable" } as const;
+    return { kind: "claimed", value: {
       databaseJobId: job.id,
       sourceConnectionId: source.id,
       connectorId: source.connectorId,
       connectorVersion: source.connectorVersion,
       sourceClass,
       configuration: source.configurationJson as Readonly<Record<string, unknown>>,
+      policy,
       rights: source.rightsJson as RightsDeclaration,
       retentionDays: source.retentionDays,
       rawRetentionHours: source.rawRetentionHours,
@@ -58,7 +78,7 @@ export async function claimAcquisitionJob(id: number, now = new Date()): Promise
         dataClassification: classification(sourceClass), request: job.requestJson as SourceAcquisitionRequest,
         idempotencyKey: job.idempotencyKey, requestedAt: job.requestedAt.toISOString(),
       },
-    };
+    } } as const;
   });
 }
 

@@ -10,9 +10,11 @@ export type SignalCandidate = {
   observedAt: string;
   sourceIds: readonly string[];
   duplicateOf?: string;
+  duplicateObservedAt?: string;
   botRisk: number;
   manipulationRisk: number;
   sampleSize: number;
+  novelty?: number;
   seasonalExpectation?: number;
 };
 
@@ -20,6 +22,7 @@ export type SignalQualification = {
   signalId: string;
   qualified: boolean;
   materiality: number;
+  novelty: number;
   reasons: readonly string[];
 };
 
@@ -56,7 +59,10 @@ export function qualifySignals(input: {
     const reasons: string[] = [];
     if (candidate.clientId !== input.profile.clientId) reasons.push("different-client");
     if (!input.profile.themes.includes(candidate.theme)) reasons.push("theme-out-of-scope");
-    if (candidate.duplicateOf) reasons.push("duplicate");
+    const duplicateAgeDays = candidate.duplicateObservedAt
+      ? (now - new Date(candidate.duplicateObservedAt).getTime()) / 86_400_000
+      : 0;
+    if (candidate.duplicateOf && duplicateAgeDays <= input.profile.deduplicationWindowDays) reasons.push("duplicate");
     if (candidate.sourceIds.length < input.profile.minimumCorroboration) reasons.push("insufficient-corroboration");
     if (candidate.confidence < input.profile.confidenceThreshold) reasons.push("low-confidence");
     if (candidate.botRisk >= 0.5) reasons.push("bot-heavy");
@@ -64,12 +70,15 @@ export function qualifySignals(input: {
     if (candidate.sampleSize < 10) reasons.push("low-sample");
     const ageDays = (now - new Date(candidate.observedAt).getTime()) / 86_400_000;
     if (ageDays > input.profile.freshnessDays) reasons.push("stale");
-    const baseline = candidate.seasonalExpectation ?? candidate.baselineValue;
+    if (ageDays > input.profile.expiryDays) reasons.push("expired");
+    const baseline = input.profile.seasonalExpectations[candidate.theme] ?? candidate.seasonalExpectation ?? candidate.baselineValue;
     const materiality = baseline === undefined || baseline === 0 ? 0 : Math.abs((candidate.currentValue - baseline) / baseline);
+    const novelty = candidate.novelty ?? Math.min(materiality, 1);
     if (baseline === undefined) reasons.push("missing-baseline");
     else if (baseline === 0) reasons.push("non-comparable-baseline");
     else if (materiality < input.profile.materialityThreshold) reasons.push("below-materiality");
-    return { signalId: candidate.id, qualified: reasons.length === 0, materiality, reasons };
+    if (novelty < input.profile.noveltyThreshold) reasons.push("low-novelty");
+    return { signalId: candidate.id, qualified: reasons.length === 0, materiality, novelty, reasons };
   });
 
   const qualified = qualifications.filter((item) => item.qualified);

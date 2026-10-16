@@ -69,6 +69,13 @@ The worker dispatches canonical acquisition jobs through the runtime-only regist
 has passed permission, people-blind and provider acceptance review. Missing adapters produce a
 redacted failure receipt and degraded source health; they never yield synthetic evidence.
 
+Every governed source declares scopes, data classifications, permitted purposes, markets,
+languages, cadence, lookback, rights, retention, quota and optional cost limits. Those declarations
+are enforced when a job is claimed and when its receipt returns; an out-of-policy acquisition is
+failed before evidence is persisted. Administrators can revoke a source from `/workspace`, which
+cancels active work, blocks future collection and immediately sends its retained material through
+the canonical tombstoning flow.
+
 Successful aggregate and public-conversation adapters persist normalized observations/themes with
 their canonical evidence. Monitoring uses comparable aggregate observations, one latest historical
 baseline per source, explicit corroboration/materiality/freshness/risk gates, and an auditable
@@ -108,6 +115,10 @@ monitoring, solution packaging, and operational resilience. `/workspace` is the 
 scoped control surface. Runtime permissions distinguish owner, administrator, researcher,
 reviewer, and viewer responsibilities; product actions are protected at the API boundary rather
 than only hidden in the interface.
+
+Portable configuration format v3 carries both the solution profile and its tenant-neutral sensing
+policy. Import allocates both active versions atomically and verifies all local connector bindings;
+valid v2 packages remain importable through the explicit compatibility path.
 
 The canonical worker also applies source-rights-aware expiry: expired evidence is reduced to a
 non-reversible lineage tombstone, structured sidecars and copied citation wording are removed, and

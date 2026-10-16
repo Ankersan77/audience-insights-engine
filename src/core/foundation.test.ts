@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Campaign, Citation, EvidenceItem, IntelligenceRecord, MeasurementPlan, SensingProfile, SolutionProfile, StudyDesign } from "./contracts.ts";
+import type { Campaign, Citation, EvidenceItem, IntelligenceRecord, MeasurementPlan, SensingProfile, SolutionProfile, SourceConnection, StudyDesign } from "./contracts.ts";
 import { TenantAccessError, assertTenantReview, assertTenantScope, tenantFilter } from "./tenancy.ts";
 import { TransitionError, assertCampaignTransition, promoteIntelligence } from "./transitions.ts";
-import { validateCampaign, validateCitation, validateEvidenceItem, validateIntelligenceRecord, validateMeasurementPlan, validateSensingProfile, validateSolutionProfile, validateStudyDesign } from "./validation.ts";
+import { validateCampaign, validateCitation, validateEvidenceItem, validateIntelligenceRecord, validateMeasurementPlan, validateSensingProfile, validateSolutionProfile, validateSourceConnection, validateStudyDesign } from "./validation.ts";
 
 const applicability = { markets: ["DK"], languages: ["da"], categories: [], audiences: [], campaigns: [] };
 
@@ -75,6 +75,20 @@ test("tenant isolation fails closed and filters every record by client", () => {
     () => assertTenantReview({ ...context, role: "viewer" }),
     /tenant-review-denied/,
   );
+});
+
+test("source connections require an explicit usable policy envelope", () => {
+  const source: SourceConnection = {
+    id: "source-1", clientId: "client-a", connectorId: "official-statistics", connectorVersion: "1.0.0",
+    sourceClass: "official_or_public", health: "configured", permissions: ["read:statistics"], dataClassifications: ["public"],
+    permittedPurposes: ["market-research"], markets: ["DK"], languages: ["da"], cadence: "monthly", lookbackDays: 90,
+    quota: 1000, costLimit: 0, retentionDays: 365, rawRetentionHours: 0,
+  };
+  assert.equal(validateSourceConnection(source).valid, true);
+  assert.equal(validateSourceConnection({ ...source, permittedPurposes: [] }).valid, false);
+  assert.equal(validateSourceConnection({ ...source, markets: [], languages: [] }).valid, false);
+  assert.equal(validateSourceConnection({ ...source, lookbackDays: 0 }).valid, false);
+  assert.equal(validateSourceConnection({ ...source, quota: -1 }).valid, false);
 });
 
 test("identity-risk verbatim evidence is quarantined and unlicensed evidence cannot go live", () => {
@@ -180,17 +194,28 @@ test("campaign and sensing contracts enforce their release gates", () => {
     markets: ["DK"],
     competitors: [],
     products: [],
+    audiences: ["Audience A"], occasions: [], risks: [],
     sourceConnectionIds: ["source-1"],
     cadence: "weekly",
+    lookbackDays: 30,
     materialityThreshold: 0.2,
+    noveltyThreshold: 0.2,
     confidenceThreshold: 0.7,
     freshnessDays: 14,
+    expiryDays: 30,
     minimumCorroboration: 2,
+    deduplicationWindowDays: 30,
+    seasonalExpectations: {}, suppressionRules: ["duplicate", "bot-heavy", "manipulation-risk", "low-sample", "stale"], downRankingRules: ["seasonal"],
+    destinations: ["owned-product"], humanReviewRequired: true, decisionContexts: ["market-planning"],
     quietPeriods: [],
   };
   assert.equal(validateSensingProfile(sensing).valid, true);
   assert.equal(validateSensingProfile({ ...sensing, minimumCorroboration: 0 }).valid, false);
   assert.equal(validateSensingProfile({ ...sensing, cadence: "whenever" }).valid, false);
+  assert.equal(validateSensingProfile({ ...sensing, humanReviewRequired: false }).valid, false);
+  assert.equal(validateSensingProfile({ ...sensing, destinations: ["external-webhook"] }).valid, false);
+  assert.equal(validateSensingProfile({ ...sensing, suppressionRules: ["duplicate"] }).valid, false);
+  assert.equal(validateSensingProfile({ ...sensing, expiryDays: 7 }).valid, false);
 });
 
 test("measurement and study contracts reject mismatched metrics and invalid fieldwork", () => {
