@@ -1,10 +1,14 @@
 # ADR 0001: Rill access is an explicit, enumerated measure-and-dimension allowlist
 
-- Status: Accepted
+- Status: Superseded for the target product; retained as a historical control until Rill code is removed
 - Date: 2026-10-08
 - Initiative: `init-20261002-audience-insights-engine` (Audience Insights Engine)
 
 ## Context
+
+> Superseded 2026-10-16: `BLUEPRINT.md` removes Rill as a product dependency. This ADR continues to
+> govern the existing legacy Rill adapter until roadmap Phase 0 removes or generalizes that code.
+> It must not be used as justification for adding Rill to the new architecture.
 
 This product must query Better Collective's internal Rill instance for two non-financial views (`organic_search_performance`, `playbook_event_stream`) while satisfying an absolute, non-negotiable requirement: commercial revenue and New Depositing Customer (NDC) data must never be queryable, stored, or surfaced by this product, under any configuration. Rill hosts many views that do contain revenue/NDC data (`commercial_revenue`, `affiliate_metrics`, every `business_central_*` view, `subscriptions`, `sponsorships`, `ad_cost`, `programmatic_revenue`, `engagement_subaffiliation`, `ai_spend_by_employee`).
 

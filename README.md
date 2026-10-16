@@ -1,6 +1,20 @@
 # Market Research
 
-Market Research is an internal audience-insights application for managing brands, research instructions, evidence, research runs, insights, and delivery channels.
+Market Research is a reusable, client-configurable market intelligence and campaign-learning
+product built on D4WN principles. It combines governed client evidence, commissioned research,
+aggregate behavioral and commercial signals, official/public sources, and permitted public
+conversation into a versioned **Market Twin** and decision-ready research outputs.
+
+The product is trend-first and people-blind: it studies populations, themes, behaviors, and changes
+without building consumer profiles or cross-platform identity graphs.
+
+## Source of truth
+
+- [`BLUEPRINT.md`](BLUEPRINT.md) — canonical product, architecture, data, research, and quality
+  contract.
+- [`ROADMAP.md`](ROADMAP.md) — phased build plan and release gates.
+- [`product-spec.md`](product-spec.md) and [`implementation-plan.md`](implementation-plan.md) —
+  compatibility pointers for legacy links only.
 
 ## Stack
 
@@ -8,8 +22,12 @@ Market Research is an internal audience-insights application for managing brands
 - PostgreSQL with Drizzle ORM
 - `pg-boss` background jobs
 - OneLogin OIDC authentication
-- Optional Slack, Google Drive, and Rill integrations
-- The pinned `last30days` research engine in `vendor/last30days`
+- Provider-neutral evidence, metric, source-acquisition, and delivery adapters (target architecture)
+- A pinned `last30days` research engine in `vendor/last30days`, retained only while it can satisfy
+  the blueprint's source-rights, provenance, and people-blind ingestion contracts
+
+The current codebase still contains legacy Slack and Rill implementation. Phase 0 of the roadmap
+removes or generalizes it; neither is part of the product contract.
 
 ## Requirements
 
@@ -43,7 +61,9 @@ The minimum application setup requires:
 - `ONELOGIN_CLIENT_ID`
 - `ONELOGIN_CLIENT_SECRET`
 
-Slack, Google Drive, Rill, and evidence-retention variables are optional until those integrations are enabled.
+Provider-specific variables are optional and may be removed as legacy adapters are retired. New
+connectors must use opaque credential references and the provider-neutral contracts in the
+blueprint.
 
 ## Commands
 
@@ -72,6 +92,7 @@ docker run --rm --env-file .env.local -p 3000:3000 market-research
 
 `.github/workflows/ci.yml` installs dependencies, lints, type-checks, tests, and builds on pull requests and pushes to `main`.
 
-`.github/workflows/rill-schema-check.yml` separately protects the Rill allowlist and performs the scheduled live-schema check once `RILL_API_TOKEN` is configured.
+`.github/workflows/rill-schema-check.yml` is a legacy integration check scheduled for removal or
+replacement in roadmap Phase 0.
 
 Deployment infrastructure is intentionally not coupled to a specific hosting platform. Add deployment configuration only after a target environment has been selected.
