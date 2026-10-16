@@ -109,8 +109,10 @@ factory; authenticated HTTP proves absent configuration remains disabled. No rea
 An independent five-minute worker now reconciles expired attempts across authorization days in
 bounded, tenant-locked batches without replay or refund. Partial deadline indexes (`0016`),
 all-day backlog visibility and synthetic real-pg-boss execution cover this recovery path.
-Live acceptance, actual usage reconciliation, owned-surface budget
-administration, live-provider HTTP proof and human benchmarks remain open. See
+Owners/admins can now inspect and explicitly edit both budget types in Sources & Setup, with exact
+currency entry, expected-version conflicts, live membership/session checks and atomic named audit.
+Migration `0017` adds acquisition edit versions without changing issued authorization semantics.
+Live acceptance, actual usage reconciliation, live-provider HTTP proof and human benchmarks remain open. See
 `docs/synthesis-provider-acceptance.md`.
 
 New decision briefs preserve fingerprints of their used evidence/methods and reviewed Market Twin
@@ -153,7 +155,7 @@ against one client-wide UTC-day allowance before adapter execution. Retries requ
 authorizations; cancellation, crashes and cheaper-than-planned success do not automatically refund
 them. An operator CLI configures and inspects these conservative bounds. Synthetic database/worker
 tests cover contention, isolation and retry failures; real provider metering acceptance, measured
-cost reconciliation and budget administration in the owned UI remain open.
+cost reconciliation remain open; owned-surface budget administration is now implemented as above.
 Session hardening now uses server-side expiry/revocation, current tenant permissions, explicit
 operator provisioning and same-origin write checks. The external OIDC/deployment login proof is
 still required; migration `0013` forces older signed-role cookies through sign-in again.

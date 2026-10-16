@@ -184,7 +184,10 @@ turns expired undispatched reservations into `cancelled`, and expired dispatched
 `unknown`. It never retries or refunds. The worker now registers an independent five-minute
 reconciliation queue with bounded, oldest-first tenant batches, busy-lock deferral and redacted
 failure telemetry. `show` exposes an all-day backlog separately from daily authorized totals.
-Migration `0016` adds partial pending-deadline indexes. The owned-surface budget editor remains open.
+Migration `0016` adds partial pending-deadline indexes. The owned-surface budget editor now lets
+owners/admins explicitly change their client's allowance with version conflict detection, current
+session/membership checks and named atomic audit. It cannot select/approve providers, edit keys or
+reset the ledger. See the runbook; budget enablement alone cannot activate synthesis.
 Synthetic PostgreSQL tests cover concurrency, tenant isolation, revocation, expiry during audit
 contention, crash reconciliation, batch limits and actual pg-boss execution as well as the governance
 wrapper. They do not replace production scheduling/alert proof, real provider metering/processing

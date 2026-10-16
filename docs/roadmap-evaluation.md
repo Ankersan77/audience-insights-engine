@@ -138,15 +138,22 @@ evidence, not a substitute for the open external gates below.
   evidence prevents acceptance. The packets deliberately index existing evidence and work; they
   do not yet provide expert narrative synthesis. Urgent alert delivery, late-evidence revision
   workflows and live shadow-mode quality proof remain open.
-- Queued acquisition now requires an explicit operator-enabled, client-wide daily budget and a
+- Queued acquisition now requires an explicitly enabled, client-wide daily budget and a
   synchronous adapter upper-bound plan before execution/credential access. Currency-tagged integer
   micro-units, records and requests are authorized atomically across sources; each retry needs a
   fresh durable authorization. Bounds remain charged on success, cancellation and unknown outcomes,
   so this is conservative admission accounting, not a provider invoice. Per-request gates bound
   pagination; legacy currency-less source cost limits cannot authorize paid plans. PostgreSQL
   tests exercise concurrency, tenant isolation, retries and non-refund behavior. Live adapters must
-  still demonstrate compliant request metering and provider-enforced bounds; operator-budget UI,
-  measured-cost reconciliation and provider acceptance remain open. Local in-memory uploads do not
+  still demonstrate compliant request metering and provider-enforced bounds; measured-cost
+  reconciliation and provider acceptance remain open. Owners/admins now have an owned-surface editor
+  for both budgets: explicit confirmation, exact amounts, expected-version checks, locked live
+  membership/session validation and atomic named audit. Other roles receive neither budget controls
+  nor budget data. Migration `0017` versions acquisition edits; existing grant semantics are unchanged.
+  Synthetic HTTP tests cover both role visibility and server-side enforcement. An opt-in local
+  browser case additionally exercises exact amount entry, confirmation reset, two-tab conflicts
+  and mobile layout. These bounded checks are not a full client/browser pilot.
+  Local in-memory uploads do not
   call a provider and remain subject to the existing source/receipt checks.
 - The PostgreSQL suite now exercises actual authenticated HTTP briefing reads/reviews and the
   server-rendered Market Pulse with real server sessions for synthetic identities. This does not exercise external

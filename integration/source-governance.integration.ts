@@ -16,6 +16,7 @@ import type { ContextualPreflight } from "../src/campaigns/preflight";
 import type { CampaignResultAssessment } from "../src/campaigns/results";
 import { runSynthesisBudgetCases } from "./synthesis-budget-cases";
 import { runSynthesisProviderCases } from "./synthesis-provider-cases";
+import { runBudgetAdministrationCases } from "./budget-administration-cases";
 
 // Refuse accidental execution against the application's database. No tables are
 // truncated: each test creates uniquely named, synthetic tenant/source fixtures.
@@ -91,6 +92,7 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
     await migrate(db, { migrationsFolder: "drizzle" });
     await runSynthesisBudgetCases(t, db, probe);
     await runSynthesisProviderCases(t, db, probe, async () => { const first = await fixture(); return { first, second: await fixture(first.tenant) }; });
+    await runBudgetAdministrationCases(t, db, probe);
     await t.test("manual retention enforces tenant, purpose, output scope and revocation", async () => {
       const f = await fixture();
       const other = await fixture();

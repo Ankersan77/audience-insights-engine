@@ -24,10 +24,45 @@ sources and a separate synthesis budget before credential access. Follow
 source acquisition budgets are not synthesis budgets, and synthetic transport tests are not live
 provider acceptance. No real client binding, budget or key is enabled by shipping this code.
 
+### Budget administration in the owned surface
+
+Apply migration `0017` before releasing this version. It initializes acquisition configuration
+versions at 1 without granting any budget, changing ledger values or revoking issued acquisitions.
+Both trusted operator edits and workspace edits increment the relevant budget version.
+
+Client **owners and admins** can use `Sources & Setup → Budgets & recovery`. Other roles receive
+neither budget controls nor budget data; direct API requests are denied too. The server derives
+client/user/session from the authenticated request, not submitted fields. Each save locks and
+rechecks current membership and session, including expiry after audit contention. Policy and named
+audit commit together or both roll back. The operator CLI remains available without a browser
+session; that trusted server path must never be exposed as an authority-free HTTP operation.
+
+The panel shows separate acquisition and synthesis allowances, today's reserved upper bounds,
+configuration versions, and the all-day synthesis recovery backlog. These are **not actual billed
+charges**. Currency input is in whole currency units with up to six decimal places; conversion to
+micro-units is exact. Counts must be non-negative whole numbers. No amount, currency or request cap
+is preselected for a new allowance, and its enabled checkbox starts unchecked. Limits and a
+confirmation must be supplied explicitly; changing a field clears that confirmation. A zero cost
+cap authorizes only bounded zero-cost work, not unlimited spend. Disabled budgets cannot admit work.
+
+Every save carries the version displayed when editing began (null for a new budget). A stale edit
+or a duplicate after a lost response is rejected instead of overwriting a newer policy. On a
+conflict or unconfirmed network result, **refresh and review the saved state before retrying**.
+Refresh discards unsaved edits. Lowering a cap below existing reservations is permitted but does
+not refund them; new admissions must fit every limit. Currency cannot change after the first
+reservation. Acquisition changes do not revoke previously authorized work; synthesis edits revoke
+prior dispatch/result grants. The panel explains this distinction before saving.
+
+Budget edits do not approve source rights, configure/activate a model, store credentials, change
+provider pricing, reset usage or retry unknown work. Budgets are private operational settings and
+are deliberately absent from portable solution exports. Named edit audits use
+`admin_set_acquisition_budget` / `admin_set_synthesis_budget`; operator edits retain separate action
+names. Keep authorization ledgers and policy versions together during backup/restore.
+
 ### Synthesis budget admission
 
 Apply migration `0015` before connecting a synthesis provider. It grants **no client budget**.
-The operator must explicitly configure a separate allowance, in integer micro-units (1,000,000 =
+An owner/admin or operator must explicitly configure a separate allowance, in integer micro-units (1,000,000 =
 one currency unit), and the approved provider factory must use `withSynthesisBudget` with the
 PostgreSQL ledger. The CLI never selects a model, reads provider credentials or invokes a model:
 
@@ -106,7 +141,7 @@ in-memory manual uploads do not make external requests and retain their existing
 ### Acquisition budget admission
 
 Apply migration `0014` before restarting workers. All clients initially have **no acquisition
-budget**, so queued adapters cannot execute until an operator supplies one. Do not invent a paid
+budget**, so queued adapters cannot execute until an owner/admin or operator supplies one. Do not invent a paid
 allowance while onboarding a client. The CLI requires an existing client and `DATABASE_URL`:
 
 ```sh
@@ -153,14 +188,25 @@ legacy field and explicit currency-budget approval, followed by provider accepta
 quota is checked against the preflight bound and again against the returned receipt.
 
 The ledger is an authorization ceiling, not measured spend. It must survive backup/restore and must
-not be deleted to free capacity. Reconciliation/refunds, monthly allowances, provider rate limits,
-live acceptance and an owned-surface budget editor are separate remaining work; do not claim that
-this CLI or synthetic tests demonstrate those capabilities.
+not be deleted to free capacity. Measured-cost reconciliation/refunds, monthly allowances, provider
+rate limits and live acceptance remain separate work; neither the editor, CLI nor synthetic tests
+demonstrate those capabilities.
 
 Run `TEST_DATABASE_URL=... pnpm test:integration` against a dedicated database whose name ends in
 `_test`. The suite applies migrations and creates synthetic tenants without truncating tables.
 It exercises actual PostgreSQL locks and both revocation/completion orderings. CI supplies an
 isolated PostgreSQL 16 service. These tests do not certify production backup or restore.
+
+The budget tests additionally exercise owner/admin authorization, all denied roles, cross-client
+attempts, stale/duplicate edits, origin protection, bounded request bodies, named audits and
+session-expiry rollback. `TEST_HTTP=1` also tests real endpoints and server-rendered control
+visibility. Optional interactive proof uses `TEST_BROWSER_MODULE` (absolute path to an installed
+Playwright module) and optionally `TEST_BROWSER_EXECUTABLE` (installed Chromium/Chrome executable)
+with `TEST_HTTP=1`. It creates an isolated browser context with a synthetic test session, verifies
+form confirmation, exact amount persistence, two-tab conflicts and mobile overflow, and writes
+synthetic screenshots to `/private/tmp/market-research-budget-desktop.png` and
+`/private/tmp/market-research-budget-mobile.png`. It never uses a real client session or activates a
+provider. This optional browser proof is not automatically run by CI without those dependencies.
 
 ### Research snapshot conflicts
 

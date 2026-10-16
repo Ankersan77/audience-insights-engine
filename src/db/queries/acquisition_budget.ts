@@ -5,21 +5,31 @@ import { readSourceConnectionPolicy, sourceClassification, sourcePolicyFailure }
 import type { SourceAcquisitionRequest } from "@/src/connectors/contracts";
 import type { RightsDeclaration, SourceClass } from "@/src/core/contracts";
 import { validateAcquisitionPlan, validateBudgetPolicy, validatePlanAgainstSource, type AcquisitionBudgetPolicy, type AcquisitionPlan } from "@/src/evidence/acquisitionBudget";
+import { checkBudgetVersion, lockBudgetAuthority, type BudgetWriteAuthority } from "./budget_authority";
 
-/** Trusted operator only. No automatic grants, no defaults that authorize paid access. */
-export async function setAcquisitionBudget(clientSlug: string, policy: AcquisitionBudgetPolicy): Promise<void> {
+/** Trusted operator CLI or authenticated admin with locked authority and expected version.
+ * Public routes must supply authority. No automatic grants or defaults authorizing paid access.
+ */
+export async function setAcquisitionBudget(clientSlug: string, policy: AcquisitionBudgetPolicy, authority?: BudgetWriteAuthority): Promise<void> {
   validateBudgetPolicy(policy);
+  authority = authority ? { ...authority } : undefined;
   policy = { currency: policy.currency, dailyCostMicros: policy.dailyCostMicros, dailyRecords: policy.dailyRecords, dailyRequests: policy.dailyRequests, enabled: policy.enabled };
   await db.transaction(async (tx) => {
     const [tenant] = await tx.select({ id: client.id }).from(client).where(eq(client.slug, clientSlug));
     if (!tenant) throw new Error("budget-client-not-found");
     await tx.execute(sql`select pg_advisory_xact_lock(73007, ${tenant.id})`);
+    const recheck = await lockBudgetAuthority(tx, tenant.id, authority);
+    const clock = await tx.execute<{ now: Date }>(sql`select clock_timestamp() as now`);
+    recheck(new Date(clock.rows[0].now));
     const [before] = await tx.select().from(acquisitionBudget).where(eq(acquisitionBudget.clientId, tenant.id));
+    checkBudgetVersion(before?.version, authority);
     const [prior] = await tx.select({ currency: acquisitionAuthorization.currency }).from(acquisitionAuthorization).where(eq(acquisitionAuthorization.clientId, tenant.id)).limit(1);
     if (prior && prior.currency !== policy.currency) throw new Error("budget-currency-change-requires-migration");
-    await tx.insert(acquisitionBudget).values({ clientId: tenant.id, ...policy })
-      .onConflictDoUpdate({ target: acquisitionBudget.clientId, set: { ...policy, updatedAt: new Date() } });
-    await tx.insert(governanceAudit).values({ clientId: tenant.id, action: "operator_set_acquisition_budget", entityType: "acquisition_budget", entityId: String(tenant.id), redactedBeforeJson: before ?? null, redactedAfterJson: policy });
+    const [after] = await tx.insert(acquisitionBudget).values({ clientId: tenant.id, ...policy })
+      .onConflictDoUpdate({ target: acquisitionBudget.clientId, set: { ...policy, version: sql`${acquisitionBudget.version} + 1`, updatedAt: new Date(clock.rows[0].now) } }).returning();
+    await tx.insert(governanceAudit).values({ clientId: tenant.id, actorUserId: authority?.actorUserId, action: authority ? "admin_set_acquisition_budget" : "operator_set_acquisition_budget", entityType: "acquisition_budget", entityId: String(tenant.id), redactedBeforeJson: before ?? null, redactedAfterJson: after });
+    const completed = await tx.execute<{ now: Date }>(sql`select clock_timestamp() as now`);
+    recheck(new Date(completed.rows[0].now));
   });
 }
 
@@ -66,8 +76,8 @@ export async function authorizeAcquisitionAttempt(input: { clientId: number; job
   });
 }
 
-export async function inspectAcquisitionBudget(clientSlug: string) {
-  const [tenant] = await db.select({ id: client.id }).from(client).where(eq(client.slug, clientSlug));
+export async function inspectAcquisitionBudget(clientReference: string | number) {
+  const [tenant] = await db.select({ id: client.id }).from(client).where(typeof clientReference === "number" ? eq(client.id, clientReference) : eq(client.slug, clientReference));
   if (!tenant) throw new Error("budget-client-not-found");
   const [policy] = await db.select().from(acquisitionBudget).where(eq(acquisitionBudget.clientId, tenant.id));
   const [usage] = await db.select({

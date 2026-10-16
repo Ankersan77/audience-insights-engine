@@ -88,9 +88,11 @@ the canonical tombstoning flow.
 
 Queued connectors additionally require an explicitly enabled client acquisition budget and an
 adapter preflight plan. `npm run budget -- show --client CLIENT_SLUG` shows the policy and today's
-conservatively authorized upper bounds; configuration is an operator-only action described in
-`docs/operations-runbook.md`. Migration `0014` adds the authorization ledger without enabling any
-budget. No paid source is activated by migrating or starting the worker.
+conservatively authorized upper bounds. Client owners/admins can inspect and explicitly edit both
+acquisition and synthesis limits in **Sources & Setup → Budgets & recovery**; operator CLIs remain
+available. Migration `0017` adds acquisition edit versions; migrations never enable a budget.
+See `docs/operations-runbook.md` for confirmation, concurrency and revocation semantics. No paid
+source is activated by migrating or starting the worker.
 
 Successful aggregate and public-conversation adapters persist normalized observations/themes with
 their canonical evidence. Monitoring uses comparable aggregate observations, one latest historical

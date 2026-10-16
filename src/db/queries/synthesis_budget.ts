@@ -2,6 +2,7 @@ import { and, eq, gte, lt, sql, type SQL } from "drizzle-orm";
 import { db } from "@/src/db/client";
 import { client, governanceAudit, synthesisAuthorization, synthesisBudget } from "@/src/db/schema";
 import { validateSynthesisAttempt, validateSynthesisBudget, type SynthesisBudgetPolicy, type SynthesisAttempt, type SynthesisPermit, type SynthesisOutcome, type SynthesisSpendLedger } from "@/src/abilities/synthesisBudget";
+import { checkBudgetVersion, lockBudgetAuthority, type BudgetWriteAuthority } from "./budget_authority";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 /** Trusted dispatch-time authority; lock its rows and return a time/config recheck. */
@@ -27,22 +28,29 @@ async function audit(tx: Tx, clientId: number, authorizationId: number, action: 
   return row.id;
 }
 
-/** Trusted operator path only. No default grants and no resetting spent reservations. */
-export async function setSynthesisBudget(clientSlug: string, policy: SynthesisBudgetPolicy): Promise<void> {
+/** Trusted operator CLI or authenticated admin with locked authority and expected version.
+ * Public routes must supply authority. No default grants and no resetting spent reservations.
+ */
+export async function setSynthesisBudget(clientSlug: string, policy: SynthesisBudgetPolicy, authority?: BudgetWriteAuthority): Promise<void> {
   validateSynthesisBudget(policy);
+  authority = authority ? { ...authority } : undefined;
   policy = { currency: policy.currency, dailyCostMicros: policy.dailyCostMicros, dailyRequests: policy.dailyRequests, enabled: policy.enabled };
   await db.transaction(async (tx) => {
     const [tenant] = await tx.select({ id: client.id }).from(client).where(eq(client.slug, clientSlug));
     if (!tenant) throw new Error("synthesis-budget-client-not-found");
     await lock(tx, tenant.id);
+    const recheck = await lockBudgetAuthority(tx, tenant.id, authority);
+    recheck(await clock(tx));
     const [before] = await tx.select().from(synthesisBudget).where(eq(synthesisBudget.clientId, tenant.id));
+    checkBudgetVersion(before?.version, authority);
     const [prior] = await tx.select({ currency: synthesisAuthorization.currency }).from(synthesisAuthorization).where(eq(synthesisAuthorization.clientId, tenant.id)).limit(1);
     if (prior && prior.currency !== policy.currency) throw new Error("synthesis-budget-currency-change-requires-migration");
     const [after] = await tx.insert(synthesisBudget).values({ clientId: tenant.id, ...policy }).onConflictDoUpdate({
       target: synthesisBudget.clientId,
       set: { ...policy, version: sql`${synthesisBudget.version} + 1`, updatedAt: await clock(tx) },
     }).returning();
-    await tx.insert(governanceAudit).values({ clientId: tenant.id, action: "operator_set_synthesis_budget", entityType: "synthesis_budget", entityId: String(tenant.id), redactedBeforeJson: before ?? null, redactedAfterJson: after });
+    await tx.insert(governanceAudit).values({ clientId: tenant.id, actorUserId: authority?.actorUserId, action: authority ? "admin_set_synthesis_budget" : "operator_set_synthesis_budget", entityType: "synthesis_budget", entityId: String(tenant.id), redactedBeforeJson: before ?? null, redactedAfterJson: after });
+    recheck(await clock(tx));
   });
 }
 
@@ -202,8 +210,8 @@ export async function reconcileDueSynthesisAttempts() {
   return result;
 }
 
-export async function inspectSynthesisBudget(clientSlug: string) {
-  const [tenant] = await db.select({ id: client.id }).from(client).where(eq(client.slug, clientSlug));
+export async function inspectSynthesisBudget(clientReference: string | number) {
+  const [tenant] = await db.select({ id: client.id }).from(client).where(typeof clientReference === "number" ? eq(client.id, clientReference) : eq(client.slug, clientReference));
   if (!tenant) throw new Error("synthesis-budget-client-not-found");
   const [policy] = await db.select().from(synthesisBudget).where(eq(synthesisBudget.clientId, tenant.id));
   const [usage] = await db.select({

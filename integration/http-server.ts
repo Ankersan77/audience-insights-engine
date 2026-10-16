@@ -39,6 +39,7 @@ export async function startTestHttpServer(databaseUrl: string) {
     }
   } catch (error) { await stop(); throw error; }
   return {
+    base,
     stop,
     async request(path: string, token?: string, body?: unknown, origin: string | null = base) {
       const headers = new Headers();

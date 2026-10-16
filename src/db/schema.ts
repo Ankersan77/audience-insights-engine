@@ -446,6 +446,7 @@ export const acquisitionBudget = pgTable("acquisition_budget", {
   dailyRecords: bigint("daily_records", { mode: "number" }).notNull(),
   dailyRequests: bigint("daily_requests", { mode: "number" }).notNull(),
   enabled: boolean("enabled").notNull().default(false),
+  version: integer("version").notNull().default(1),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
