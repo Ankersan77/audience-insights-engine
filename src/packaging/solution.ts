@@ -1,10 +1,14 @@
 import type { SolutionProfile } from "../core/contracts.ts";
 import { validateSolutionProfile } from "../core/validation.ts";
 
+export type PortableSolutionProfile = Pick<SolutionProfile,
+  "enabledAbilities" | "providerBindings" | "markets" | "languages" | "reviewRoles" | "retention"
+>;
+
 export type RedactedSolutionPackage = {
   format: "market-research-solution";
-  formatVersion: 1;
-  profile: SolutionProfile;
+  formatVersion: 2;
+  profile: PortableSolutionProfile;
   exportedAt: string;
   checksum: string;
 };
@@ -34,19 +38,35 @@ function checksum(value: unknown): string {
 export function exportSolutionProfile(profile: SolutionProfile, exportedAt: string): RedactedSolutionPackage {
   const validation = validateSolutionProfile(profile);
   if (!validation.valid) throw new Error(`invalid-solution-profile:${validation.errors.join(";")}`);
-  const serialized = JSON.stringify(profile);
+  const portable: PortableSolutionProfile = {
+    enabledAbilities: structuredClone(profile.enabledAbilities),
+    providerBindings: structuredClone(profile.providerBindings),
+    markets: structuredClone(profile.markets),
+    languages: structuredClone(profile.languages),
+    reviewRoles: structuredClone(profile.reviewRoles),
+    retention: structuredClone(profile.retention),
+  };
+  const serialized = JSON.stringify(portable);
   if (SECRET_PATTERN.test(serialized)) throw new Error("solution export contains a credential-like value");
-  const redacted = structuredClone(profile);
-  const base = { format: "market-research-solution" as const, formatVersion: 1 as const, profile: redacted, exportedAt };
+  const base = { format: "market-research-solution" as const, formatVersion: 2 as const, profile: portable, exportedAt };
   return { ...base, checksum: checksum(base) };
 }
 
-export function importSolutionProfile(value: RedactedSolutionPackage, expectedClientId: string): SolutionProfile {
-  if (value.format !== "market-research-solution" || value.formatVersion !== 1) throw new Error("unsupported-solution-package");
-  const { checksum: supplied, ...base } = value;
+export function importSolutionProfile(value: unknown): PortableSolutionProfile {
+  if (!value || typeof value !== "object") throw new Error("unsupported-solution-package");
+  const packageValue = value as RedactedSolutionPackage;
+  if (packageValue.format !== "market-research-solution" || packageValue.formatVersion !== 2 || !packageValue.profile) throw new Error("unsupported-solution-package");
+  const { checksum: supplied, ...base } = packageValue;
   if (checksum(base) !== supplied) throw new Error("solution-package-checksum-mismatch");
-  if (value.profile.clientId !== expectedClientId) throw new Error("solution-package-client-mismatch");
-  const validation = validateSolutionProfile(value.profile);
+  const candidate: SolutionProfile = {
+    ...packageValue.profile,
+    id: "portable-validation",
+    clientId: "portable-validation",
+    version: 1,
+    status: "draft",
+    createdAt: packageValue.exportedAt,
+  };
+  const validation = validateSolutionProfile(candidate);
   if (!validation.valid) throw new Error(`invalid-solution-profile:${validation.errors.join(";")}`);
-  return structuredClone(value.profile);
+  return structuredClone(packageValue.profile);
 }

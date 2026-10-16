@@ -82,7 +82,7 @@ evidence.
 | 5 | Persistent campaign revisions and evidence, ready pre-flight approval gate, versioned live/post assessments, and reviewer-promoted campaign learning implemented in the owned surface | One real campaign with aggregate result sources through the full lifecycle |
 | 6 | Persistent measurement plans and studies with separate reviewer decisions, strengthened metric/date/sample validation, deterministic classification and reproducible binary-lift analysis implemented | Qualified method review and an approved live study |
 | 7 | Versioned sensing administration, tenant-scoped durable cadence scheduling, acquisition-job emission, reconciliation, qualification, no-change/source-health outcomes, briefing contracts and governed learning promotion implemented | Live connector execution and shadow-mode evaluation |
-| 8 | Five-role runtime authorization, source/sensing/solution administration, redacted versioned packaging, second-client proof, concurrency locks, resilience controls and operations runbook implemented | Clean deployed environment, restore exercise, pilot scorecard and operating owners |
+| 8 | Five-role runtime authorization, source/sensing/solution administration, tenant-neutral checksum-verified import/export, second-client proof, concurrency locks, resilience controls and operations runbook implemented | Clean deployed environment, restore exercise, pilot scorecard and operating owners |
 
 Anything in the final column remains `needs_context`; it is not silently converted into completion.
 

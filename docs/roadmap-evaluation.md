@@ -83,8 +83,8 @@ eight phases. The owned application now exposes:
   evidence-linked post-campaign assessment;
 - separate measurement-plan and study review, including deterministic Brand Lift language gates;
 - a candidate-learning path that requires reviewer promotion before it becomes durable learning;
-- versioned sensing and solution profiles, tenant-scoped manual/durable scheduling, and redacted
-  configuration export; and
+- versioned sensing and solution profiles, tenant-scoped manual/durable scheduling, and
+  tenant-neutral checksum-verified configuration import/export; and
 - owner, administrator, researcher, reviewer and viewer permissions enforced server-side.
 
 The clean verification gate covers source-of-truth checks, generated route types, TypeScript,

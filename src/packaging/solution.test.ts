@@ -20,13 +20,13 @@ function profile(clientId: string): SolutionProfile {
   };
 }
 
-test("solution configuration exports without credentials or client content and verifies on import", () => {
+test("solution configuration exports tenant-neutral data and verifies on import", () => {
   const exported = exportSolutionProfile(profile("client-a"), "2026-10-16T01:00:00.000Z");
   const serialized = JSON.stringify(exported);
   for (const forbidden of ["apiKey", "password", "bearer", "client content"]) assert.equal(serialized.includes(forbidden), false);
-  assert.deepEqual(importSolutionProfile(exported, "client-a"), profile("client-a"));
-  assert.throws(() => importSolutionProfile(exported, "client-b"), /client-mismatch/);
-  assert.throws(() => importSolutionProfile({ ...exported, checksum: "tampered" }, "client-a"), /checksum/);
+  for (const tenantField of ["client-a", "clientId", "createdAt", "sensingProfileId"]) assert.equal(serialized.includes(tenantField), false);
+  assert.deepEqual(importSolutionProfile(exported), exported.profile);
+  assert.throws(() => importSolutionProfile({ ...exported, checksum: "tampered" }), /checksum/);
 });
 
 test("a second client uses the same profile contract without a Core code branch", () => {
@@ -35,6 +35,7 @@ test("a second client uses the same profile contract without a Core code branch"
   assert.equal(first.format, second.format);
   assert.equal(first.formatVersion, second.formatVersion);
   assert.notEqual(first.checksum, second.checksum);
+  assert.deepEqual(importSolutionProfile(first), first.profile);
 });
 
 test("retry is bounded, classified, and exponentially backed off", () => {
