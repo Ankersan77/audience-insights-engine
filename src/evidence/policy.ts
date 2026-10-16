@@ -36,6 +36,8 @@ export type EvidenceCandidate = {
   confidence: number;
   grade: EvidenceGrade;
   cohortSize?: number;
+  quantitative?: { metricKey: string; value: number; unit: string; observedAt: string; dimensions: Readonly<Record<string, string>>; cohortSize?: number };
+  qualitative?: { label: string; paraphrase: string; occurrenceCount: number; sourceDiversity: number; method: string };
 };
 
 const IDENTIFIER_PATTERNS: readonly { name: string; pattern: RegExp; replacement: string }[] = [

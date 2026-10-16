@@ -1,10 +1,12 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Applicability, EvidenceItem, MethodDeclaration, RightsDeclaration, SourceClass } from "@/src/core/contracts";
-import { validateEvidenceItem } from "@/src/core/validation";
+import { validateEvidenceItem, validateQualitativeTheme, validateQuantitativeObservation } from "@/src/core/validation";
 import { db } from "@/src/db/client";
 import {
   canonicalEvidence,
   evidenceCollection,
+  qualitativeTheme,
+  quantitativeObservation,
   sourceAcquisitionJob,
   sourceAcquisitionReceipt,
   sourceConnection,
@@ -144,6 +146,30 @@ function assertEvidenceScope(item: EvidenceItem, input: PersistAcquisitionInput)
   if (!validation.valid) throw new Error(`invalid-evidence:${validation.errors.join(";")}`);
 }
 
+function structuredRows(result: AdapterRunResult, inserted: readonly { id: number; contentHash: string }[], clientId: number) {
+  const temporaryEvidence = new Map(result.evidence.map((item) => [item.id, item]));
+  const databaseByHash = new Map(inserted.map((item) => [item.contentHash, item.id]));
+  const resolve = (temporaryId: string) => {
+    const evidence = temporaryEvidence.get(temporaryId);
+    return evidence ? databaseByHash.get(evidence.contentHash) : undefined;
+  };
+  const quantitative = (result.quantitativeObservations ?? []).flatMap((item) => {
+    if (item.clientId !== String(clientId)) throw new Error("cross-client-quantitative-observation-rejected");
+    const validation = validateQuantitativeObservation(item);
+    if (!validation.valid) throw new Error(`invalid-quantitative-observation:${validation.errors.join(";")}`);
+    const evidenceId = resolve(item.evidenceId);
+    return evidenceId ? [{ clientId, evidenceId, metricKey: item.metricKey, value: item.value, unit: item.unit, observedAt: new Date(item.observedAt), dimensionsJson: item.dimensions, cohortSize: item.cohortSize, suppressed: item.suppressed }] : [];
+  });
+  const qualitative = (result.qualitativeThemes ?? []).flatMap((item) => {
+    if (item.clientId !== String(clientId)) throw new Error("cross-client-qualitative-theme-rejected");
+    const validation = validateQualitativeTheme(item);
+    if (!validation.valid) throw new Error(`invalid-qualitative-theme:${validation.errors.join(";")}`);
+    const evidenceIds = item.evidenceIds.map(resolve).filter((id): id is number => id !== undefined);
+    return evidenceIds.length ? [{ clientId, label: item.label, paraphrase: item.paraphrase, evidenceIds, occurrenceCount: item.occurrenceCount, sourceDiversity: item.sourceDiversity, method: item.method, suppressed: item.suppressed }] : [];
+  });
+  return { quantitative, qualitative };
+}
+
 /**
  * Persists one completed adapter run atomically. Raw provider payloads are not
  * accepted by this boundary; only canonical evidence and a redacted receipt
@@ -236,7 +262,11 @@ export async function persistAcquisition(input: PersistAcquisitionInput): Promis
         .onConflictDoNothing({
           target: [canonicalEvidence.clientId, canonicalEvidence.sourceConnectionId, canonicalEvidence.contentHash],
         })
-        .returning({ id: canonicalEvidence.id });
+        .returning({ id: canonicalEvidence.id, contentHash: canonicalEvidence.contentHash });
+
+    const structured = structuredRows(input.result, inserted, input.clientId);
+    if (structured.quantitative.length) await tx.insert(quantitativeObservation).values(structured.quantitative);
+    if (structured.qualitative.length) await tx.insert(qualitativeTheme).values(structured.qualitative);
 
     const finishedAt = new Date(input.result.receipt.completedAt ?? Date.now());
     await tx.insert(sourceAcquisitionReceipt).values({
@@ -298,7 +328,10 @@ export async function completeExistingAcquisition(input: CompleteExistingAcquisi
       redactions: [...item.redactions], methodJson: item.method, rightsJson: item.rights, applicabilityJson: item.applicability,
       publishedAt: item.publishedAt ? new Date(item.publishedAt) : null, observedAt: item.observedAt ? new Date(item.observedAt) : null,
       ingestedAt: new Date(item.ingestedAt), expiresAt: new Date(item.expiresAt),
-    }))).onConflictDoNothing({ target: [canonicalEvidence.clientId, canonicalEvidence.sourceConnectionId, canonicalEvidence.contentHash] }).returning({ id: canonicalEvidence.id });
+    }))).onConflictDoNothing({ target: [canonicalEvidence.clientId, canonicalEvidence.sourceConnectionId, canonicalEvidence.contentHash] }).returning({ id: canonicalEvidence.id, contentHash: canonicalEvidence.contentHash });
+    const structured = structuredRows(input.result, inserted, input.clientId);
+    if (structured.quantitative.length) await tx.insert(quantitativeObservation).values(structured.quantitative);
+    if (structured.qualitative.length) await tx.insert(qualitativeTheme).values(structured.qualitative);
     const finishedAt = new Date(input.result.receipt.completedAt ?? Date.now());
     await tx.insert(sourceAcquisitionReceipt).values({
       clientId: input.clientId, jobId: input.jobId, status: "succeeded", acquiredCount: input.result.receipt.acquiredCount,

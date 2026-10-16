@@ -1,0 +1,2 @@
+CREATE INDEX "evidence_collection_client_acquisition_job_idx" ON "evidence_collection" USING btree ("client_id","acquisition_job_id");--> statement-breakpoint
+CREATE INDEX "quantitative_observation_client_metric_observed_idx" ON "quantitative_observation" USING btree ("client_id","metric_key","observed_at");

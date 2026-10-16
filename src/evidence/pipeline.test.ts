@@ -82,6 +82,46 @@ test("sensitive content, prompt injection, and small cohorts are quarantined", a
   assert.equal(result.evidence[0].lifecycle, "quarantined");
   assert.equal(result.evidence[0].sourceContent, "[suppressed: cohort below configured minimum]");
   assert.ok(result.evidence[0].redactions.includes("small-cohort"));
+  assert.equal(result.quantitativeObservations?.[0].suppressed, true);
+  assert.equal(result.quantitativeObservations?.[0].value, 0);
+});
+
+test("aggregate metrics retain a normalized quantitative observation", async () => {
+  const adapter = new AggregateMetricEvidenceAdapter([
+    { id: "m2", content: "Index observation", metric: "search_index", value: 113, unit: "index", cohortSize: 100, rights, method, applicability },
+  ]);
+  const result = await adapter.run(job("job-quantitative", "metrics"), context, policy);
+  assert.deepEqual(result.quantitativeObservations, [{
+    id: "job-quantitative:m2:quantitative",
+    clientId: "client-a",
+    evidenceId: "job-quantitative:m2",
+    metricKey: "search_index",
+    value: 113,
+    unit: "index",
+    observedAt: context.now,
+    dimensions: {},
+    cohortSize: 100,
+    suppressed: false,
+  }]);
+});
+
+test("public conversations retain a normalized, non-verbatim theme", async () => {
+  const adapter = new PublicConversationThemeAdapter([
+    { id: "t1", content: "Buyers repeatedly compare repairability before price.", occurrenceCount: 20, sourceDiversity: 4, rights, method, applicability },
+  ]);
+  const result = await adapter.run(job("job-theme", "themes"), context, policy);
+  assert.deepEqual(result.qualitativeThemes, [{
+    id: "job-theme:t1:qualitative",
+    clientId: "client-a",
+    evidenceIds: ["job-theme:t1"],
+    label: "Buyers repeatedly compare repairability before price.",
+    paraphrase: "Buyers repeatedly compare repairability before price.",
+    occurrenceCount: 20,
+    sourceDiversity: 4,
+    method: "fixture",
+    suppressed: false,
+  }]);
+  assert.equal(result.evidence[0].citationLevel, "paraphrased");
 });
 
 test("three source classes normalize through one adapter contract with redacted receipts", async () => {

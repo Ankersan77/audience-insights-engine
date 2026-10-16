@@ -1,4 +1,4 @@
-import type { EvidenceItem } from "../core/contracts.ts";
+import type { EvidenceItem, QualitativeTheme, QuantitativeObservation } from "../core/contracts.ts";
 import type { SourceAcquisitionJob, SourceAcquisitionReceipt } from "../connectors/contracts.ts";
 import { assertPeopleBlind, retainEvidence, type EvidenceCandidate, type EvidencePolicy } from "./policy.ts";
 
@@ -10,6 +10,8 @@ export type AdapterRunContext = {
 
 export type AdapterRunResult = {
   evidence: readonly EvidenceItem[];
+  quantitativeObservations?: readonly QuantitativeObservation[];
+  qualitativeThemes?: readonly QualitativeTheme[];
   receipt: SourceAcquisitionReceipt;
 };
 
@@ -58,6 +60,8 @@ export abstract class EvidenceAdapter<TRaw> {
     const rawRecords = await this.acquireRaw(job, context);
     const zone = new EphemeralAcquisitionZone<TRaw>();
     const evidence: EvidenceItem[] = [];
+    const quantitativeObservations: QuantitativeObservation[] = [];
+    const qualitativeThemes: QualitativeTheme[] = [];
     let rejectedCount = 0;
     const rawExpiry = new Date(context.now).getTime() + 60_000;
 
@@ -74,6 +78,24 @@ export abstract class EvidenceAdapter<TRaw> {
       const retained = retainEvidence(candidate, policy);
       assertPeopleBlind(retained);
       evidence.push(retained);
+      const suppressed = candidate.cohortSize !== undefined && candidate.cohortSize < policy.minimumCohortSize;
+      if (candidate.quantitative) {
+        quantitativeObservations.push({
+          id: `${retained.id}:quantitative`, clientId: retained.clientId, evidenceId: retained.id,
+          metricKey: candidate.quantitative.metricKey, value: suppressed ? 0 : candidate.quantitative.value,
+          unit: candidate.quantitative.unit, observedAt: candidate.quantitative.observedAt,
+          dimensions: candidate.quantitative.dimensions, cohortSize: candidate.quantitative.cohortSize,
+          suppressed,
+        });
+      }
+      if (candidate.qualitative) {
+        qualitativeThemes.push({
+          id: `${retained.id}:qualitative`, clientId: retained.clientId, evidenceIds: [retained.id],
+          label: candidate.qualitative.label, paraphrase: candidate.qualitative.paraphrase,
+          occurrenceCount: candidate.qualitative.occurrenceCount, sourceDiversity: candidate.qualitative.sourceDiversity,
+          method: candidate.qualitative.method, suppressed: suppressed || candidate.qualitative.sourceDiversity < 2,
+        });
+      }
     }
 
     zone.expire(Number.POSITIVE_INFINITY);
@@ -86,6 +108,6 @@ export abstract class EvidenceAdapter<TRaw> {
       completedAt: context.now,
     };
     assertPeopleBlind(receipt);
-    return { evidence, receipt };
+    return { evidence, quantitativeObservations, qualitativeThemes, receipt };
   }
 }

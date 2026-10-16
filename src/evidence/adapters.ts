@@ -87,6 +87,7 @@ export class AggregateMetricEvidenceAdapter extends EvidenceAdapter<CommonFixtur
       citationLevel: "statistical",
       cohortSize: raw.cohortSize,
       grade: "A",
+      quantitative: { metricKey: raw.metric, value: raw.value, unit: raw.unit, observedAt: context.now, dimensions: {}, cohortSize: raw.cohortSize },
     });
   }
 }
@@ -104,6 +105,7 @@ export class PublicConversationThemeAdapter extends EvidenceAdapter<CommonFixtur
       citationLevel: "paraphrased",
       cohortSize: raw.occurrenceCount,
       grade: "C",
+      qualitative: { label: raw.content.slice(0, 120), paraphrase: raw.content, occurrenceCount: raw.occurrenceCount, sourceDiversity: raw.sourceDiversity, method: raw.method.method },
     });
   }
 }

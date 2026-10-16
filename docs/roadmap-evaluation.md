@@ -112,4 +112,10 @@ evidence, not a substitute for the open external gates below.
 - Version allocation for solution profiles, sensing profiles, measurement plans, campaign
   revisions and campaign assessments is serialized with transaction-scoped PostgreSQL advisory
   locks; unique constraints remain the final integrity boundary.
+- Adapter runs persist normalized quantitative observations and qualitative themes alongside their
+  canonical evidence. Suppressed cohorts keep their lineage but never retain a usable metric value.
+- Monitoring qualification compares like-for-like dimensions against the latest prior observation
+  per source, persists the full qualification result, and creates only pending-review signals.
+  Missing baselines and missing public-conversation risk metadata fail closed as `needs_context` or
+  risk rejection; they are never translated into a no-change claim.
 

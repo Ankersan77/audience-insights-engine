@@ -5,7 +5,7 @@ export type SignalCandidate = {
   clientId: string;
   theme: string;
   currentValue: number;
-  baselineValue: number;
+  baselineValue?: number;
   confidence: number;
   observedAt: string;
   sourceIds: readonly string[];
@@ -24,7 +24,7 @@ export type SignalQualification = {
 };
 
 export type MonitoringOutcome = {
-  outcome: "signals_qualified" | "no_material_change" | "source_health_failure";
+  outcome: "signals_qualified" | "no_material_change" | "source_health_failure" | "needs_context";
   qualifications: readonly SignalQualification[];
   briefingType?: "urgent" | "weekly" | "monthly" | "quarterly";
   message: string;
@@ -47,6 +47,10 @@ export function qualifySignals(input: {
     return { outcome: "source_health_failure", qualifications: [], message: "One or more required sources did not produce a trustworthy receipt." };
   }
 
+  if (input.candidates.length === 0) {
+    return { outcome: "needs_context", qualifications: [], message: "Evidence was acquired, but no comparable signal candidate could be constructed." };
+  }
+
   const now = new Date(input.now).getTime();
   const qualifications = input.candidates.map((candidate): SignalQualification => {
     const reasons: string[] = [];
@@ -61,13 +65,18 @@ export function qualifySignals(input: {
     const ageDays = (now - new Date(candidate.observedAt).getTime()) / 86_400_000;
     if (ageDays > input.profile.freshnessDays) reasons.push("stale");
     const baseline = candidate.seasonalExpectation ?? candidate.baselineValue;
-    const materiality = baseline === 0 ? Math.abs(candidate.currentValue) : Math.abs((candidate.currentValue - baseline) / baseline);
-    if (materiality < input.profile.materialityThreshold) reasons.push("below-materiality");
+    const materiality = baseline === undefined || baseline === 0 ? 0 : Math.abs((candidate.currentValue - baseline) / baseline);
+    if (baseline === undefined) reasons.push("missing-baseline");
+    else if (baseline === 0) reasons.push("non-comparable-baseline");
+    else if (materiality < input.profile.materialityThreshold) reasons.push("below-materiality");
     return { signalId: candidate.id, qualified: reasons.length === 0, materiality, reasons };
   });
 
   const qualified = qualifications.filter((item) => item.qualified);
   if (qualified.length === 0) {
+    if (qualifications.some((item) => item.reasons.includes("missing-baseline") || item.reasons.includes("non-comparable-baseline"))) {
+      return { outcome: "needs_context", qualifications, message: "Evidence was acquired, but a historical or seasonal baseline is required before change can be assessed." };
+    }
     return { outcome: "no_material_change", qualifications, message: "Sources were checked; no signal passed scope, quality, freshness, corroboration, and materiality gates." };
   }
   const urgent = qualified.some((item) => item.materiality >= input.profile.materialityThreshold * 2);

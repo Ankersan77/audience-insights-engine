@@ -458,7 +458,9 @@ export const evidenceCollection = pgTable("evidence_collection", {
   lifecycle: lifecycleStateEnum("lifecycle").notNull().default("candidate"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-});
+}, (table) => [
+  index("evidence_collection_client_acquisition_job_idx").on(table.clientId, table.acquisitionJobId),
+]);
 
 export const canonicalEvidence = pgTable("canonical_evidence", {
   id: serial("id").primaryKey(),
@@ -509,7 +511,9 @@ export const quantitativeObservation = pgTable("quantitative_observation", {
   dimensionsJson: jsonb("dimensions_json").notNull(),
   cohortSize: integer("cohort_size"),
   suppressed: boolean("suppressed").notNull().default(false),
-});
+}, (table) => [
+  index("quantitative_observation_client_metric_observed_idx").on(table.clientId, table.metricKey, table.observedAt),
+]);
 
 export const qualitativeTheme = pgTable("qualitative_theme", {
   id: serial("id").primaryKey(),

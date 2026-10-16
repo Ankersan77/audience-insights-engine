@@ -1,9 +1,22 @@
 import { and, desc, eq, inArray, max, sql } from "drizzle-orm";
-import type { SensingProfile } from "@/src/core/contracts";
+import type { Applicability, IntelligenceRecord, SensingProfile, SourceClass } from "@/src/core/contracts";
 import { db } from "@/src/db/client";
-import { monitoringRun, sensingProfile, sourceAcquisitionJob, sourceAcquisitionReceipt, sourceConnection } from "@/src/db/schema";
+import {
+  canonicalEvidence,
+  evidenceCollection,
+  intelligenceRecord,
+  monitoringRun,
+  quantitativeObservation,
+  researchArtifact,
+  sensingProfile,
+  sourceAcquisitionJob,
+  sourceAcquisitionReceipt,
+  sourceConnection,
+} from "@/src/db/schema";
 import { monitoringScheduleKey, planMonitoringAcquisitions } from "@/src/monitoring/scheduler";
-import { validateSensingProfile } from "@/src/core/validation";
+import { validateIntelligenceRecord, validateSensingProfile } from "@/src/core/validation";
+import { buildQuantitativeSignalCandidates, type MonitoringObservation } from "@/src/monitoring/candidates";
+import { qualifySignals } from "@/src/monitoring/engine";
 
 export type MonitoringScheduleSummary = {
   scheduled: number;
@@ -186,5 +199,195 @@ export async function reconcileMonitoringRuns(now = new Date(), clientId?: numbe
     changed += 1;
   }
   return changed;
+}
+
+function monitoringObservation(row: {
+  observation: typeof quantitativeObservation.$inferSelect;
+  evidence: typeof canonicalEvidence.$inferSelect;
+  sourceClass: typeof sourceConnection.$inferSelect.sourceClass;
+}): MonitoringObservation {
+  return {
+    evidenceId: String(row.evidence.id),
+    clientId: String(row.observation.clientId),
+    sourceConnectionId: String(row.evidence.sourceConnectionId),
+    sourceClass: row.sourceClass as SourceClass,
+    metricKey: row.observation.metricKey,
+    value: row.observation.value,
+    unit: row.observation.unit,
+    observedAt: row.observation.observedAt.toISOString(),
+    dimensions: row.observation.dimensionsJson as Readonly<Record<string, string>>,
+    cohortSize: row.observation.cohortSize ?? undefined,
+    confidence: row.evidence.confidence,
+    applicability: row.evidence.applicabilityJson as Applicability,
+    suppressed: row.observation.suppressed,
+  };
+}
+
+/** Converts completed acquisitions into auditable, pending-review signals. */
+export async function qualifyPendingMonitoringRuns(now = new Date(), clientId?: number): Promise<number> {
+  const pending = await db.select({ id: monitoringRun.id, clientId: monitoringRun.clientId }).from(monitoringRun).where(
+    clientId
+      ? and(eq(monitoringRun.clientId, clientId), eq(monitoringRun.status, "succeeded"), eq(monitoringRun.outcome, "acquisition_complete_pending_qualification"))
+      : and(eq(monitoringRun.status, "succeeded"), eq(monitoringRun.outcome, "acquisition_complete_pending_qualification")),
+  );
+  let qualifiedRuns = 0;
+
+  for (const pendingRun of pending) {
+    const changed = await db.transaction(async (tx): Promise<boolean> => {
+      await tx.execute(sql`select pg_advisory_xact_lock(73004, ${pendingRun.id})`);
+      const [run] = await tx.select().from(monitoringRun).where(and(
+        eq(monitoringRun.id, pendingRun.id),
+        eq(monitoringRun.clientId, pendingRun.clientId),
+        eq(monitoringRun.status, "succeeded"),
+        eq(monitoringRun.outcome, "acquisition_complete_pending_qualification"),
+      )).limit(1);
+      if (!run) return false;
+      const [profileRow] = await tx.select().from(sensingProfile).where(and(
+        eq(sensingProfile.id, run.sensingProfileId), eq(sensingProfile.clientId, run.clientId),
+      )).limit(1);
+      if (!profileRow) throw new Error("monitoring-profile-not-found");
+      const profile = canonicalProfile(profileRow);
+      const jobs = await tx.select({ id: sourceAcquisitionJob.id }).from(sourceAcquisitionJob).where(and(
+        eq(sourceAcquisitionJob.clientId, run.clientId), eq(sourceAcquisitionJob.monitoringRunId, run.id),
+      ));
+      if (jobs.length === 0) throw new Error("monitoring-acquisition-jobs-not-found");
+
+      const currentRows = await tx.select({
+        observation: quantitativeObservation,
+        evidence: canonicalEvidence,
+        sourceClass: sourceConnection.sourceClass,
+      }).from(quantitativeObservation)
+        .innerJoin(canonicalEvidence, and(
+          eq(canonicalEvidence.id, quantitativeObservation.evidenceId),
+          eq(canonicalEvidence.clientId, quantitativeObservation.clientId),
+        ))
+        .innerJoin(evidenceCollection, and(
+          eq(evidenceCollection.id, canonicalEvidence.collectionId),
+          eq(evidenceCollection.clientId, canonicalEvidence.clientId),
+        ))
+        .innerJoin(sourceConnection, and(
+          eq(sourceConnection.id, canonicalEvidence.sourceConnectionId),
+          eq(sourceConnection.clientId, canonicalEvidence.clientId),
+        ))
+        .where(and(
+          eq(quantitativeObservation.clientId, run.clientId),
+          inArray(evidenceCollection.acquisitionJobId, jobs.map((job) => job.id)),
+        ));
+      const current = currentRows.map(monitoringObservation);
+      const metricKeys = [...new Set(current.map((item) => item.metricKey))];
+      const historyRows = metricKeys.length === 0 ? [] : await tx.select({
+        observation: quantitativeObservation,
+        evidence: canonicalEvidence,
+        sourceClass: sourceConnection.sourceClass,
+      }).from(quantitativeObservation)
+        .innerJoin(canonicalEvidence, and(
+          eq(canonicalEvidence.id, quantitativeObservation.evidenceId),
+          eq(canonicalEvidence.clientId, quantitativeObservation.clientId),
+        ))
+        .innerJoin(sourceConnection, and(
+          eq(sourceConnection.id, canonicalEvidence.sourceConnectionId),
+          eq(sourceConnection.clientId, canonicalEvidence.clientId),
+        ))
+        .where(and(
+          eq(quantitativeObservation.clientId, run.clientId),
+          eq(quantitativeObservation.suppressed, false),
+          inArray(quantitativeObservation.metricKey, metricKeys),
+        ))
+        .orderBy(desc(quantitativeObservation.observedAt))
+        .limit(5000);
+      const currentEvidenceIds = new Set(current.map((item) => item.evidenceId));
+      const history = historyRows.map(monitoringObservation).filter((item) => !currentEvidenceIds.has(item.evidenceId));
+      const candidates = buildQuantitativeSignalCandidates({ clientId: String(run.clientId), current, history });
+      const result = qualifySignals({ profile, candidates, now: now.toISOString(), sourceHealthOk: true });
+      const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+      const signalIds: number[] = [];
+
+      for (const qualification of result.qualifications.filter((item) => item.qualified)) {
+        const candidate = byId.get(qualification.signalId);
+        if (!candidate || candidate.baselineValue === undefined) throw new Error("qualified-signal-candidate-missing");
+        const statement = `${candidate.theme} changed from ${candidate.baselineValue.toFixed(2)} ${candidate.unit} to ${candidate.currentValue.toFixed(2)} ${candidate.unit}; relative materiality ${(qualification.materiality * 100).toFixed(1)}% across ${candidate.sourceIds.length} source(s).`;
+        const contract: IntelligenceRecord<"signal"> = {
+          id: "pending",
+          clientId: String(run.clientId),
+          kind: "signal",
+          title: `Monitoring signal: ${candidate.theme}`,
+          statement,
+          lifecycle: "candidate",
+          reviewState: "pending",
+          evidenceIds: candidate.evidenceIds,
+          contradictionIds: [],
+          dependencyIds: [],
+          applicability: candidate.applicability,
+          confidence: candidate.confidence,
+          uncertainty: ["Automatically qualified from aggregate observations; human review is required before use.", "The detected association is not a causal claim."],
+          synthesisBy: "model",
+          createdAt: now.toISOString(),
+          decayAt: new Date(now.getTime() + profile.freshnessDays * 86_400_000).toISOString(),
+        };
+        const validation = validateIntelligenceRecord(contract);
+        if (!validation.valid) throw new Error(`invalid-monitoring-signal:${validation.errors.join(";")}`);
+        const [created] = await tx.insert(intelligenceRecord).values({
+          clientId: run.clientId,
+          kind: "signal",
+          title: contract.title,
+          statement: contract.statement,
+          lifecycle: "candidate",
+          reviewState: "pending",
+          evidenceIds: candidate.evidenceIds.map(Number),
+          contradictionIds: [],
+          dependencyIds: [],
+          applicabilityJson: candidate.applicability,
+          confidence: candidate.confidence,
+          uncertainty: [...contract.uncertainty],
+          synthesisBy: "model",
+          createdAt: now,
+          decayAt: new Date(contract.decayAt!),
+        }).returning({ id: intelligenceRecord.id });
+        signalIds.push(created.id);
+      }
+
+      const evidenceIds = [...new Set(candidates.flatMap((candidate) => candidate.evidenceIds.map(Number)))];
+      await tx.insert(researchArtifact).values({
+        clientId: run.clientId,
+        artifactKey: `monitoring-run:${run.id}:qualification`,
+        artifactType: "monitoring_qualification",
+        abilityKey: "continuous-sensing",
+        abilityVersion: "1.0.0",
+        status: result.outcome,
+        version: 1,
+        payloadJson: {
+          monitoringRunId: run.id,
+          profileId: run.sensingProfileId,
+          evaluatedAt: now.toISOString(),
+          outcome: result.outcome,
+          message: result.message,
+          briefingType: result.briefingType,
+          candidates: candidates.map((candidate) => ({
+            id: candidate.id,
+            theme: candidate.theme,
+            metricKey: candidate.metricKey,
+            unit: candidate.unit,
+            currentValue: candidate.currentValue,
+            baselineValue: candidate.baselineValue,
+            confidence: candidate.confidence,
+            observedAt: candidate.observedAt,
+            sourceIds: candidate.sourceIds,
+            sampleSize: candidate.sampleSize,
+            evidenceIds: candidate.evidenceIds,
+          })),
+          qualifications: result.qualifications,
+        },
+        evidenceIds,
+      });
+      await tx.update(monitoringRun).set({
+        outcome: result.outcome,
+        qualifiedSignalIds: signalIds,
+        finishedAt: now,
+      }).where(and(eq(monitoringRun.id, run.id), eq(monitoringRun.clientId, run.clientId)));
+      return true;
+    });
+    if (changed) qualifiedRuns += 1;
+  }
+  return qualifiedRuns;
 }
 

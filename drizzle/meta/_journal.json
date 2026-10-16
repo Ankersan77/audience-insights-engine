@@ -64,6 +64,13 @@
       "when": 1792147479254,
       "tag": "0009_cute_violations",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792148520412,
+      "tag": "0010_noisy_selene",
+      "breakpoints": true
     }
   ]
 }

@@ -69,6 +69,13 @@ The worker dispatches canonical acquisition jobs through the runtime-only regist
 has passed permission, people-blind and provider acceptance review. Missing adapters produce a
 redacted failure receipt and degraded source health; they never yield synthetic evidence.
 
+Successful aggregate and public-conversation adapters persist normalized observations/themes with
+their canonical evidence. Monitoring uses comparable aggregate observations, one latest historical
+baseline per source, explicit corroboration/materiality/freshness/risk gates, and an auditable
+qualification artifact. Passing changes become pending-review Market Twin signals only; missing
+baselines return `needs_context`, and no monitor can automatically promote learning or act outside
+the owned product surface.
+
 ## Environment variables
 
 Required and optional variables are documented in `.env.example`. Keep real values in local or hosted secret storage; never commit them.
