@@ -14,14 +14,14 @@ const bebasNeue = Bebas_Neue({
   weight: "400",
 });
 
-// A function rather than a constant: APP_NAME is read per request, so the title
-// tracks whatever the chart injected instead of freezing the CI-time value.
+// A function rather than a constant: the application name is read per request,
+// so the title tracks the runtime environment instead of the build environment.
 export async function generateMetadata(): Promise<Metadata> {
   const appName = getAppName();
 
   return {
     title: appName,
-    description: `${appName} — a Better Collective better-craft application`,
+    description: `${appName} — audience research and insights`,
   };
 }
 

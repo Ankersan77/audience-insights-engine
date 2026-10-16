@@ -8,7 +8,7 @@
 
 This product's live social-listening layer is provided by `last30days` (MIT-licensed, `github.com/mvanhorn/last30days-skill`), a ~63,000-line vendored Python CLI engine with no plugin or extension seam: adding a native source to it means hand-editing its core across several internal mechanisms (an if/elif fetch chain, a normalizer dict, render-table entries), none of which this product should depend on or modify. It must therefore be treated as an external, unmodified dependency, invoked as-is.
 
-An initial draft of this design ran `last30days` as a second, Python-based container in the same Kubernetes pod as the Next.js/worker container ("sidecar"), communicating over `localhost` HTTP. Tech review during expert review of `product-spec.md` v1 did not object to this in principle, but devops review found it undeployable as specified: the better-craft platform's CI (`build-and-push.yml`) and chart templates build and push exactly one image per release, with no stock mechanism for a second image or a second container in one pod — only a second Deployment from the *same* image (used for the worker itself).
+An initial draft of this design ran `last30days` as a second, Python-based container in the same Kubernetes pod as the Next.js/worker container ("sidecar"), communicating over `localhost` HTTP. Tech review during expert review of `product-spec.md` v1 did not object to this in principle, but devops review found it undeployable in the hosting setup used at the time: the pipeline built exactly one image per release and had no mechanism for a second image or a second container in one pod.
 
 ## Decision
 

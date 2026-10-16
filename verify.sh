@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One command, one verdict — the epic gate for a BetterCraft initiative.
+# One command, one verdict for the project.
 #
 # Copy this into the initiative folder in the first epic and keep it there. Every
 # epic `Gate` in implementation-plan.md is then literally `bash verify.sh`, which
@@ -44,26 +44,6 @@ fi
 if [ -f pyproject.toml ] || [ -f requirements.txt ]; then
   command -v ruff >/dev/null && run "ruff" ruff check .
   command -v pytest >/dev/null && run "pytest" pytest -q
-fi
-
-# better-craft platform repository: the contracts ArgoCD and CI depend on, and
-# the chart rendered the way ArgoCD renders it. A broken contract fails here,
-# at the epic gate, instead of at the deploy.
-if [ -f .bettercraft/activation.json ] && grep -q '"platform": "better-craft-eks"' .bettercraft/activation.json; then
-  PLATFORM_PY="${CLAUDE_PLUGIN_ROOT:-}/scripts/better_craft_platform.py"
-  [ -f "$PLATFORM_PY" ] || PLATFORM_PY="$(find "$HOME/.claude/plugins" -name better_craft_platform.py 2>/dev/null | head -1)"
-  if [ -n "$PLATFORM_PY" ] && [ -f "$PLATFORM_PY" ]; then
-    run "platform contracts" python3 "$PLATFORM_PY" check --dir .
-  else
-    run "platform contracts (BetterCraft plugin not found)" false
-  fi
-  CHART="$(ls -d k8s/*/ 2>/dev/null | grep -v '/APP_NAME/' | head -1)"
-  if [ -n "$CHART" ] && command -v helm >/dev/null; then
-    run "helm template" sh -c "helm lint '$CHART' -f '${CHART}values.yaml' -f '${CHART}values_image_tag.yaml' >/dev/null \
-      && helm template app '$CHART' -f '${CHART}values.yaml' -f '${CHART}values_image_tag.yaml' >/dev/null"
-  elif [ -n "$CHART" ]; then
-    printf '\n=== helm template\n--- skipped: helm is not installed here (CI still runs it)\n'
-  fi
 fi
 
 # --- project-specific gate steps go below this line -------------------------

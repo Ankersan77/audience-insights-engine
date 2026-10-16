@@ -1,21 +1,14 @@
 /**
- * Identity of this deployment, injected at runtime by the Helm chart.
+ * Identity of this deployment, injected through the runtime environment.
  *
- * Both values come from the chart rather than the image so that one build is
- * never tied to one app, and so the version can never drift from the image that
- * is actually running. See the env block in
- * k8s/APP_NAME/templates/deployment.yaml.
- *
- * Neither is named APP_NAME: scaffolding rewrites that literal throughout k8s/
- * when it renames the chart folder, which would rename the variable in
- * deployment.yaml but not here, and the app would silently fall back.
- *
- * The fallbacks only apply to `pnpm dev`, where no chart is involved.
+ * Keeping these values outside the image lets the same build run in different
+ * environments without baking deployment-specific identity into the bundle.
+ * The fallbacks apply to local development.
  */
 
-/** The app's own name — .Chart.Name, i.e. the repo minus the better-craft- prefix. */
+/** The application name shown in metadata and the landing page. */
 export function getAppName(): string {
-  return process.env.APPLICATION_NAME?.trim() || "better-craft";
+  return process.env.APPLICATION_NAME?.trim() || "Market Research";
 }
 
 /**

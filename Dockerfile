@@ -17,8 +17,7 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 RUN addgroup -S app && adduser -S app -G app
 # ADR 0002: `last30days` (vendor/last30days) runs as a local Python subprocess
-# of the worker, inside this same image — never a sidecar, since the platform
-# builds exactly one image per release. Alpine 3.2x's python3 package is
+# of the worker inside this same image. Alpine 3.2x's python3 package is
 # 3.12+, matching the engine's `requires-python = ">=3.12"`; it has zero pip
 # dependencies of its own for the keyless sources (see pyproject.toml), so no
 # `pip install` step is needed.
@@ -35,10 +34,8 @@ COPY --from=builder --chown=app:app /app/public ./public
 COPY --from=builder --chown=app:app /app/vendor/last30days ./vendor/last30days
 USER app
 EXPOSE 3000
-# NOTE: /healthz must be a real route in the app. The Kubernetes liveness and
-# readiness probes and the ALB target-group health check all point at it too
-# (k8s/APP_NAME/values.yaml). If the app uses a different path, change it in
-# all four places — do not leave a probe aimed at a route that does not exist.
+# NOTE: /healthz must remain a real route in the app and match any health check
+# configured by the eventual hosting provider.
 # 127.0.0.1, not localhost: the server binds IPv4 only, and busybox wget resolves
 # localhost to ::1 first, which is refused.
 HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://127.0.0.1:3000/healthz || exit 1

@@ -9,7 +9,7 @@
 | Owner | Patrick Johansen (pjohansen@bettercollective.com) — Publishing - Audience |
 | Contributor | Martin (Publishing - Product) |
 | Status | planning |
-| Repository | `BetterCollective/better-craft-audience-insights-engine` (requested from BC Helpdesk, pending creation) |
+| Repository | `man-D4wn/Market-research` (requested from BC Helpdesk, pending creation) |
 | Spec version | v1 |
 | Spec date | 2026-10-08 |
 | Target milestone | First real report, US + Greece, end of November 2026 |
@@ -252,13 +252,13 @@ A Run's Evidence is compared against a trailing baseline (the same Brand/Market'
 
 ## 13. Operations, Traffic, Deployment, and Observability
 
-- **Artifact type:** persistent service (Next.js app + Postgres + background worker + `last30days` sidecar), on the better-craft platform.
+- **Artifact type:** persistent service (Next.js app + Postgres + background worker + the local `last30days` subprocess).
 - **Environments:** production only, per platform convention (merge to `main` is the deploy; no staging environment).
-- **Secrets handling:** Rill service token, Google service-account credentials (Drive, later GA4), Slack bot token, and `last30days`' own source credentials (`X_BEARER_TOKEN`/`XAI_API_KEY`, optional `SCRAPECREATORS_API_KEY`) all live in SSM Parameter Store under `/better-craft/audience-insights-engine/production/`, referenced from the chart via `remoteRef`, read as `process.env.*` in code. No secret value is ever generated, typed, or committed by the agent. Each secret's owner must resolve to a named individual with AWS SSO access before its value can be entered (Section 16) — the path is set regardless. CI includes a guardrail check against any server secret leaking into a `NEXT_PUBLIC_*` variable or the client bundle (devops review, advisory).
+- **Secrets handling:** Rill service token, Google service-account credentials (Drive, later GA4), Slack bot token, and `last30days` source credentials (`X_BEARER_TOKEN`/`XAI_API_KEY`, optional `SCRAPECREATORS_API_KEY`) are read from environment variables backed by the selected hosting provider's secret store. No secret value is generated, typed, or committed by the agent. Each secret must have a named human owner before it is provisioned (Section 16). CI must guard against any server secret leaking into a `NEXT_PUBLIC_*` variable or the client bundle.
 - **Database backup and restore (devops review, blocking for release):** no backup schedule, retention period, RPO, or restore test exists yet for the in-cluster Postgres instance that owns every table in Section 11 — brands, research instructions, evidence, insights, and the audit log. This must be defined (schedule, retention, RPO) and a restore actually performed and timed, in coordination with `@BetterCollective/devops`, before production release; it is not a default the platform provides automatically (Section 16).
 - **Migrations:** run as their own Job, kept forward-compatible (expand/contract) so an image rollback is never blocked by an irreversible schema change; each migration task in the implementation plan states its compatibility explicitly (devops review, required).
 - **Rollback:** standard platform rollback — revert the merge commit that pinned the bad image tag; ArgoCD reconciles to the prior version. A migration is never reverted by an image rollback (see above). Owner: whoever merges the release PR, per the standard platform runbook.
-- **Deployed URL:** `https://audience-insights-engine.better-craft.bettercollective.dev` (VPN/office network only, per platform default).
+- **Deployed URL:** not selected; access-control requirements must be defined with the hosting target.
 - **Worker shutdown:** the worker drains in-flight Runs (lets a running job finish, or safely requeues it) rather than killing it mid-`last30days`-invocation on a rolling pod replacement, which merge-to-main's frequent deploys make a routine occurrence, not an edge case (devops review, required).
 - **Observability:** Run success/failure counts and duration, per-source Evidence counts per Run, Rill-allowlist-rejection count (should be zero in normal operation — a non-zero count is itself an alertable signal that something tried to query a blocked view), a separate stripped-measure count (a measure silently dropped by the pattern filter inside an otherwise-allowed view), Slack/Drive delivery failures. Logs are structured JSON to stdout via the platform's standard log collection; metrics are exposed for the platform's standard scrape/dashboard convention — the exact destination is confirmed against current platform tooling at implementation time (devops review, required) rather than assumed here. Alert on: worker queue depth **and** oldest-waiting-job age (devops review, required — depth alone misses a stuck-but-shallow queue), any Rill-allowlist rejection or stripped measure, repeated Run failures for the same brand.
 - **SLOs (devops review, required):** a Run completes (success or failure) within 10 minutes of being queued; an accepted Insight is delivered to its Channel(s) within 30 seconds. A breach of either is the trigger for investigating the worker/sidecar-subprocess path first.
@@ -321,7 +321,7 @@ None of the above (other than the two blocking items above, which are release/ma
 ## 17. Decisions and Assumptions
 
 **Decided (technical, agent's call):**
-- Delivery mode: `internal-backend-tool`, on the better-craft platform.
+- Delivery mode: `internal-backend-tool`.
 - Auth: OneLogin SSO, no local password store.
 - Datastore: PostgreSQL in-cluster; no Firestore (internal tool, not customer-facing).
 - Background execution: pg-boss worker; Runs never execute synchronously in an HTTP request.

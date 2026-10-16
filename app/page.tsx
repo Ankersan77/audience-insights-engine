@@ -30,8 +30,8 @@ export default function Home() {
         </div>
 
         <p className="max-w-xl text-lg leading-relaxed text-muted">
-          A better-craft application, scaffolded from the TypeScript app template
-          and deployed to the shared platform by ArgoCD.
+          Audience research, evidence, insights, and delivery workflows in one
+          place.
         </p>
 
         <dl className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3">
@@ -46,8 +46,8 @@ export default function Home() {
         </dl>
       </main>
 
-      {/* Rendered only when the chart supplied a version, so `pnpm dev` does not
-          show an empty or misleading one. */}
+      {/* Rendered only when the runtime supplies a version, so `pnpm dev` does
+          not show an empty or misleading one. */}
       {version && (
         <footer className="mx-auto w-full max-w-3xl px-6 pb-10">
           <p className="text-xs tracking-widest text-muted uppercase">
