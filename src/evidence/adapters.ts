@@ -1,5 +1,5 @@
 import type { SourceAcquisitionJob } from "../connectors/contracts.ts";
-import type { Applicability, MethodDeclaration, RightsDeclaration } from "../core/contracts.ts";
+import type { Applicability, MethodDeclaration, RightsDeclaration, SourceClass } from "../core/contracts.ts";
 import { EvidenceAdapter, type AdapterRunContext } from "./sdk.ts";
 import type { EvidenceCandidate } from "./policy.ts";
 
@@ -37,15 +37,24 @@ function candidate(
   };
 }
 
-export class DocumentEvidenceAdapter extends EvidenceAdapter<CommonFixture & { title: string }> {
+export class DocumentEvidenceAdapter extends EvidenceAdapter<CommonFixture & { title: string; sourceUrl?: string }> {
   readonly id = "document-evidence";
-  private readonly records: readonly (CommonFixture & { title: string })[];
-  constructor(records: readonly (CommonFixture & { title: string })[]) { super(); this.records = records; }
-  protected async acquireRaw(): Promise<readonly (CommonFixture & { title: string })[]> { return this.records; }
-  protected normalize(raw: CommonFixture & { title: string }, job: SourceAcquisitionJob, context: AdapterRunContext) {
+  private readonly records: readonly (CommonFixture & { title: string; sourceUrl?: string })[];
+  private readonly sourceClass: Extract<SourceClass, "client_owned" | "commissioned_or_licensed" | "primary_research">;
+  constructor(
+    records: readonly (CommonFixture & { title: string; sourceUrl?: string })[],
+    sourceClass: Extract<SourceClass, "client_owned" | "commissioned_or_licensed" | "primary_research"> = "client_owned",
+  ) {
+    super();
+    this.records = records;
+    this.sourceClass = sourceClass;
+  }
+  protected async acquireRaw(): Promise<readonly (CommonFixture & { title: string; sourceUrl?: string })[]> { return this.records; }
+  protected normalize(raw: CommonFixture & { title: string; sourceUrl?: string }, job: SourceAcquisitionJob, context: AdapterRunContext) {
     return candidate(raw, job, context, {
-      sourceClass: "client_owned",
+      sourceClass: this.sourceClass,
       synthesis: raw.title,
+      sourceUrl: raw.sourceUrl,
       grade: "B",
     });
   }

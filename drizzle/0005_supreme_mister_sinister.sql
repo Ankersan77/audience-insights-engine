@@ -1,0 +1,2 @@
+ALTER TABLE "canonical_evidence" DROP CONSTRAINT "canonical_evidence_client_hash_unique";--> statement-breakpoint
+ALTER TABLE "canonical_evidence" ADD CONSTRAINT "canonical_evidence_client_source_hash_unique" UNIQUE("client_id","source_connection_id","content_hash");

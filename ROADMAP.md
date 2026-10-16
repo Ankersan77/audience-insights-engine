@@ -77,11 +77,11 @@ evidence.
 | 0 | Complete and shipped | None |
 | 1 | Canonical contracts, additive migration, direct client scope, membership and transition tests implemented | Apply and verify migration in the selected environment |
 | 2 | Adapter boundary, minimization, quarantine, redaction, citations and four deterministic source classes implemented; legacy ingestion is fail-closed | Approved sources, live adapters and provider acceptance |
-| 3 | Structured onboarding, method preservation, idempotency, contradictions and relevance resolution implemented | Pilot documents and qualified lineage review; upload/link experience |
+| 3 | Persistent text/CSV/JSON upload and permitted-link onboarding, method preservation, idempotency, contradictions and relevance resolution implemented | Pilot documents, qualified lineage review and any required office/PDF extraction adapter |
 | 4 | Four versioned abilities, evidence selection, causal-language guard and decision brief implemented | Human scorecards on representative and adversarial briefs |
 | 5 | Persistent model plus pre-flight, live, post and governed candidate-learning logic implemented | One real campaign through the full lifecycle |
 | 6 | Measurement contract, deterministic design classification and reproducible binary-lift analysis implemented | Qualified method review and an approved live study |
-| 7 | Sensing contract, signal qualification, no-change/source-health outcomes and briefing contracts implemented | Durable canonical scheduler and shadow-mode evaluation |
+| 7 | Durable cadence scheduler, acquisition-job emission, reconciliation, signal qualification, no-change/source-health outcomes and briefing contracts implemented | Live connector execution and shadow-mode evaluation |
 | 8 | Source administration, redacted packaging, second-client proof, resilience controls and operations runbook implemented | Clean deployed environment, restore exercise, pilot scorecard and operating owners |
 
 Anything in the final column remains `needs_context`; it is not silently converted into completion.

@@ -56,20 +56,20 @@ const INJECTION_PATTERNS = [
 
 const PERSON_PROFILE_URL = /^https?:\/\/(?:www\.)?(?:x\.com|twitter\.com|instagram\.com|tiktok\.com)\/[a-z0-9_.-]+\/?(?:[?#].*)?$/i;
 
-function safeSourceUrl(value: string | undefined): { value?: string; redacted: boolean } {
-  if (!value) return { redacted: false };
+function safeSourceUrl(value: string | undefined): { value?: string; redacted: boolean; identityRisk: boolean } {
+  if (!value) return { redacted: false, identityRisk: false };
   try {
     const parsed = new URL(value);
     if (!['http:', 'https:'].includes(parsed.protocol) || PERSON_PROFILE_URL.test(value)) {
-      return { redacted: true };
+      return { redacted: true, identityRisk: true };
     }
     parsed.username = "";
     parsed.password = "";
     parsed.search = "";
     parsed.hash = "";
-    return { value: parsed.toString(), redacted: parsed.toString() !== value };
+    return { value: parsed.toString(), redacted: parsed.toString() !== value, identityRisk: false };
   } catch {
-    return { redacted: true };
+    return { redacted: true, identityRisk: true };
   }
 }
 
@@ -96,15 +96,19 @@ export function hasPromptInjection(content: string): boolean {
 
 export function retainEvidence(candidate: EvidenceCandidate, policy: EvidencePolicy): EvidenceItem {
   const redacted = redactIdentifiers(candidate.content);
+  const redactedSynthesis = candidate.synthesis ? redactIdentifiers(candidate.synthesis) : undefined;
   const sourceUrl = safeSourceUrl(candidate.sourceUrl);
+  const identityRisk = redacted.identityRisk || Boolean(redactedSynthesis?.identityRisk) || sourceUrl.identityRisk;
   const sensitive = policy.sensitiveTerms.some((term) =>
     redacted.content.toLocaleLowerCase().includes(term.toLocaleLowerCase()),
   );
   const cohortSuppressed = candidate.cohortSize !== undefined && candidate.cohortSize < policy.minimumCohortSize;
   const unsafeVerbatim = candidate.citationLevel === "verbatim" &&
-    (!policy.allowVerbatim || redacted.identityRisk || !candidate.rights.quotationAllowed);
+    (!policy.allowVerbatim || identityRisk || !candidate.rights.quotationAllowed);
   const injectionRisk = hasPromptInjection(redacted.content);
-  const lifecycle = sensitive || cohortSuppressed || unsafeVerbatim || injectionRisk || !candidate.rights.commercialUse
+  const rightsExpired = Boolean(candidate.rights.expiresAt) &&
+    new Date(candidate.rights.expiresAt!).getTime() <= new Date(candidate.ingestedAt).getTime();
+  const lifecycle = sensitive || cohortSuppressed || unsafeVerbatim || injectionRisk || !candidate.rights.commercialUse || rightsExpired
     ? "quarantined"
     : "candidate";
   const safeContent = cohortSuppressed ? "[suppressed: cohort below configured minimum]" : redacted.content;
@@ -116,9 +120,9 @@ export function retainEvidence(candidate: EvidenceCandidate, policy: EvidencePol
     sourceConnectionId: candidate.sourceConnectionId,
     sourceClass: candidate.sourceClass,
     externalReference: candidate.externalReference,
-    sourceUrl: redacted.identityRisk ? undefined : sourceUrl.value,
+    sourceUrl: identityRisk ? undefined : sourceUrl.value,
     sourceContent: safeContent,
-    synthesis: candidate.synthesis,
+    synthesis: redactedSynthesis?.content,
     publishedAt: candidate.publishedAt,
     observedAt: candidate.observedAt,
     ingestedAt: candidate.ingestedAt,
@@ -131,12 +135,14 @@ export function retainEvidence(candidate: EvidenceCandidate, policy: EvidencePol
     confidence: candidate.confidence,
     grade: candidate.grade,
     sensitive,
-    identityRisk: redacted.identityRisk,
+    identityRisk,
     redactions: [
       ...redacted.redactions,
+      ...(redactedSynthesis?.redactions.map((name) => `synthesis-${name}`) ?? []),
       ...(sourceUrl.redacted ? ["source-url"] : []),
       ...(cohortSuppressed ? ["small-cohort"] : []),
       ...(injectionRisk ? ["prompt-injection"] : []),
+      ...(rightsExpired ? ["rights-expired"] : []),
     ],
     contentHash: createHash("sha256").update(safeContent).digest("hex"),
   };

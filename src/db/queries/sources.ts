@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/src/db/client";
 import { sourceConnection } from "@/src/db/schema";
 import type { RightsDeclaration, SourceClass } from "@/src/core/contracts";
@@ -7,7 +7,7 @@ export type SourceConnectionListRow = {
   id: number;
   connectorId: string;
   connectorVersion: string;
-  sourceClass: string;
+  sourceClass: SourceClass;
   health: "configured" | "verified" | "degraded" | "unavailable" | "producing_evidence";
   hasCredentialReference: boolean;
   rights: RightsDeclaration;
@@ -36,10 +36,19 @@ export async function listSourceConnections(clientId: number): Promise<SourceCon
 
   return rows.map((row) => ({
     ...row,
-    sourceClass: row.sourceClass,
+    sourceClass: row.sourceClass as SourceClass,
     hasCredentialReference: Boolean(row.credentialRef),
     rights: row.rights as RightsDeclaration,
   }));
+}
+
+export async function getSourceConnection(clientId: number, id: number) {
+  const [row] = await db
+    .select()
+    .from(sourceConnection)
+    .where(and(eq(sourceConnection.clientId, clientId), eq(sourceConnection.id, id)))
+    .limit(1);
+  return row ?? null;
 }
 
 export async function createSourceConnection(input: {

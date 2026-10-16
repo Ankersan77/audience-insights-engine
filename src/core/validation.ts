@@ -190,5 +190,6 @@ export function validateSensingProfile(value: SensingProfile): ValidationResult 
   if (value.materialityThreshold < 0) errors.push("materialityThreshold cannot be negative");
   if (value.freshnessDays <= 0) errors.push("freshnessDays must be positive");
   if (value.minimumCorroboration < 1) errors.push("minimumCorroboration must be positive");
+  if (value.sourceConnectionIds.length === 0) errors.push("at least one source connection is required");
   return result(errors);
 }

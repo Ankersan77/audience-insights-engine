@@ -48,6 +48,10 @@ pnpm dev
 ```
 
 The application is available at `http://localhost:3000`. Its health endpoint is `GET /healthz`.
+The authenticated `/workspace` surface configures governed sources and onboards extracted text,
+Markdown, CSV, JSON, or permitted public-link content into canonical evidence. PDF and office-file
+extraction must be supplied by a verified document adapter; the application never stores the raw
+upload as a substitute for that boundary.
 
 ## Environment variables
 

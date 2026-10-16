@@ -407,6 +407,8 @@ export const sourceAcquisitionJob = pgTable("source_acquisition_job", {
   sourceConnectionId: integer("source_connection_id")
     .notNull()
     .references(() => sourceConnection.id, { onDelete: "restrict" }),
+  monitoringRunId: integer("monitoring_run_id")
+    .references(() => monitoringRun.id, { onDelete: "set null" }),
   status: acquisitionStatusEnum("status").notNull().default("queued"),
   operation: text("operation").notNull(),
   requestJson: jsonb("request_json").notNull(),
@@ -487,7 +489,7 @@ export const canonicalEvidence = pgTable("canonical_evidence", {
   ingestedAt: timestamp("ingested_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 }, (table) => [
-  unique("canonical_evidence_client_hash_unique").on(table.clientId, table.contentHash),
+  unique("canonical_evidence_client_source_hash_unique").on(table.clientId, table.sourceConnectionId, table.contentHash),
 ]);
 
 export const quantitativeObservation = pgTable("quantitative_observation", {
@@ -676,12 +678,15 @@ export const monitoringRun = pgTable("monitoring_run", {
   sensingProfileId: integer("sensing_profile_id")
     .notNull()
     .references(() => sensingProfile.id, { onDelete: "restrict" }),
+  scheduleKey: text("schedule_key").notNull(),
   status: acquisitionStatusEnum("status").notNull().default("queued"),
   outcome: text("outcome"),
   qualifiedSignalIds: integer("qualified_signal_ids").array().notNull().default(sql`'{}'::integer[]`),
   startedAt: timestamp("started_at", { withTimezone: true }),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
-});
+}, (table) => [
+  unique("monitoring_run_profile_schedule_unique").on(table.clientId, table.sensingProfileId, table.scheduleKey),
+]);
 
 export const governanceAudit = pgTable("governance_audit", {
   id: serial("id").primaryKey(),

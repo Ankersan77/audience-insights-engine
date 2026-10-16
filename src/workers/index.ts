@@ -22,8 +22,10 @@ try {
 
 async function main() {
   const { startRunWorker } = await import("./runQueue");
+  const { startCanonicalScheduler } = await import("./canonicalQueue");
   const boss = await startRunWorker();
-  console.log(`[worker] subscribed to the research-run queue (pid ${process.pid})`);
+  await startCanonicalScheduler(boss);
+  console.log(`[worker] subscribed to legacy and canonical scheduler queues (pid ${process.pid})`);
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {

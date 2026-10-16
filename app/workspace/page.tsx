@@ -5,6 +5,8 @@ import { requireSession } from "@/src/lib/auth";
 import { getWorkspaceReadiness } from "@/src/db/queries/workspace";
 import { listSourceConnections } from "@/src/db/queries/sources";
 import { SourceConnections } from "./SourceConnections";
+import { listCanonicalEvidence } from "@/src/db/queries/canonical_evidence";
+import { EvidenceOnboarding } from "./EvidenceOnboarding";
 
 export const dynamic = "force-dynamic";
 
@@ -30,9 +32,10 @@ const EXTERNAL_GATES = [
 
 export default async function WorkspacePage() {
   const session = await requireSession("/workspace");
-  const [readiness, sources] = await Promise.all([
+  const [readiness, sources, evidence] = await Promise.all([
     getWorkspaceReadiness(session.clientId),
     listSourceConnections(session.clientId),
+    listCanonicalEvidence(session.clientId),
   ]);
   const readinessItems = [
     ["Sources", readiness.sources],
@@ -136,6 +139,7 @@ export default async function WorkspacePage() {
       </section>
 
       <SourceConnections initialSources={sources} isAdmin={session.role === "admin"} />
+      <EvidenceOnboarding initialEvidence={evidence} sources={sources} isAdmin={session.role === "admin"} />
     </AppShell>
   );
 }

@@ -136,3 +136,22 @@ test("profile URLs and tracking parameters never become retained source referenc
   assert.equal(result.evidence[1].sourceUrl, "https://example.com/report");
   assert.ok(result.evidence[1].redactions.includes("source-url"));
 });
+
+test("identifiers in document titles and expired rights quarantine retained evidence", async () => {
+  const adapter = new DocumentEvidenceAdapter([
+    {
+      id: "expired",
+      title: "Interview with jane@example.com",
+      content: "A recurring category observation.",
+      rights: { ...rights, expiresAt: "2026-10-15T00:00:00.000Z" },
+      method,
+      applicability,
+    },
+  ]);
+  const result = await adapter.run(job("job-expired", "documents"), context, policy);
+  assert.equal(result.evidence[0].synthesis, "Interview with [redacted-email]");
+  assert.equal(result.evidence[0].identityRisk, true);
+  assert.equal(result.evidence[0].lifecycle, "quarantined");
+  assert.ok(result.evidence[0].redactions.includes("synthesis-email"));
+  assert.ok(result.evidence[0].redactions.includes("rights-expired"));
+});
