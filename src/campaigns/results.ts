@@ -6,6 +6,7 @@ import { resolveEvidence } from "../market-twin/resolver.ts";
 import { validateMeasurementPlan } from "../core/validation.ts";
 import type { CampaignAssessment } from "./analysis.ts";
 import { interpretationGaps, type CampaignInterpretation } from "./interpretation.ts";
+import { resolveCampaignScope, sameCampaignScopes } from "./scope.ts";
 
 export type MetricSelection = { metricKey: string; baselineObservationId: string; resultObservationId: string };
 export type MetricComparison = {
@@ -50,7 +51,8 @@ export function evaluateCampaignResults(input: {
 }): { assessment: CampaignResultAssessment; evidenceIds: string[] } {
   if (input.campaign.state !== (input.stage === "live" ? "active" : "completed")) throw new Error("campaign-state-incompatible-with-assessment");
   const abilityId = input.stage === "live" ? "live-campaign-intelligence" : "post-campaign-learning";
-  const prepared = prepareResearchContext({ ...input, clientId: input.campaign.clientId, campaignId: input.campaign.id, abilityId });
+  const scope = resolveCampaignScope(input.campaign.targetScopes, input.market, input.language);
+  const prepared = prepareResearchContext({ ...input, ...scope, clientId: input.campaign.clientId, campaignId: input.campaign.id, abilityId });
   const resultEvidence = resolveEvidence({ clientId: input.campaign.clientId, now: input.now, market: prepared.context?.market, language: prepared.context?.language,
     requirements: getAbility(abilityId)!.evidenceRequirements, evidence: prepared.evidence.filter((item) => item.applicability.campaigns.includes(input.campaign.id)) });
   // Historical baselines are allowed; current live observations use the ability's freshness gate.
@@ -60,6 +62,7 @@ export function evaluateCampaignResults(input: {
   const results = new Map(resultEvidence.selected.map((item) => [item.id, item]));
   const observations = new Map(input.observations.filter((item) => item.clientId === input.campaign.clientId).map((item) => [item.id, item]));
   const gaps = [...prepared.gaps, ...resultEvidence.gaps];
+  if (!sameCampaignScopes(input.campaign.targetScopes, input.plan.plan.targetScopes)) gaps.push("The frozen measurement plan does not cover the declared campaign scope.");
   if (input.plan.reviewState !== "accepted" || !validateMeasurementPlan(input.plan.plan).valid
     || input.plan.plan.clientId !== input.campaign.clientId || input.plan.plan.campaignId !== input.campaign.id) gaps.push("A valid accepted campaign measurement plan is required.");
   if (input.selections.some((item) => !input.plan.plan.metrics.some((metric) => metric.key === item.metricKey))) gaps.push("An observation selection uses an unplanned metric.");

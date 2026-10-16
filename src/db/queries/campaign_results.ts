@@ -6,6 +6,7 @@ import { db } from "@/src/db/client";
 import { parseCampaignInterpretation } from "@/src/campaigns/interpretation";
 import { campaign, campaignRevision, canonicalEvidence, governanceAudit, measurementPlan, quantitativeObservation, researchArtifact, sourceConnection } from "@/src/db/schema";
 import { lockedContext } from "./campaign_preflight";
+import { resolveCampaignScope } from "@/src/campaigns/scope";
 import type { CampaignAssessmentArtifact, CampaignRevisionPayload } from "./campaign_workspace";
 import { CONTEXT_EVIDENCE_REQUIREMENTS } from "@/src/abilities/context";
 import { resolveEvidence } from "@/src/market-twin/resolver";
@@ -69,7 +70,8 @@ export async function evaluateLockedCampaignResults(tx: CampaignTransaction, inp
   if (!revision || !plan) throw new Error("campaign-measurement-context-required");
   const payload = revision.briefJson as CampaignRevisionPayload;
   if (payload.campaign.measurementPlanId !== String(plan.id)) throw new Error("approved-measurement-plan-mismatch");
-  const sources = await lockedContext(tx, input.clientId, input.market, input.language);
+  const scope = resolveCampaignScope(payload.campaign.targetScopes, input.market, input.language);
+  const sources = await lockedContext(tx, input.clientId, scope.market, scope.language);
   const ids = [...new Set(selections.flatMap((item) => [Number(item.baselineObservationId), Number(item.resultObservationId)]))];
   const observations = ids.length ? (await tx.select().from(quantitativeObservation).where(and(eq(quantitativeObservation.clientId, input.clientId), inArray(quantitativeObservation.id, ids)))
     .orderBy(asc(quantitativeObservation.id)).for("share")).map(observationDomain) : [];

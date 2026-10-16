@@ -250,6 +250,8 @@ export type CampaignState =
   | "learning_reviewed"
   | "archived";
 
+export type CampaignScope = { market: string; language: string };
+
 export type Campaign = {
   id: string;
   clientId: ClientId;
@@ -262,6 +264,8 @@ export type Campaign = {
   creativeRoutes: readonly string[];
   channels: readonly string[];
   budgetAssumptions: readonly string[];
+  /** Absent only on legacy records; never infer campaign coverage from the client profile. */
+  targetScopes?: readonly CampaignScope[];
   measurementPlanId?: string;
   approvedAt?: ISODateTime;
 };
@@ -291,6 +295,8 @@ export type MeasurementPlan = {
   incrementalityDesign?: string;
   materialityThresholds: Readonly<Record<string, number>>;
   decisionRules: readonly string[];
+  /** Frozen from the campaign revision when this plan is created. */
+  targetScopes?: readonly CampaignScope[];
 };
 
 export type StudyDesign = {

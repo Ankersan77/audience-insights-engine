@@ -1,27 +1,31 @@
-import { and, eq, gt, isNull, lte, or } from "drizzle-orm";
+import { and, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
 import { db } from "@/src/db/client";
 import { appUser, authSession, client, clientMembership } from "@/src/db/schema";
 import { newSessionToken, sessionTokenHash, SESSION_MAX_AGE_SECONDS, validTenantRole, type SessionUser } from "@/src/lib/authTokens";
 
-export async function createAuthSession(userId: number, clientId: number, now = new Date()): Promise<string> {
-  if (!Number.isFinite(now.getTime())) throw new Error("invalid-session-time");
+export async function createAuthSession(userId: number, clientId: number, now?: Date): Promise<string> {
+  if (now && !Number.isFinite(now.getTime())) throw new Error("invalid-session-time");
   return db.transaction(async (tx) => {
     const [membership] = await tx.select().from(clientMembership).where(and(eq(clientMembership.userId, userId), eq(clientMembership.clientId, clientId))).limit(1).for("share");
     if (!membership || !validTenantRole(membership.role)) throw new Error("client-access-denied");
+    // Production session validity and locked budget authority share the database clock.
+    // An explicit instant remains available for deterministic expiry tests.
+    const instant = now ?? new Date((await tx.execute<{ now: Date }>(sql`select clock_timestamp() as now`)).rows[0].now);
     const token = newSessionToken();
-    await tx.insert(authSession).values({ tokenHash: sessionTokenHash(token)!, userId, clientId, createdAt: now, expiresAt: new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000) });
+    await tx.insert(authSession).values({ tokenHash: sessionTokenHash(token)!, userId, clientId, createdAt: instant, expiresAt: new Date(instant.getTime() + SESSION_MAX_AGE_SECONDS * 1000) });
     return token;
   });
 }
 
-export async function resolveAuthSession(token: string | undefined, now = new Date()): Promise<SessionUser | null> {
+export async function resolveAuthSession(token: string | undefined, now?: Date): Promise<SessionUser | null> {
   const hash = sessionTokenHash(token);
-  if (!hash || !Number.isFinite(now.getTime())) return null;
+  if (!hash || (now && !Number.isFinite(now.getTime()))) return null;
+  const instant = now ?? sql`clock_timestamp()`;
   const [row] = await db.select({ user: appUser, tenant: client, role: clientMembership.role }).from(authSession)
     .innerJoin(clientMembership, and(eq(clientMembership.clientId, authSession.clientId), eq(clientMembership.userId, authSession.userId)))
     .innerJoin(appUser, eq(appUser.id, authSession.userId))
     .innerJoin(client, eq(client.id, authSession.clientId))
-    .where(and(eq(authSession.tokenHash, hash), isNull(authSession.revokedAt), lte(authSession.createdAt, now), gt(authSession.expiresAt, now))).limit(1);
+    .where(and(eq(authSession.tokenHash, hash), isNull(authSession.revokedAt), lte(authSession.createdAt, instant), gt(authSession.expiresAt, instant))).limit(1);
   if (!row || !validTenantRole(row.role)) return null;
   return { id: row.user.id, clientId: row.tenant.id, clientSlug: row.tenant.slug, role: row.role, email: row.user.email, name: row.user.name, ssoSubjectId: row.user.ssoSubjectId };
 }

@@ -11,6 +11,7 @@ const now = "2026-10-16T00:00:00.000Z";
 function fixture() {
   const campaign: Campaign = { id: "7", clientId: "1", name: "Synthetic", state: "active", revision: 3, objective: "Consideration", audience: "Adults", proposition: "Quality", creativeRoutes: [], channels: [], budgetAssumptions: [] };
   const plan: MeasurementPlan = { id: "4", clientId: "1", campaignId: "7", objective: "Consideration", hypothesis: "Consideration changes", population: "Adults", metrics: [{ key: "consideration", label: "Consideration", unit: "rate", aggregation: "rate", population: "Adults", direction: "increase" }], baseline: { consideration: 0.2 }, targets: { consideration: 0.25 }, checkpoints: [now], attributionAssumptions: ["Descriptive only"], materialityThresholds: { consideration: 0.02 }, decisionRules: ["Review context"] };
+  campaign.targetScopes = [{ market: "DK", language: "da" }]; plan.targetScopes = campaign.targetScopes;
   const evidence: EvidenceItem = { id: "10", clientId: "1", collectionId: "collection", sourceConnectionId: "source", sourceClass: "first_party_aggregate", externalReference: "synthetic report", sourceContent: "Synthetic aggregate", observedAt: "2026-10-01T00:00:00.000Z", ingestedAt: now, expiresAt: "2027-01-01T00:00:00.000Z", lifecycle: "live", citationLevel: "statistical", rights: { basis: "client_owned", commercialUse: true, quotationAllowed: false, restrictions: [] }, method: { method: "Survey", universe: "Adults", limitations: ["Noncausal"] }, applicability: { markets: ["DK"], languages: ["da"], campaigns: ["7"], categories: [], audiences: [] }, confidence: 0.8, grade: "A", sensitive: false, identityRisk: false, redactions: [], contentHash: "fixture" };
   const sources: ResearchContextSources = { sourceBindings: { metrics: "source" }, evidence: [evidence, { ...evidence, id: "11", observedAt: "2026-10-15T00:00:00.000Z" }], solution: { id: "solution", clientId: "1", version: 1, status: "active", enabledAbilities: [{ id: "live-campaign-intelligence", version: "1.0.0" }, { id: "post-campaign-learning", version: "1.0.0" }], providerBindings: { metrics: "metrics" }, markets: ["DK"], languages: ["da"], reviewRoles: {}, retention: { evidenceDays: 30, rawHours: 0, auditDays: 365 }, createdAt: now }, intelligence: [{ id: "strategy", clientId: "1", kind: "fact", title: "Reviewed strategy", statement: "Consideration is a strategic measure.", lifecycle: "live", reviewState: "accepted", evidenceIds: ["11"], contradictionIds: [], dependencyIds: [], applicability: evidence.applicability, confidence: 0.8, uncertainty: [], synthesisBy: "human", createdAt: now, reviewedAt: now }] };
   const observations: QuantitativeObservation[] = [
@@ -54,6 +55,15 @@ test("campaign reconciliation refuses incompatible, unavailable and falsely scop
     if (variant === "stale") { result.observedAt = "2026-10-01"; result.dimensions = { ...result.dimensions, periodStart: "2026-09-01", periodEnd: "2026-10-01" }; }
     assert.equal(evaluateCampaignResults(input).assessment.status, "needs_context", variant);
   }
+});
+
+test("readbacks cannot silently borrow solution scope or approve a mismatched measurement scope", () => {
+  const input = fixture();
+  assert.throws(() => evaluateCampaignResults({ ...input, market: "SE", language: "sv" }), /declared campaign/);
+  assert.throws(() => evaluateCampaignResults({ ...input, campaign: { ...input.campaign, targetScopes: undefined } }), /target-scopes-required/);
+  input.campaign.targetScopes = [...input.campaign.targetScopes!, { market: "SE", language: "sv" }];
+  assert.throws(() => evaluateCampaignResults(input), /declared campaign/);
+  assert.equal(evaluateCampaignResults({ ...input, market: "DK", language: "da" }).assessment.status, "needs_context");
 });
 
 test("retention removes copied metric values and differences without erasing lineage", () => {

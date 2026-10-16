@@ -40,7 +40,7 @@ const { setClientAccess } = await import("../src/db/queries/client_access");
 const { setAcquisitionBudget, inspectAcquisitionBudget, authorizeAcquisitionAttempt } = await import("../src/db/queries/acquisition_budget");
 const { processAcquisitionJob, reconcileStaleAcquisitions } = await import("../src/workers/acquisitionQueue");
 const { enforceCanonicalRetention } = await import("../src/db/queries/retention");
-const { createCampaignRecord, createMeasurementPlanRecord, reviewMeasurementPlan, createCampaignAssessmentRecord, transitionCampaignRecord, listCampaignWorkspace } = await import("../src/db/queries/campaign_workspace");
+const { createCampaignRecord, createMeasurementPlanRecord, reviewMeasurementPlan, createCampaignAssessmentRecord, transitionCampaignRecord, listCampaignWorkspace, reviseCampaignScopes } = await import("../src/db/queries/campaign_workspace");
 const probe = new Pool({ connectionString: url });
 const rights = { basis: "public_permitted" as const, commercialUse: true, quotationAllowed: false, restrictions: [] };
 const policy: SourceConnectionPolicy = {
@@ -533,11 +533,100 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       await assert.rejects(authorizeAcquisitionAttempt({ clientId: stale.tenant.id, jobId: revoked.id, attempt: 1, plan }), /cancelled|source-unavailable/);
       assert.equal((await db.select().from(acquisitionAuthorization).where(eq(acquisitionAuthorization.clientId, stale.tenant.id))).length, 1);
     });
+    await t.test("multi-market campaigns require latest current reviews for every declared pair", async () => {
+      const f = await fixture(), sw = await fixture(f.tenant), other = await fixture();
+      const dk = { market: "DK", language: "da" }, se = { market: "SE", language: "sv" };
+      const swPolicy = { ...policy, markets: ["SE"], languages: ["sv"] };
+      await db.update(sourceConnection).set({ configurationJson: swPolicy }).where(eq(sourceConnection.id, sw.source.id));
+      sw.input.applicability = { ...sw.input.applicability, markets: ["SE"], languages: ["sv"] };
+      sw.input.request = { ...sw.input.request, filters: { markets: ["SE"], languages: ["sv"] } };
+      sw.input.result.evidence = sw.input.result.evidence.map((item) => ({ ...item, applicability: sw.input.applicability }));
+      const evidence = [await persistAcquisition(f.input), await persistAcquisition(sw.input)];
+      const [user] = await db.insert(appUser).values({ name: "Synthetic scope researcher", email: "", role: "viewer", ssoSubjectId: randomUUID() }).returning();
+      const scopes = [dk, se];
+      const created = await createCampaignRecord({ clientId: f.tenant.id, name: "Synthetic two-market campaign", objective: "Consideration", audience: "Declared adults in each market", proposition: "Accessible quality", creativeRoutes: ["Demonstration"], channels: ["owned"], budgetAssumptions: ["Bounded pilot"], strategicEvidenceIds: evidence.flatMap((item) => item.evidenceIds), brandConstraints: ["No causal claims"], targetScopes: scopes });
+      const plan = { objective: "Consideration", hypothesis: "Consideration may change", population: "Declared adults in each market", metrics: [{ key: "consideration", label: "Consideration", unit: "rate", direction: "increase" as const, aggregation: "rate" as const, population: "Declared adults in each market" }], baseline: { consideration: 0.2 }, targets: { consideration: 0.25 }, checkpoints: [new Date().toISOString()], attributionAssumptions: ["Descriptive per-market only"], materialityThresholds: { consideration: 0.02 }, decisionRules: ["Review each market separately"] };
+      const replacePlan = async () => {
+        const result = await createMeasurementPlanRecord({ clientId: f.tenant.id, campaignId: created.id, plan: { ...plan, targetScopes: [{ market: "US", language: "en" }] } });
+        assert.deepEqual(result.plan.targetScopes, (await listCampaignWorkspace(f.tenant.id))[0].payload.campaign.targetScopes, "server scope overrides body claims");
+        await reviewMeasurementPlan({ clientId: f.tenant.id, campaignId: created.id, reviewerUserId: user.id, decision: "accepted" });
+      };
+      await replacePlan();
+      const records: (typeof intelligenceRecord.$inferSelect)[] = [];
+      for (const [index, item] of [f, sw].entries()) {
+        const [record] = await db.insert(intelligenceRecord).values({ clientId: f.tenant.id, kind: "fact", title: "Reviewed market strategy", statement: "Accessible quality is the declared positioning.", lifecycle: "live", reviewState: "accepted", evidenceIds: [...evidence[index].evidenceIds], contradictionIds: [], dependencyIds: [], applicabilityJson: item.input.applicability, confidence: 0.8, uncertainty: ["Synthetic only"], synthesisBy: "human", reviewedBy: user.id, reviewedAt: new Date() }).returning();
+        records.push(record);
+      }
+      await createActiveSolutionProfile({ clientId: f.tenant.id, createdBy: user.id, profile: { enabledAbilities: [{ id: "campaign-preflight", version: "1.0.0" }], providerBindings: { dk: f.source.connectorId, se: sw.source.connectorId }, markets: ["DK", "SE"], languages: ["da", "sv"], reviewRoles: { research: ["reviewer"] }, retention: { evidenceDays: 30, rawHours: 0, auditDays: 365 } } });
+      const review = (index: number) => ({ pointOfView: "The proposed demonstration supports the declared positioning.", recommendation: "Submit this scope to a reviewer.", alternative: "Test an informational route.", wouldChangeConclusion: "Contradictory audience evidence would require revision.", findings: PREFLIGHT_DIMENSIONS.map((dimension) => ({ dimension, verdict: "aligned" as const, rationale: "The linked approved strategy supports this bounded proposal.", evidenceIds: evidence[index].evidenceIds.map(String), intelligenceIds: [String(records[index].id)] })) });
+      const base = { clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id };
+      const assess = (index: number, complete = true) => createCampaignAssessmentRecord({ ...base, stage: "preflight", ...scopes[index], preflightReview: complete ? review(index) : undefined });
+      const approve = () => transitionCampaignRecord({ ...base, nextState: "approved" });
+      await assert.rejects(createCampaignAssessmentRecord({ ...base, stage: "preflight", preflightReview: review(0) }), /declared campaign/);
+      await assert.rejects(createCampaignAssessmentRecord({ ...base, stage: "preflight", market: "DK", language: "sv", preflightReview: review(0) }), /declared campaign/);
+      const dkReady = await assess(0);
+      assert.equal(dkReady.assessment.status, "ready", JSON.stringify(dkReady.assessment.researchGaps));
+      assert.deepEqual(dkReady.evidenceIds, evidence[0].evidenceIds, "SE-only evidence cannot enter the DK review");
+      await assert.rejects(approve(), /current-contextual-preflight-required:SE\/sv/);
+      const swReady = await assess(1);
+      assert.equal(swReady.assessment.status, "ready", JSON.stringify(swReady.assessment.researchGaps));
+      await assess(0, false);
+      await assert.rejects(approve(), /current-contextual-preflight-required:DK\/da/);
+      assert.equal((await listCampaignWorkspace(f.tenant.id))[0].scopedPreflights.length, 2);
+      await assess(0);
+      await db.update(sourceConnection).set({ configurationJson: { ...swPolicy, permittedPurposes: ["other"] } }).where(eq(sourceConnection.id, sw.source.id));
+      await assert.rejects(approve(), /campaign-context-changed/);
+      await db.update(sourceConnection).set({ configurationJson: swPolicy }).where(eq(sourceConnection.id, sw.source.id));
+      const scopeEdit = { ...base, expectedRevision: 1, targetScopes: [dk] };
+      await assert.rejects(reviseCampaignScopes({ ...scopeEdit, clientId: other.tenant.id }), /campaign-not-found/);
+      const race = await Promise.allSettled([reviseCampaignScopes(scopeEdit), reviseCampaignScopes(scopeEdit)]);
+      assert.equal(race.filter((item) => item.status === "fulfilled").length, 1);
+      assert.equal(race.filter((item) => item.status === "rejected").length, 1);
+      assert.equal((await assess(0)).assessment.status, "needs_context", "old shared plan no longer matches campaign scope");
+      await assert.rejects(approve(), /current-contextual-preflight-required/);
+      await reviseCampaignScopes({ ...base, expectedRevision: 2, targetScopes: scopes });
+      await replacePlan();
+      await assert.rejects(approve(), /current-contextual-preflight-required|campaign-context-changed/);
+      await assess(0);
+      // A review from an older revision cannot approve SE, even though the pair itself is unchanged.
+      await assert.rejects(approve(), /campaign-context-changed/);
+      const finalSe = await assess(1);
+      if (process.env.TEST_HTTP === "1") {
+        await db.insert(clientMembership).values({ clientId: f.tenant.id, userId: user.id, role: "researcher" });
+        const token = await createAuthSession(user.id, f.tenant.id), server = await startTestHttpServer(url!);
+        try {
+          const html = await (await server.request("/campaigns", token)).text();
+          assert.match(html, /Market\/language approval coverage/); assert.match(html, /SE\/sv/); assert.match(html, /DK\/da/);
+          assert.equal((await server.request(`/api/campaigns/${created.id}/scope`, token, { targetScopes: scopes, expectedRevision: 1 })).status, 409);
+          assert.equal((await server.request(`/api/campaigns/${created.id}/scope`, token, { targetScopes: scopes, expectedRevision: 3, clientId: other.tenant.id })).status, 400);
+          assert.equal((await server.request(`/api/campaigns/${created.id}/scope`, token, { targetScopes: scopes, expectedRevision: 3 }, "https://other.invalid")).status, 403);
+          assert.equal((await server.request(`/api/campaigns/${created.id}/transition`, token, { nextState: "approved" })).status, 403);
+          const { runCampaignScopeBrowser } = await import("./campaign-scope-browser");
+          await runCampaignScopeBrowser(server.base, token);
+          await db.update(clientMembership).set({ role: "viewer" }).where(and(eq(clientMembership.clientId, f.tenant.id), eq(clientMembership.userId, user.id)));
+          assert.equal((await server.request(`/api/campaigns/${created.id}/scope`, token, { targetScopes: scopes, expectedRevision: 3 })).status, 403);
+          const view = await (await server.request("/campaigns", token)).text();
+          assert.ok(!view.includes("Save declared scope"));
+        } finally { await server.stop(); }
+      }
+      const approved = await approve();
+      assert.equal(approved.payload.approvedPreflightId, undefined, "multi-market approval cannot identify a single representative review");
+      assert.equal(approved.payload.approvedPreflights?.length, 2);
+      assert.equal(approved.payload.approvedPreflights?.find((item) => item.market === "SE")?.artifactId, finalSe.id);
+      const [audit] = await db.select().from(governanceAudit).where(and(eq(governanceAudit.clientId, f.tenant.id), eq(governanceAudit.action, "transition")));
+      assert.deepEqual((audit.redactedAfterJson as { approvedPreflights: unknown }).approvedPreflights, approved.payload.approvedPreflights);
+      await assert.rejects(reviseCampaignScopes({ ...base, expectedRevision: approved.currentRevision, targetScopes: [dk] }), /frozen-after-approval/);
+      await transitionCampaignRecord({ ...base, nextState: "active" });
+      await transitionCampaignRecord({ ...base, nextState: "completed" });
+      await assert.rejects(transitionCampaignRecord({ ...base, nextState: "learning_reviewed", learningRecordId: records[0].id }), /multi-scope-learning-review-not-yet-supported/);
+      assert.equal((await listCampaignWorkspace(other.tenant.id)).length, 0);
+    });
+
     await t.test("campaign preflight binds analyst reasoning, current Market Twin and the exact approved plan", async () => {
       const f = await fixture();
       const retained = await persistAcquisition(f.input);
       const [user] = await db.insert(appUser).values({ email: "campaign-researcher@example.invalid", name: "Synthetic campaign researcher", role: "researcher", ssoSubjectId: randomUUID() }).returning();
-      const created = await createCampaignRecord({ clientId: f.tenant.id, name: "Synthetic category campaign", objective: "Increase consideration", audience: "Declared Danish audience", proposition: "Accessible quality",
+      const created = await createCampaignRecord({ clientId: f.tenant.id, name: "Synthetic category campaign", objective: "Increase consideration", audience: "Declared Danish audience", proposition: "Accessible quality", targetScopes: [{ market: "DK", language: "da" }],
         creativeRoutes: ["Product demonstration"], channels: ["owned"], budgetAssumptions: ["Within approved resources"], strategicEvidenceIds: retained.evidenceIds, brandConstraints: ["Descriptive claims only"] });
       const plan = { objective: "Increase consideration", hypothesis: "Consideration changes during the campaign.", population: "Eligible Danish adults",
         metrics: [{ key: "consideration", label: "Consideration", unit: "rate", direction: "increase" as const, aggregation: "rate" as const, population: "Eligible Danish adults" }],

@@ -6,9 +6,9 @@ import { evaluateContextualPreflight, parsePreflightReview, preflightBasisDigest
 import { PREFLIGHT_DIMENSIONS } from "./preflightFields.ts";
 
 const now = "2026-10-16T00:00:00.000Z";
-const campaign: Campaign = { id: "campaign", clientId: "client", name: "Category launch", state: "proposed", revision: 1,
+const campaign: Campaign = { id: "campaign", clientId: "client", name: "Category launch", state: "proposed", revision: 1, targetScopes: [{ market: "DK", language: "da" }],
   objective: "Increase consideration", audience: "Declared segment", proposition: "Accessible quality", creativeRoutes: ["Product demonstration"], channels: ["owned"], budgetAssumptions: ["Within approved resources"] };
-const plan: MeasurementPlan = { id: "plan", clientId: "client", campaignId: "campaign", objective: campaign.objective, hypothesis: "Consideration changes during the campaign.", population: "Eligible Danish adults",
+const plan: MeasurementPlan = { id: "plan", clientId: "client", campaignId: "campaign", targetScopes: campaign.targetScopes, objective: campaign.objective, hypothesis: "Consideration changes during the campaign.", population: "Eligible Danish adults",
   metrics: [{ key: "consideration", label: "Consideration", unit: "rate", direction: "increase", aggregation: "rate", population: "Eligible Danish adults" }], baseline: { consideration: 0.2 }, targets: { consideration: 0.25 }, checkpoints: ["2026-11-01T00:00:00.000Z"], attributionAssumptions: ["Descriptive only"], materialityThresholds: { consideration: 0.02 }, decisionRules: ["Review directional change, not causal effect"] };
 const evidence: EvidenceItem = { id: "evidence", clientId: "client", collectionId: "collection", sourceConnectionId: "source", sourceClass: "client_owned", externalReference: "approved-brand-guide", sourceContent: "The approved brand promise is accessible quality.",
   ingestedAt: now, expiresAt: "2027-01-01T00:00:00.000Z", lifecycle: "live", citationLevel: "paraphrased", rights: { basis: "client_owned", commercialUse: true, quotationAllowed: false, restrictions: [] },
@@ -74,4 +74,18 @@ test("preflight reviews validate all dimensions and preserve an immutable decisi
   const saved = evaluateContextualPreflight(input).assessment;
   input.sources.intelligence = input.sources.intelligence.map((item) => ({ ...item, statement: "The reviewed promise changed." }));
   assert.notEqual(preflightBasisDigest(saved), preflightBasisDigest(evaluateContextualPreflight(input).assessment));
+});
+
+test("campaign scope is declared, paired and frozen into the measurement basis", () => {
+  const input = fixture();
+  const multi = { ...campaign, targetScopes: [{ market: "DK", language: "da" }, { market: "SE", language: "sv" }] };
+  assert.equal(evaluateContextualPreflight({ ...input, campaign: multi }).assessment.status, "needs_context");
+  assert.equal(evaluateContextualPreflight({ ...input, campaign: multi, market: "DK", language: "da" }).assessment.status, "needs_context", "old single-scope measurement is insufficient");
+  const paired = { ...input, campaign: multi, plan: { ...input.plan, plan: { ...plan, targetScopes: multi.targetScopes } } };
+  assert.equal(evaluateContextualPreflight({ ...paired, market: "DK", language: "da" }).assessment.status, "ready");
+  const missingContext = evaluateContextualPreflight({ ...paired, market: "SE", language: "sv" }).assessment;
+  assert.equal(missingContext.status, "needs_context");
+  assert.deepEqual(missingContext.targetScope, { market: "SE", language: "sv" }, "incomplete reviews still identify the superseded scope");
+  assert.equal(evaluateContextualPreflight({ ...paired, market: "DK", language: "sv" }).assessment.status, "needs_context");
+  assert.equal(evaluateContextualPreflight({ ...input, campaign: { ...campaign, targetScopes: undefined } }).assessment.status, "needs_context");
 });

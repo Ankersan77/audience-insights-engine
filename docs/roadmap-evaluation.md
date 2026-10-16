@@ -161,6 +161,9 @@ evidence, not a substitute for the open external gates below.
 - Sessions now use random opaque tokens stored only as hashes, with server-enforced expiry and
   revocation, current membership/role resolution on every request and cascading invalidation when
   membership is removed. Explicit operator provisioning replaces automatic OIDC role grants.
+  Production session creation/resolution use the database clock, matching locked budget authority;
+  a small app/database clock skew must not make a newly issued session appear future-dated to one
+  path but valid to another. Explicit test instants still exercise expiry and future-session denial.
   OIDC flow cookies have independently enforced expiry; login return paths are local-only.
   Cookie-authenticated API writes require the owned origin, and logout is a revoking POST rather
   than a prefetchable GET. Adversarial database/HTTP tests cover these boundaries. External OIDC,
@@ -181,17 +184,41 @@ visible. Unresolved findings yield `needs_context`; material tensions block appr
 
 The owned campaign surface supports writing and inspecting this review. Snapshots bind campaign
 revision, accepted measurement version, solution/sensing versions, evidence and reviewed knowledge.
-Approval re-evaluates the newest assessment against the current locked basis, never falling back to
-an older ready artifact. Changing an accepted measurement plan requires a new pre-flight; plans
+Approval re-evaluates the newest assessment for every declared market/language pair against the
+current locked basis, never falling back to an older ready artifact. Changing an accepted measurement plan requires a new pre-flight; plans
 are frozen after approval. PostgreSQL tests cover stale plans, newer incomplete assessments and
 concurrent strategy edits; HTTP coverage exercises the form surface and researcher/reviewer split.
 
 This is a usable human-led review path, **not automated expert synthesis**. Its references establish
 traceability, not that the analyst's reasoning is substantively correct; qualified review remains
-necessary. Model-assisted campaign interpretation, live/post-campaign Market Twin context,
-source-backed metric reconciliation, multi-market approval coverage and broader browser interaction
-tests remain open. General brand/strategy evidence is reusable across campaigns when applicable;
+necessary. Model-assisted campaign interpretation and broader browser interaction tests remain
+open. Live/post context, metric reconciliation and human interpretation are described below.
+General brand/strategy evidence is reusable across campaigns when applicable;
 evidence explicitly scoped to another campaign cannot support this one.
+
+### Campaign market-coverage correction
+
+Previously a single DK/da review could authorize a campaign with no declared geographic scope.
+Campaigns now declare bounded market/language pairs explicitly; the solution's markets and languages
+never imply a Cartesian product. Each pair needs its own latest ready pre-flight, revalidated against
+the exact campaign revision, reviewed plan, rights and Market Twin. New incomplete reviews supersede
+only their own pair. Approval freezes the complete list of review IDs in the revision and audit.
+Authorized connectors for other markets remain configured, but their evidence cannot enter a review
+outside source policy. Missing or revoked bindings still fail closed.
+
+The owned surface exposes per-pair coverage and a proposed-only scope editor with expected-revision
+conflict protection. The measurement plan snapshots campaign scope on the server, disregarding body
+claims. Scope changes invalidate earlier reviews; a mismatched plan requires replacement and review.
+Legacy proposals need explicit scope and a scoped plan. Historical approvals are never backfilled.
+Unit/database/HTTP tests cover pair selection, missing/incomplete/stale reviews, source permissions,
+scope-edit races, foreign tenants, role denial and frozen approval lineage. An opt-in synthetic browser
+case checks desktop/mobile coverage, campaign creation, scope editing and two-tab conflicts.
+
+The shared metric plan applies separately to each declared pair; it does not establish valid pooled
+results. Per-market metric plans and complete multi-market learning review remain open. Live/post
+readbacks reject undeclared/ambiguous pairs, and a multi-scope campaign cannot enter learning-reviewed
+from a single scoped learning. Existing approved legacy campaigns without scope require a separately
+reviewed migration before new scoped readbacks; no historical authorization is invented.
 
 ### Result-lineage correction
 
@@ -258,9 +285,10 @@ open. A human-authored workflow is not evidence of an autonomous expert capabili
   compose an explicitly accepted client adapter; absent bindings or authority still return
   `needs_context`. Runtime configuration is not independent proof of quality or permitted processing.
 - External delivery stays optional. The owned product surface is the authoritative MVP output.
-- Campaign approval requires both an accepted measurement plan and a saved `ready` pre-flight
-  assessment. Completion-to-learning review requires an accepted learning explicitly scoped to
-  that campaign.
+- Campaign approval requires both an accepted scope-matched measurement plan and a current `ready`
+  pre-flight assessment for every declared market/language pair. Completion-to-learning review
+  currently supports single-pair campaigns only and requires a current accepted learning explicitly
+  scoped to that campaign.
 - Version allocation for solution profiles, sensing profiles, measurement plans, campaign
   revisions and campaign assessments is serialized with transaction-scoped PostgreSQL advisory
   locks; unique constraints remain the final integrity boundary.

@@ -8,6 +8,7 @@ export function PreflightSummary({ assessment }: { assessment?: CampaignAssessme
     <summary>Analyst pre-flight reasoning and frozen context</summary>
     <p className="mt-2 text-xs text-muted">Campaign revision {assessed.campaignSnapshot.revision}; measurement version {assessed.measurementSnapshot?.version ?? "missing"}; solution version {assessed.contextBasis?.solutionVersion ?? "missing"}; scope {assessed.contextBasis?.market} / {assessed.contextBasis?.language}. Historical snapshot, not a claim of perpetual freshness.</p>
     <p className="mt-2">Alternative: {assessed.review?.alternative ?? "Not assessed"}</p>
+    {assessed.researchGaps.length ? <ul className="mt-2 list-disc pl-5 text-[var(--status-warning-text)]">{assessed.researchGaps.map((gap) => <li key={gap}>{gap}</li>)}</ul> : null}
     <p className="mt-2">What would change this conclusion: {assessed.review?.wouldChangeConclusion ?? "Not assessed"}</p>
     {assessed.review?.findings.map((finding) => <div key={finding.dimension} className="mt-3">
       <strong>{finding.dimension.replaceAll("_", " ")} · {finding.verdict}</strong>

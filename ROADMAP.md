@@ -124,12 +124,22 @@ and read-time availability coverage is described below; full interactive pilot p
 
 Campaign pre-flight now has an owned-surface, analyst-authored strategic review with seven
 evidence-linked dimensions, alternatives, explicit contradiction rationale and current Market Twin
-context. Approval revalidates the latest review, exact campaign revision and accepted measurement
-version under database locks. A newer incomplete review cannot reuse an older ready verdict.
+context. Campaigns explicitly declare market/language pairs (not a Cartesian product of solution
+settings). Approval revalidates the latest review for **every** declared pair, the exact campaign
+revision and accepted measurement version under database locks. A newer incomplete review cannot
+reuse an older ready verdict for that pair. Approval freezes all scoped review IDs in its revision
+and audit. The owned surface shows missing, outdated and saved reviews separately from historical
+approval. Proposed scope changes use optimistic revision checks and invalidate prior assessments;
+the measurement plan snapshots the server-owned scope and must match before approval. Legacy
+proposals must declare scope and replace/review unscoped plans; legacy approvals are not backfilled
+or presented as covered. Scope is frozen after approval.
 Measurement replacement is available before approval and requires review/reassessment; after
 approval the plan is frozen. This closes the prior structural-checklist-only pre-flight path, not
-the automated campaign expert requirement. Multi-market approval coverage, execution/checkpoint
-alignment and model-assisted interpretation remain implementation work.
+the automated campaign expert requirement. Multi-market pre-flight coverage is implemented;
+per-market metric plans, pooled-result comparability, complete multi-market learning review,
+execution/checkpoint alignment and model-assisted interpretation remain implementation work.
+Live/post readbacks reject undeclared or ambiguous pairs. Multi-scope campaigns cannot yet enter
+`learning_reviewed`: a single-market learning must not silently close the entire campaign.
 
 Live/post readbacks now select normalized baseline/result observation IDs instead of trusting
 free-form outcome numbers. Core verifies current source permission, campaign, metric dictionary,

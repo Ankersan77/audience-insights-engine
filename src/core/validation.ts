@@ -14,6 +14,7 @@ import type {
   SourceConnection,
   StudyDesign,
 } from "./contracts.ts";
+import { parseCampaignScopes } from "../campaigns/scope.ts";
 
 export type ValidationResult = { valid: true } | { valid: false; errors: readonly string[] };
 
@@ -129,6 +130,9 @@ export function validateDecisionBrief(value: DecisionBrief): ValidationResult {
 
 export function validateMeasurementPlan(value: MeasurementPlan): ValidationResult {
   const errors: string[] = [];
+  if (value.targetScopes !== undefined) {
+    try { parseCampaignScopes(value.targetScopes); } catch { errors.push("targetScopes must contain unique market/language pairs"); }
+  }
   required(value.clientId, "clientId", errors);
   required(value.objective, "objective", errors);
   required(value.hypothesis, "hypothesis", errors);
@@ -227,6 +231,9 @@ export function validateQualitativeTheme(value: QualitativeTheme): ValidationRes
 
 export function validateCampaign(value: Campaign): ValidationResult {
   const errors: string[] = [];
+  if (value.targetScopes !== undefined) {
+    try { parseCampaignScopes(value.targetScopes); } catch { errors.push("targetScopes must contain unique market/language pairs"); }
+  }
   required(value.clientId, "clientId", errors);
   required(value.name, "name", errors);
   required(value.objective, "objective", errors);

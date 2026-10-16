@@ -1,4 +1,4 @@
-import type { Campaign, MeasurementPlan, ResearchContextBasis } from "../core/contracts.ts";
+import type { Campaign, CampaignScope, MeasurementPlan, ResearchContextBasis } from "../core/contracts.ts";
 import { prepareResearchContext, type ResearchContextSources } from "../abilities/context.ts";
 import { researchSnapshotDigest } from "../abilities/snapshot.ts";
 import { getAbility } from "../abilities/catalog.ts";
@@ -7,6 +7,7 @@ import { assertPeopleBlind, hasPromptInjection, redactIdentifiers } from "../evi
 import { assessPreflight, type CampaignAssessment } from "./analysis.ts";
 import { validateMeasurementPlan } from "../core/validation.ts";
 import { PREFLIGHT_DIMENSIONS, type PreflightDimension } from "./preflightFields.ts";
+import { resolveCampaignScope, sameCampaignScopes } from "./scope.ts";
 
 export type PreflightReview = {
   pointOfView: string;
@@ -18,6 +19,7 @@ export type PreflightReview = {
 };
 export type ContextualPreflight = CampaignAssessment & {
   method: "analyst-preflight@1";
+  targetScope?: CampaignScope;
   review?: PreflightReview;
   contextBasis?: ResearchContextBasis;
   campaignSnapshot: { revision: number; contentDigest: string };
@@ -55,8 +57,12 @@ export function evaluateContextualPreflight(input: {
   plan?: { id: number; version: number; reviewState: string; plan: MeasurementPlan };
   sources: ResearchContextSources; review?: PreflightReview; market?: string; language?: string; now: string;
 }): { assessment: ContextualPreflight; evidenceIds: string[] } {
+  let targetScope: CampaignScope | undefined;
+  let scopeGap: string | undefined;
+  try { targetScope = resolveCampaignScope(input.campaign.targetScopes, input.market, input.language); }
+  catch (error) { scopeGap = error instanceof Error ? error.message : "campaign-target-scopes-required"; }
   const prepared = prepareResearchContext({ clientId: input.campaign.clientId, abilityId: "campaign-preflight", campaignId: input.campaign.id,
-    market: input.market, language: input.language, now: input.now, sources: input.sources });
+    market: targetScope?.market ?? input.market, language: targetScope?.language ?? input.language, now: input.now, sources: input.sources });
   const primary = resolveEvidence({ clientId: input.campaign.clientId, now: input.now, market: prepared.context?.market, language: prepared.context?.language,
     evidence: prepared.evidence.filter((item) => input.strategicEvidenceIds.includes(item.id)), requirements: getAbility("campaign-preflight")!.evidenceRequirements });
   const evidence = [...new Map([...primary.selected, ...prepared.contextEvidence].map((item) => [item.id, item])).values()];
@@ -64,6 +70,8 @@ export function evaluateContextualPreflight(input: {
   const allowedIntelligence = new Set(prepared.context?.marketTwin.map((item) => item.id));
   const structural = assessPreflight({ campaign: input.campaign, measurementPlan: input.plan?.plan, strategicEvidence: primary.selected, brandConstraints: input.brandConstraints });
   const gaps = [...prepared.gaps, ...primary.gaps, ...structural.researchGaps];
+  if (scopeGap) gaps.push(scopeGap);
+  if (!sameCampaignScopes(input.campaign.targetScopes, input.plan?.plan.targetScopes)) gaps.push("The measurement plan must explicitly cover the current campaign scope; replace and review it after scope changes.");
   if (!input.plan || input.plan.reviewState !== "accepted") gaps.push("The measurement plan requires explicit acceptance before strategic approval.");
   if (input.plan && (!validateMeasurementPlan(input.plan.plan).valid || input.plan.plan.clientId !== input.campaign.clientId || input.plan.plan.campaignId !== input.campaign.id)) gaps.push("A valid, campaign-scoped measurement plan is required.");
   if (!input.review) gaps.push("An evidence-linked analyst review is required; filled fields alone do not establish strategic fit.");
@@ -83,7 +91,7 @@ export function evaluateContextualPreflight(input: {
   const status = gaps.length ? "needs_context" : tensions.length ? "blocked" : "ready";
   const basis = prepared.basis ? { ...prepared.basis, evidence: prepared.basis.evidence?.filter((item) => allowedEvidence.has(item.id)), primaryEvidenceIds: primary.selected.map((item) => item.id) } : undefined;
   const assessment: ContextualPreflight = {
-    ...structural, method: "analyst-preflight@1", status, review: input.review, contextBasis: basis,
+    ...structural, method: "analyst-preflight@1", targetScope, status, review: input.review, contextBasis: basis,
     campaignSnapshot: { revision: input.campaign.revision, contentDigest: researchSnapshotDigest(input.campaign) },
     measurementSnapshot: input.plan ? { id: input.plan.id, version: input.plan.version, contentDigest: researchSnapshotDigest(input.plan) } : undefined,
     pointOfView: input.review?.pointOfView ?? "Strategic fit has not been assessed against the reviewed Market Twin.",
@@ -95,6 +103,6 @@ export function evaluateContextualPreflight(input: {
 
 export function preflightBasisDigest(assessment: ContextualPreflight): string {
   const basis = assessment.contextBasis;
-  return researchSnapshotDigest({ campaign: assessment.campaignSnapshot, measurement: assessment.measurementSnapshot,
+  return researchSnapshotDigest({ scope: assessment.targetScope, campaign: assessment.campaignSnapshot, measurement: assessment.measurementSnapshot,
     context: basis ? { ...basis, excludedRecordCount: undefined } : undefined });
 }

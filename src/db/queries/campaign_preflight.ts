@@ -9,6 +9,7 @@ import { canonicalEvidenceItem } from "./canonical_evidence";
 import { canonicalProfile } from "./monitoring";
 import { toIntelligence } from "./workspace_intelligence";
 import type { CampaignAssessmentArtifact, CampaignRevisionPayload } from "./campaign_workspace";
+import { campaignScopeKey, parseCampaignScopes, resolveCampaignScope } from "@/src/campaigns/scope";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -26,14 +27,16 @@ export async function lockedContext(tx: Transaction, clientId: number, market?: 
   const scopedMarket = market?.trim() || (profile?.markets.length === 1 ? profile.markets[0] : undefined);
   const scopedLanguage = language?.trim() || (profile?.languages.length === 1 ? profile.languages[0] : undefined);
   return (now = new Date().toISOString()) => {
-  const permitted = sources.filter((source) => !sourcePolicyFailure({ health: source.health, rights: source.rightsJson as RightsDeclaration,
+  const available = sources.filter((source) => !sourcePolicyFailure({ health: source.health, rights: source.rightsJson as RightsDeclaration,
+    policy: readSourceConnectionPolicy(source.configurationJson), dataClassification: sourceClassification(source.sourceClass as SourceClass), request: { operation: "research" }, now }));
+  const permitted = new Set(available.filter((source) => !sourcePolicyFailure({ health: source.health, rights: source.rightsJson as RightsDeclaration,
     policy: readSourceConnectionPolicy(source.configurationJson), dataClassification: sourceClassification(source.sourceClass as SourceClass), request: { operation: "research", filters: {
       ...(scopedMarket ? { markets: [scopedMarket] } : {}), ...(scopedLanguage ? { languages: [scopedLanguage] } : {}),
-    } }, now }));
+    } }, now })).map((source) => source.id));
   return {
     solution: profile,
     sensing: sensing ? canonicalProfile(sensing) : null, intelligence: intelligence.map(toIntelligence),
-    evidence: evidence.filter((item) => sourceMap.has(item.sourceConnectionId)).map((item) => {
+    evidence: evidence.filter((item) => permitted.has(item.sourceConnectionId)).map((item) => {
       const source = sourceMap.get(item.sourceConnectionId)!;
       const canonical = canonicalEvidenceItem({ evidence: item, sourceClass: source.sourceClass });
       const currentRightsExpiry = (source.rightsJson as RightsDeclaration).expiresAt;
@@ -41,7 +44,9 @@ export async function lockedContext(tx: Transaction, clientId: number, market?: 
       if (currentRightsExpiry && Number.isFinite(Date.parse(currentRightsExpiry)) && Date.parse(currentRightsExpiry) < Date.parse(canonical.expiresAt)) return { ...canonical, expiresAt: currentRightsExpiry };
       return canonical;
     }),
-    sourceBindings: Object.fromEntries(permitted.map((item) => [item.connectorId, String(item.id)])),
+    // An authorized SE-only connector remains a configured binding during a DK review,
+    // but none of its evidence may enter that review. Revoked/invalid bindings still fail closed.
+    sourceBindings: Object.fromEntries(available.map((item) => [item.connectorId, String(item.id)])),
   };
   };
 }
@@ -53,12 +58,13 @@ export async function evaluateLockedPreflight(tx: Transaction, input: { clientId
   if (!revision) throw new Error("campaign-revision-missing");
   const [plan] = await tx.select().from(measurementPlan).where(and(eq(measurementPlan.clientId, input.clientId), eq(measurementPlan.campaignId, row.id))).orderBy(desc(measurementPlan.version)).limit(1).for("share");
   const payload = revision.briefJson as CampaignRevisionPayload;
-  const sources = await lockedContext(tx, input.clientId, input.market, input.language);
+  const scope = resolveCampaignScope(payload.campaign.targetScopes, input.market, input.language);
+  const sources = await lockedContext(tx, input.clientId, scope.market, scope.language);
   const review = parsePreflightReview(input.review);
   const run = () => evaluateContextualPreflight({ campaign: { ...payload.campaign, state: row.state, revision: row.currentRevision, measurementPlanId: plan ? String(plan.id) : undefined },
     strategicEvidenceIds: payload.strategicEvidenceIds.map(String), brandConstraints: payload.brandConstraints,
     plan: plan ? { id: plan.id, version: plan.version, reviewState: plan.reviewState, plan: plan.planJson as NonNullable<Parameters<typeof evaluateContextualPreflight>[0]["plan"]>["plan"] } : undefined,
-    sources: sources(), review, market: input.market, language: input.language, now: new Date().toISOString() });
+    sources: sources(), review, ...scope, now: new Date().toISOString() });
   return { result: run(), recheck: run };
 }
 
@@ -74,21 +80,34 @@ export async function createContextualPreflight(input: { clientId: number; campa
       status: result.assessment.status, version, payloadJson: { campaignId: input.campaignId, campaignRevision: result.assessment.campaignSnapshot.revision, assessment: result.assessment },
       evidenceIds: result.evidenceIds.map(Number), createdBy: input.actorUserId }).returning();
     await tx.insert(governanceAudit).values({ clientId: input.clientId, actorUserId: input.actorUserId, action: "assess", entityType: "campaign", entityId: String(input.campaignId),
-      redactedAfterJson: { stage: "preflight", method: result.assessment.method, artifactId: created.id, version, status: result.assessment.status, evidenceIds: created.evidenceIds } });
+      redactedAfterJson: { stage: "preflight", method: result.assessment.method, targetScope: result.assessment.targetScope, artifactId: created.id, version, status: result.assessment.status, evidenceIds: created.evidenceIds } });
     if (result.assessment.status === "ready" && recheck().assessment.status !== "ready") throw new Error("campaign-context-changed");
     return { id: created.id, campaignId: input.campaignId, version, assessment: result.assessment, evidenceIds: created.evidenceIds, createdAt: created.createdAt };
   });
 }
 
-export async function assertCurrentPreflight(tx: Transaction, input: { clientId: number; campaignId: number }): Promise<{ id: number; recheck(): void }> {
-  const [artifact] = await tx.select().from(researchArtifact).where(and(eq(researchArtifact.clientId, input.clientId), eq(researchArtifact.artifactKey, `campaign:${input.campaignId}:preflight`), eq(researchArtifact.artifactType, "campaign_assessment"))).orderBy(desc(researchArtifact.version)).limit(1);
-  const saved = (artifact?.payloadJson as { assessment?: ContextualPreflight } | undefined)?.assessment;
-  if (!artifact || saved?.method !== "analyst-preflight@1" || saved.status !== "ready" || !saved.contextBasis) throw new Error("current-contextual-preflight-required");
-  const fresh = await evaluateLockedPreflight(tx, { ...input, market: saved.contextBasis.market, language: saved.contextBasis.language, review: saved.review });
-  const recheck = () => {
-    const assessment = fresh.recheck().assessment;
-    if (assessment.status !== "ready" || preflightBasisDigest(assessment) !== preflightBasisDigest(saved)) throw new Error("campaign-context-changed");
-  };
-  recheck();
-  return { id: artifact.id, recheck };
+export async function assertCurrentPreflight(tx: Transaction, input: { clientId: number; campaignId: number }) {
+  const [current] = await tx.select({ brief: campaignRevision.briefJson }).from(campaign).innerJoin(campaignRevision, and(
+    eq(campaignRevision.clientId, campaign.clientId), eq(campaignRevision.campaignId, campaign.id), eq(campaignRevision.revision, campaign.currentRevision),
+  )).where(and(eq(campaign.clientId, input.clientId), eq(campaign.id, input.campaignId)));
+  const scopes = parseCampaignScopes((current?.brief as CampaignRevisionPayload | undefined)?.campaign.targetScopes);
+  const artifacts = await tx.select().from(researchArtifact).where(and(eq(researchArtifact.clientId, input.clientId), eq(researchArtifact.artifactKey, `campaign:${input.campaignId}:preflight`), eq(researchArtifact.artifactType, "campaign_assessment"))).orderBy(desc(researchArtifact.version), desc(researchArtifact.id));
+  const checks: (() => void)[] = [];
+  const approved = [];
+  for (const scope of scopes) {
+    // The newest review for each declared pair wins, even when incomplete. Legacy unscoped reviews cannot authorize approval.
+    const artifact = artifacts.find((item) => {
+      const assessment = (item.payloadJson as { assessment?: ContextualPreflight }).assessment;
+      return assessment?.targetScope && campaignScopeKey(assessment.targetScope) === campaignScopeKey(scope);
+    });
+    const saved = (artifact?.payloadJson as { assessment?: ContextualPreflight } | undefined)?.assessment;
+    if (!artifact || saved?.method !== "analyst-preflight@1" || saved.status !== "ready" || !saved.contextBasis) throw new Error(`current-contextual-preflight-required:${campaignScopeKey(scope)}`);
+    const fresh = await evaluateLockedPreflight(tx, { ...input, ...scope, review: saved.review });
+    const check = () => {
+      const assessment = fresh.recheck().assessment;
+      if (assessment.status !== "ready" || preflightBasisDigest(assessment) !== preflightBasisDigest(saved)) throw new Error("campaign-context-changed");
+    };
+    check(); checks.push(check); approved.push({ ...scope, artifactId: artifact.id });
+  }
+  return { id: approved.length === 1 ? approved[0].artifactId : undefined, approved, recheck: () => checks.forEach((check) => check()) };
 }

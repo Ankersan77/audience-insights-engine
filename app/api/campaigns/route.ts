@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const created = await createCampaignRecord({
       clientId: session.clientId, name, objective, audience, proposition,
       creativeRoutes: strings(body.creativeRoutes), channels: strings(body.channels), budgetAssumptions: strings(body.budgetAssumptions),
-      strategicEvidenceIds: ids(body.strategicEvidenceIds), brandConstraints: strings(body.brandConstraints),
+      strategicEvidenceIds: ids(body.strategicEvidenceIds), brandConstraints: strings(body.brandConstraints), targetScopes: body.targetScopes,
     });
     await recordGovernanceAudit({ clientId: session.clientId, actorUserId: session.id, action: "create", entityType: "campaign", entityId: String(created.id), after: { state: created.state, revision: created.currentRevision } });
     return NextResponse.json({ campaign: created }, { status: 201 });

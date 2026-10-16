@@ -1,5 +1,7 @@
 import { and, desc, eq, inArray, max, sql } from "drizzle-orm";
-import type { Campaign, MeasurementPlan, StudyDesign } from "@/src/core/contracts";
+import type { Campaign, CampaignScope, MeasurementPlan, StudyDesign } from "@/src/core/contracts";
+import { campaignScopeKey, parseCampaignScopes, resolveCampaignScope, sameCampaignScopes } from "@/src/campaigns/scope";
+import type { ContextualPreflight } from "@/src/campaigns/preflight";
 import type { CampaignAssessment } from "@/src/campaigns/analysis";
 import { assertCampaignTransition } from "@/src/core/transitions";
 import { validateCampaign, validateMeasurementPlan, validateStudyDesign } from "@/src/core/validation";
@@ -16,6 +18,7 @@ export type CampaignRevisionPayload = {
   strategicEvidenceIds: readonly number[];
   brandConstraints: readonly string[];
   approvedPreflightId?: number;
+  approvedPreflights?: readonly (CampaignScope & { artifactId: number })[];
   reviewedLearningId?: number;
 };
 
@@ -28,6 +31,7 @@ export type CampaignWorkspaceRow = {
   measurementPlanDbId: number | null;
   measurementPlanReviewState: "pending" | "accepted" | "rejected" | "revision_requested" | null;
   latestAssessments: Partial<Record<CampaignAssessment["stage"], CampaignAssessmentArtifact>>;
+  scopedPreflights: CampaignAssessmentArtifact[];
   createdAt: Date;
 };
 
@@ -71,6 +75,20 @@ async function latestMeasurementPlan(clientId: number, campaignId: number) {
   return row ?? null;
 }
 
+async function scopedPreflights(clientId: number, campaignId: number): Promise<CampaignAssessmentArtifact[]> {
+  const rows = await db.select().from(researchArtifact).where(and(eq(researchArtifact.clientId, clientId),
+    eq(researchArtifact.artifactType, "campaign_assessment"), eq(researchArtifact.artifactKey, `campaign:${campaignId}:preflight`))).orderBy(desc(researchArtifact.version), desc(researchArtifact.id));
+  const seen = new Set<string>();
+  return rows.flatMap((row) => {
+    const assessment = (row.payloadJson as { assessment?: ContextualPreflight }).assessment;
+    if (!assessment?.targetScope) return [];
+    const key = campaignScopeKey(assessment.targetScope);
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{ id: row.id, campaignId, version: row.version, assessment, evidenceIds: row.evidenceIds, createdAt: row.createdAt }];
+  });
+}
+
 export async function listCampaignWorkspace(clientId: number): Promise<CampaignWorkspaceRow[]> {
   const campaigns = await db.select().from(campaign).where(eq(campaign.clientId, clientId)).orderBy(desc(campaign.id));
   return Promise.all(campaigns.map(async (row) => {
@@ -99,6 +117,7 @@ export async function listCampaignWorkspace(clientId: number): Promise<CampaignW
       measurementPlanDbId: plan?.id ?? null,
       measurementPlanReviewState: plan?.reviewState ?? null,
       latestAssessments,
+      scopedPreflights: await scopedPreflights(clientId, row.id),
       createdAt: row.createdAt,
     };
   }));
@@ -115,7 +134,9 @@ export async function createCampaignRecord(input: {
   budgetAssumptions: readonly string[];
   strategicEvidenceIds: readonly number[];
   brandConstraints: readonly string[];
+  targetScopes: unknown;
 }): Promise<CampaignWorkspaceRow> {
+  const targetScopes = parseCampaignScopes(input.targetScopes);
   if (input.strategicEvidenceIds.length > 0) {
     const owned = await db.select({ id: canonicalEvidence.id }).from(canonicalEvidence).where(and(
       eq(canonicalEvidence.clientId, input.clientId),
@@ -129,14 +150,38 @@ export async function createCampaignRecord(input: {
     const [created] = await tx.insert(campaign).values({ clientId: input.clientId, name: input.name, state: "proposed", currentRevision: 1 }).returning();
     const domain: Campaign = {
       id: String(created.id), clientId: String(input.clientId), name: input.name, state: "proposed", revision: 1,
-      objective: input.objective, audience: input.audience, proposition: input.proposition,
+      objective: input.objective, audience: input.audience, proposition: input.proposition, targetScopes,
       creativeRoutes: input.creativeRoutes, channels: input.channels, budgetAssumptions: input.budgetAssumptions,
     };
     const validation = validateCampaign(domain);
     if (!validation.valid) throw new Error(`invalid-campaign:${validation.errors.join(";")}`);
     const payload: CampaignRevisionPayload = { campaign: domain, strategicEvidenceIds: input.strategicEvidenceIds, brandConstraints: input.brandConstraints };
     await tx.insert(campaignRevision).values({ clientId: input.clientId, campaignId: created.id, revision: 1, briefJson: payload });
-    return { id: created.id, state: created.state, currentRevision: 1, payload, measurementPlan: null, measurementPlanDbId: null, measurementPlanReviewState: null, latestAssessments: {}, createdAt: created.createdAt };
+    return { id: created.id, state: created.state, currentRevision: 1, payload, measurementPlan: null, measurementPlanDbId: null, measurementPlanReviewState: null, latestAssessments: {}, scopedPreflights: [], createdAt: created.createdAt };
+  });
+}
+
+export async function reviseCampaignScopes(input: { clientId: number; campaignId: number; expectedRevision: number; targetScopes: unknown; actorUserId: number }) {
+  const targetScopes = parseCampaignScopes(input.targetScopes);
+  if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) throw new Error("invalid-campaign-revision");
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(73004, ${input.campaignId})`);
+    await tx.execute(sql`select pg_advisory_xact_lock(73003, ${input.campaignId})`);
+    const [row] = await tx.select().from(campaign).where(and(eq(campaign.clientId, input.clientId), eq(campaign.id, input.campaignId)));
+    if (!row) throw new Error("campaign-not-found");
+    if (row.state !== "proposed") throw new Error("campaign-scope-frozen-after-approval");
+    if (row.currentRevision !== input.expectedRevision) throw new Error("campaign-revision-conflict");
+    const [revision] = await tx.select().from(campaignRevision).where(and(eq(campaignRevision.clientId, input.clientId), eq(campaignRevision.campaignId, row.id), eq(campaignRevision.revision, row.currentRevision)));
+    if (!revision) throw new Error("campaign-revision-missing");
+    const payload = revision.briefJson as CampaignRevisionPayload;
+    if (sameCampaignScopes(payload.campaign.targetScopes, targetScopes)) return { revision: row.currentRevision };
+    const nextRevision = row.currentRevision + 1;
+    await tx.insert(campaignRevision).values({ clientId: input.clientId, campaignId: row.id, revision: nextRevision,
+      briefJson: { ...payload, campaign: { ...payload.campaign, targetScopes, revision: nextRevision } } });
+    await tx.update(campaign).set({ currentRevision: nextRevision }).where(and(eq(campaign.clientId, input.clientId), eq(campaign.id, row.id)));
+    await tx.insert(governanceAudit).values({ clientId: input.clientId, actorUserId: input.actorUserId, action: "update", entityType: "campaign", entityId: String(row.id),
+      redactedBeforeJson: { revision: row.currentRevision, targetScopes: payload.campaign.targetScopes }, redactedAfterJson: { revision: nextRevision, targetScopes, requiresReassessment: true, measurementScopeMustMatch: true } });
+    return { revision: nextRevision };
   });
 }
 
@@ -147,12 +192,14 @@ export async function createMeasurementPlanRecord(input: {
 }): Promise<{ id: number; plan: MeasurementPlan; version: number }> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(73003, ${input.campaignId})`);
-    const [ownedCampaign] = await tx.select({ id: campaign.id, state: campaign.state }).from(campaign).where(and(eq(campaign.id, input.campaignId), eq(campaign.clientId, input.clientId))).limit(1);
+    const [ownedCampaign] = await tx.select().from(campaign).where(and(eq(campaign.id, input.campaignId), eq(campaign.clientId, input.clientId))).limit(1);
     if (!ownedCampaign) throw new Error("campaign-not-found");
     if (ownedCampaign.state !== "proposed") throw new Error("measurement-plan-frozen-after-approval");
     const [versionRow] = await tx.select({ value: max(measurementPlan.version) }).from(measurementPlan).where(and(eq(measurementPlan.clientId, input.clientId), eq(measurementPlan.campaignId, input.campaignId)));
     const version = Number(versionRow?.value ?? 0) + 1;
-    const domain: MeasurementPlan = { ...input.plan, id: `campaign:${input.campaignId}:measurement:${version}`, clientId: String(input.clientId), campaignId: String(input.campaignId) };
+    const [revision] = await tx.select().from(campaignRevision).where(and(eq(campaignRevision.clientId, input.clientId), eq(campaignRevision.campaignId, input.campaignId), eq(campaignRevision.revision, ownedCampaign.currentRevision)));
+    const targetScopes = parseCampaignScopes((revision?.briefJson as CampaignRevisionPayload | undefined)?.campaign.targetScopes);
+    const domain: MeasurementPlan = { ...input.plan, targetScopes, id: `campaign:${input.campaignId}:measurement:${version}`, clientId: String(input.clientId), campaignId: String(input.campaignId) };
     const validation = validateMeasurementPlan(domain);
     if (!validation.valid) throw new Error(`invalid-measurement-plan:${validation.errors.join(";")}`);
     const [created] = await tx.insert(measurementPlan).values({ clientId: input.clientId, campaignId: input.campaignId, version, planJson: domain, reviewState: "pending" }).returning();
@@ -181,6 +228,7 @@ export async function transitionCampaignRecord(input: {
     const preflight = input.nextState === "approved" ? await assertCurrentPreflight(tx, input) : undefined;
     let recheckLearning: (() => void) | undefined;
     if (input.nextState === "learning_reviewed") {
+      if (parseCampaignScopes((current.briefJson as CampaignRevisionPayload).campaign.targetScopes).length !== 1) throw new Error("multi-scope-learning-review-not-yet-supported");
       if (!input.learningRecordId) throw new Error("accepted-learning-required");
       const [learning] = await tx.select().from(intelligenceRecord).where(and(
         eq(intelligenceRecord.id, input.learningRecordId), eq(intelligenceRecord.clientId, input.clientId),
@@ -190,6 +238,7 @@ export async function transitionCampaignRecord(input: {
       const campaigns = scope?.campaigns;
       if (!learning || !Array.isArray(campaigns) || !campaigns.includes(String(row.id))) throw new Error("accepted-campaign-learning-required");
       if (scope?.markets.length !== 1 || scope.languages.length !== 1) throw new Error("scoped-campaign-learning-required");
+      resolveCampaignScope((current.briefJson as CampaignRevisionPayload).campaign.targetScopes, scope.markets[0], scope.languages[0]);
       const sources = await lockedContext(tx, input.clientId, scope.markets[0], scope.languages[0]);
       recheckLearning = () => {
         const current = prepareResearchContext({ clientId: String(input.clientId), campaignId: String(row.id), abilityId: "post-campaign-learning", market: scope.markets[0], language: scope.languages[0], sources: sources(), now: new Date().toISOString() });
@@ -209,14 +258,14 @@ export async function transitionCampaignRecord(input: {
     };
     await tx.insert(campaignRevision).values({
       clientId: input.clientId, campaignId: row.id, revision: nextRevision,
-      briefJson: { ...currentPayload, campaign: domain, ...(preflight ? { approvedPreflightId: preflight.id } : {}), ...(reviewedLearningId ? { reviewedLearningId } : {}) }, approvedBy: input.nextState === "approved" ? input.actorUserId : null,
+      briefJson: { ...currentPayload, campaign: domain, ...(preflight ? { approvedPreflightId: preflight.id, approvedPreflights: preflight.approved } : {}), ...(reviewedLearningId ? { reviewedLearningId } : {}) }, approvedBy: input.nextState === "approved" ? input.actorUserId : null,
     });
     const [updated] = await tx.update(campaign).set({ state: input.nextState, currentRevision: nextRevision, archivedAt: input.nextState === "archived" ? new Date() : null }).where(and(eq(campaign.id, row.id), eq(campaign.clientId, input.clientId))).returning();
     await tx.insert(governanceAudit).values({ clientId: input.clientId, actorUserId: input.actorUserId, action: "transition", entityType: "campaign", entityId: String(row.id),
-      redactedBeforeJson: { state: row.state, revision: row.currentRevision }, redactedAfterJson: { state: updated.state, revision: nextRevision, approvedPreflightId: preflight?.id, reviewedLearningId } });
+      redactedBeforeJson: { state: row.state, revision: row.currentRevision }, redactedAfterJson: { state: updated.state, revision: nextRevision, approvedPreflightId: preflight?.id, approvedPreflights: preflight?.approved, reviewedLearningId } });
     preflight?.recheck();
     recheckLearning?.();
-    return { id: updated.id, state: updated.state, currentRevision: nextRevision, payload: { ...currentPayload, campaign: domain, ...(preflight ? { approvedPreflightId: preflight.id } : {}), ...(reviewedLearningId ? { reviewedLearningId } : {}) }, measurementPlan: plan ? plan.planJson as MeasurementPlan : null, measurementPlanDbId: plan?.id ?? null, measurementPlanReviewState: plan?.reviewState ?? null, latestAssessments: await latestCampaignAssessments(input.clientId, row.id), createdAt: updated.createdAt };
+    return { id: updated.id, state: updated.state, currentRevision: nextRevision, payload: { ...currentPayload, campaign: domain, ...(preflight ? { approvedPreflightId: preflight.id, approvedPreflights: preflight.approved } : {}), ...(reviewedLearningId ? { reviewedLearningId } : {}) }, measurementPlan: plan ? plan.planJson as MeasurementPlan : null, measurementPlanDbId: plan?.id ?? null, measurementPlanReviewState: plan?.reviewState ?? null, latestAssessments: await latestCampaignAssessments(input.clientId, row.id), scopedPreflights: await scopedPreflights(input.clientId, row.id), createdAt: updated.createdAt };
   });
 }
 
