@@ -88,12 +88,19 @@ Anything in the final column remains `needs_context`; it is not silently convert
 
 The implementation column is an inventory, not a completion declaration. The follow-up audit in
 `docs/roadmap-evaluation.md` tracks remaining production synthesis acceptance, durable briefing production,
-pre-acquisition budget enforcement and broader runtime verification. Those repository tasks remain
+live adapter budget compliance and broader runtime verification. Those repository tasks remain
 open alongside the external gates. Source-policy persistence and revocation concurrency now have
 dedicated PostgreSQL integration coverage in `integration/source-governance.integration.ts`.
 Scheduled review packets now persist and support owned-surface review; narrative synthesis, urgent
 alert delivery and explicit late-evidence revisions are still open. Briefing HTTP authorization
 and viewer server rendering are covered with synthetic sessions; this is not a full browser pilot.
+
+Queued acquisitions now reserve explicit currency-denominated cost, record and request upper bounds
+against one client-wide UTC-day allowance before adapter execution. Retries require new durable
+authorizations; cancellation, crashes and cheaper-than-planned success do not automatically refund
+them. An operator CLI configures and inspects these conservative bounds. Synthetic database/worker
+tests cover contention, isolation and retry failures; real provider metering acceptance, measured
+cost reconciliation and budget administration in the owned UI remain open.
 Session hardening now uses server-side expiry/revocation, current tenant permissions, explicit
 operator provisioning and same-origin write checks. The external OIDC/deployment login proof is
 still required; migration `0013` forces older signed-role cookies through sign-in again.

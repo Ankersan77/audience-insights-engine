@@ -1,8 +1,12 @@
 import type { SourceAcquisitionJob } from "../connectors/contracts.ts";
 import type { EvidenceAdapter, AdapterRunContext, AdapterRunResult } from "./sdk.ts";
 import type { EvidencePolicy } from "./policy.ts";
+import type { AcquisitionPlan } from "./acquisitionBudget.ts";
 
-export type RunnableEvidenceAdapter = Pick<EvidenceAdapter<unknown>, "id" | "run">;
+export type RunnableEvidenceAdapter = Pick<EvidenceAdapter<unknown>, "id" | "run"> & {
+  /** Pure, synchronous, credential-free declaration; missing bounds block queued execution. */
+  plan?(job: SourceAcquisitionJob): AcquisitionPlan;
+};
 
 export type AcquisitionAdapterFactoryContext = {
   connectorId: string;

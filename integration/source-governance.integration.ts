@@ -4,7 +4,8 @@ import test from "node:test";
 import { Pool } from "pg";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { and, eq } from "drizzle-orm";
-import { appUser, authSession, client, clientMembership, canonicalEvidence, researchProject, intelligenceRecord, monitoringRun, solutionProfile, sourceConnection, sourceAcquisitionJob, sourceAcquisitionReceipt, governanceAudit } from "../src/db/schema";
+import { acquisitionAuthorization, appUser, authSession, client, clientMembership, canonicalEvidence, researchProject, intelligenceRecord, monitoringRun, solutionProfile, sourceConnection, sourceAcquisitionJob, sourceAcquisitionReceipt, governanceAudit } from "../src/db/schema";
+import { AcquisitionAdapterRegistry } from "../src/evidence/registry";
 import { PublicWebEvidenceAdapter } from "../src/evidence/adapters";
 import type { SourceConnectionPolicy } from "../src/core/contracts";
 import { dueBriefingWindows } from "../src/monitoring/briefings";
@@ -30,6 +31,8 @@ const { createActiveSensingProfile } = await import("../src/db/queries/monitorin
 const { generateDueBriefings, listPeriodicBriefings, reviewPeriodicBriefing } = await import("../src/db/queries/briefings");
 const { createAuthSession, resolveAuthSession, revokeAuthSession, purgeAuthSessions, resolveProvisionedIdentity } = await import("../src/db/queries/auth_sessions");
 const { setClientAccess } = await import("../src/db/queries/client_access");
+const { setAcquisitionBudget, inspectAcquisitionBudget, authorizeAcquisitionAttempt } = await import("../src/db/queries/acquisition_budget");
+const { processAcquisitionJob, reconcileStaleAcquisitions } = await import("../src/workers/acquisitionQueue");
 const probe = new Pool({ connectionString: url });
 const rights = { basis: "public_permitted" as const, commercialUse: true, quotationAllowed: false, restrictions: [] };
 const policy: SourceConnectionPolicy = {
@@ -326,6 +329,114 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       }
       await purgeAuthSessions(new Date(Date.now() + (SESSION_MAX_AGE_SECONDS + 120) * 1000));
       assert.equal((await db.select().from(authSession).where(eq(authSession.userId, userId))).length, 0);
+    });
+    await t.test("pre-acquisition authorizations serialize across sources, isolate clients and survive configuration edits", async () => {
+      const f = await fixture();
+      const second = await fixture(f.tenant);
+      const other = await fixture();
+      const settings = { currency: "DKK", dailyCostMicros: 100, dailyRecords: 1, dailyRequests: 1, enabled: true };
+      const plan = { currency: "DKK", maxCostMicros: 100, maxRecords: 1, maxRequests: 1 };
+      const registry = new AcquisitionAdapterRegistry();
+      let calls = 0;
+      let credentials = 0;
+      const runtime = { async resolveCredential() { credentials++; return "synthetic-only"; } };
+      const enqueue = async (value: typeof f) => (await db.insert(sourceAcquisitionJob).values({ clientId: value.tenant.id, sourceConnectionId: value.source.id, operation: value.input.operation, requestJson: value.input.request, idempotencyKey: randomUUID() }).returning())[0];
+      for (const value of [f, second, other]) {
+        // No legacy currency-less cost limit; these synthetic plans have explicit DKK micro-units.
+        await db.update(sourceConnection).set({ configurationJson: { ...policy, costLimit: undefined } }).where(eq(sourceConnection.id, value.source.id));
+        registry.register(value.source.connectorId, () => ({ id: value.source.connectorId, plan: () => plan,
+          async run(job, context) {
+            context.acquisition!.authorizeRequest({ costMicros: 100, maxRecords: 1 });
+            await context.resolveCredential(job.credentialRef!);
+            calls++;
+            return { ...value.input.result, receipt: { ...value.input.result.receipt, jobId: job.id } };
+          },
+        }));
+      }
+      const denied = await enqueue(f);
+      assert.equal(await processAcquisitionJob({ databaseJobId: denied.id, registry, runtime }), "failed");
+      assert.equal(calls, 0); assert.equal(credentials, 0);
+      await setAcquisitionBudget(f.tenant.slug, settings);
+      const jobs = await Promise.all([enqueue(f), enqueue(second)]);
+      const statuses = await Promise.all(jobs.map((job) => processAcquisitionJob({ databaseJobId: job.id, registry, runtime })));
+      assert.deepEqual(statuses.sort(), ["completed", "failed"]);
+      assert.equal(calls, 1); assert.equal(credentials, 1);
+      const used = await inspectAcquisitionBudget(f.tenant.slug);
+      assert.deepEqual(used.usage, { authorizedCostMicros: "100", authorizedRecords: "1", authorizedRequests: "1" });
+      await setAcquisitionBudget(f.tenant.slug, settings);
+      const unchanged = await enqueue(f);
+      assert.equal(await processAcquisitionJob({ databaseJobId: unchanged.id, registry, runtime }), "failed");
+      assert.equal(calls, 1);
+      await assert.rejects(setAcquisitionBudget(f.tenant.slug, { ...settings, currency: "EUR" }), /budget-currency-change/);
+      await setAcquisitionBudget(other.tenant.slug, settings);
+      const isolated = await enqueue(other);
+      assert.equal(await processAcquisitionJob({ databaseJobId: isolated.id, registry, runtime }), "completed");
+      assert.equal(calls, 2);
+      const foreign = await queued(f);
+      await assert.rejects(authorizeAcquisitionAttempt({ clientId: other.tenant.id, jobId: foreign.id, attempt: 1, plan }), /budget-job-not-found/);
+      // Raising one dimension cannot bypass either of the other two dimensions.
+      for (const limits of [{ dailyCostMicros: 100, dailyRecords: 10, dailyRequests: 10 }, { dailyCostMicros: 1000, dailyRecords: 1, dailyRequests: 10 }, { dailyCostMicros: 1000, dailyRecords: 10, dailyRequests: 1 }]) {
+        await setAcquisitionBudget(f.tenant.slug, { ...settings, ...limits });
+        await assert.rejects(authorizeAcquisitionAttempt({ clientId: f.tenant.id, jobId: foreign.id, attempt: 1, plan }), /budget-daily-limit/);
+      }
+      await setAcquisitionBudget(f.tenant.slug, { ...settings, dailyCostMicros: 1000, dailyRecords: 10, dailyRequests: 10, enabled: false });
+      await assert.rejects(authorizeAcquisitionAttempt({ clientId: f.tenant.id, jobId: foreign.id, attempt: 1, plan }), /budget-not-enabled/);
+      assert.ok((await db.select().from(governanceAudit).where(and(eq(governanceAudit.clientId, f.tenant.id), eq(governanceAudit.action, "operator_set_acquisition_budget")))).length > 0);
+      // Simulate yesterday's admissions in this isolated fixture, retaining the immutable history.
+      await probe.query("update acquisition_authorization set authorized_at = (date_trunc('day', current_timestamp at time zone 'UTC') at time zone 'UTC') - interval '1 second' where client_id = $1", [f.tenant.id]);
+      await setAcquisitionBudget(f.tenant.slug, settings);
+      const nextDay = await enqueue(f);
+      assert.equal(await processAcquisitionJob({ databaseJobId: nextDay.id, registry, runtime }), "completed");
+      assert.equal((await inspectAcquisitionBudget(f.tenant.slug)).usage.authorizedRequests, "1");
+      assert.equal((await db.select().from(acquisitionAuthorization).where(eq(acquisitionAuthorization.clientId, f.tenant.id))).length, 2);
+    });
+
+    await t.test("worker retry, cancellation, missing plans and output failures cannot reuse or refund authorization", async () => {
+      const settings = { currency: "DKK", dailyCostMicros: 0, dailyRecords: 5, dailyRequests: 1, enabled: true };
+      const plan = { currency: "DKK", maxCostMicros: 0, maxRecords: 1, maxRequests: 1 };
+      const runtime = { async resolveCredential() { throw new Error("credentials-must-not-be-resolved"); } };
+      const enqueue = async (f: Awaited<ReturnType<typeof fixture>>) => (await db.insert(sourceAcquisitionJob).values({ clientId: f.tenant.id, sourceConnectionId: f.source.id, operation: f.input.operation, requestJson: f.input.request, idempotencyKey: randomUUID() }).returning())[0];
+      for (const mode of ["missing-plan", "oversized-plan", "currency-mismatch", "unknown-outcome", "cancelled", "bad-output", "retry-success", "unmetered"] as const) {
+        const f = await fixture();
+        const job = await enqueue(f);
+        await setAcquisitionBudget(f.tenant.slug, { ...settings, dailyRequests: mode === "retry-success" ? 2 : 1 });
+        const registry = new AcquisitionAdapterRegistry();
+        let calls = 0;
+        registry.register(f.source.connectorId, () => ({ id: f.source.connectorId,
+          ...(mode === "missing-plan" ? {} : { plan: () => ({ ...plan, maxRecords: mode === "oversized-plan" ? 6 : 1, currency: mode === "currency-mismatch" ? "EUR" : "DKK" }) }),
+          async run(domainJob, context) {
+            calls++;
+            if (mode !== "unmetered") context.acquisition!.authorizeRequest({ costMicros: 0, maxRecords: 1 });
+            if (mode === "unknown-outcome" || (mode === "retry-success" && calls === 1)) throw new Error("transient");
+            if (mode === "cancelled") {
+              await cancelAcquisitionJob({ clientId: f.tenant.id, id: job.id, now: new Date() });
+              throw new Error("acquisition-cancelled");
+            }
+            const receipt = { ...f.input.result.receipt, jobId: domainJob.id };
+            // Simulate a transient error while inspecting the already-returned provider output.
+            if (mode === "bad-output") Object.defineProperty(receipt, "estimatedCost", { get() { throw new Error("transient"); } });
+            return { ...f.input.result, receipt };
+          },
+        }));
+        const outcome = await processAcquisitionJob({ databaseJobId: job.id, registry, runtime });
+        assert.equal(outcome, mode === "cancelled" ? "cancelled" : mode === "retry-success" ? "completed" : "failed", mode);
+        const blockedBeforeRun = ["missing-plan", "oversized-plan", "currency-mismatch"].includes(mode);
+        assert.equal(calls, blockedBeforeRun ? 0 : mode === "retry-success" ? 2 : 1, mode);
+        const count = blockedBeforeRun ? "0" : mode === "retry-success" ? "2" : "1";
+        assert.equal((await inspectAcquisitionBudget(f.tenant.slug)).usage.authorizedRequests, count, mode);
+        assert.equal(await processAcquisitionJob({ databaseJobId: job.id, registry, runtime }), "already-claimed");
+      }
+      const stale = await fixture();
+      await setAcquisitionBudget(stale.tenant.slug, { ...settings, dailyRequests: 2 });
+      const running = await queued(stale);
+      await authorizeAcquisitionAttempt({ clientId: stale.tenant.id, jobId: running.id, attempt: 1, plan });
+      await assert.rejects(authorizeAcquisitionAttempt({ clientId: stale.tenant.id, jobId: running.id, attempt: 1, plan }), /budget-attempt-already-authorized/);
+      await reconcileStaleAcquisitions(new Date(Date.now() + 21 * 60_000));
+      assert.equal((await inspectAcquisitionBudget(stale.tenant.slug)).usage.authorizedRequests, "1");
+      const revoked = await queued(stale);
+      await revokeSourceConnection({ clientId: stale.tenant.id, id: stale.source.id, now: new Date() });
+      await assert.rejects(authorizeAcquisitionAttempt({ clientId: stale.tenant.id, jobId: revoked.id, attempt: 1, plan }), /cancelled|source-unavailable/);
+      assert.equal((await db.select().from(acquisitionAuthorization).where(eq(acquisitionAuthorization.clientId, stale.tenant.id))).length, 1);
     });
   } finally {
     await probe.end();

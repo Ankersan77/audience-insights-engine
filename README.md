@@ -86,6 +86,12 @@ failed before evidence is persisted. Administrators can revoke a source from `/w
 cancels active work, blocks future collection and immediately sends its retained material through
 the canonical tombstoning flow.
 
+Queued connectors additionally require an explicitly enabled client acquisition budget and an
+adapter preflight plan. `npm run budget -- show --client CLIENT_SLUG` shows the policy and today's
+conservatively authorized upper bounds; configuration is an operator-only action described in
+`docs/operations-runbook.md`. Migration `0014` adds the authorization ledger without enabling any
+budget. No paid source is activated by migrating or starting the worker.
+
 Successful aggregate and public-conversation adapters persist normalized observations/themes with
 their canonical evidence. Monitoring uses comparable aggregate observations, one latest historical
 baseline per source, explicit corroboration/materiality/freshness/risk gates, and an auditable

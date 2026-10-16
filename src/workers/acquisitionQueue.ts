@@ -1,8 +1,10 @@
 import { PgBoss, type Job } from "pg-boss";
 import type { AdapterRuntimeContext } from "@/src/connectors/contracts";
-import { claimAcquisitionJob, isAcquisitionCancelled, listQueuedAcquisitionJobIds, listStaleRunningAcquisitions, type ClaimedAcquisition } from "@/src/db/queries/acquisition_execution";
+import { claimAcquisitionJob, cancelAcquisitionJob, isAcquisitionCancelled, listQueuedAcquisitionJobIds, listStaleRunningAcquisitions, type ClaimedAcquisition } from "@/src/db/queries/acquisition_execution";
 import { completeExistingAcquisition, failExistingAcquisition } from "@/src/db/queries/canonical_evidence";
-import { AcquisitionAdapterRegistry, runRegisteredAdapter } from "@/src/evidence/registry";
+import { AcquisitionAdapterRegistry } from "@/src/evidence/registry";
+import { authorizeAcquisitionAttempt } from "@/src/db/queries/acquisition_budget";
+import { createAcquisitionRequestGate, validatePlanAgainstSource, type AcquisitionRequestGate } from "@/src/evidence/acquisitionBudget";
 import { acquisitionLimitFailure } from "@/src/connectors/sourcePolicy";
 import { classifyAcquisitionError } from "@/src/evidence/executionPolicy";
 import { logEvent } from "@/src/lib/metrics";
@@ -50,14 +52,29 @@ export async function processAcquisitionJob(input: {
   let lastError: unknown;
   try {
     for (let attempt = 1; attempt <= RETRY_POLICY.maximumAttempts; attempt += 1) {
+      let providerReturned = false;
+      let acquisition: AcquisitionRequestGate | undefined;
       try {
-      const result = await runRegisteredAdapter({
-        registry: input.registry,
-        factoryContext: { connectorId: claimed.connectorId, connectorVersion: claimed.connectorVersion, sourceClass: claimed.sourceClass, configuration: claimed.configuration },
-        job: claimed.job,
-        runtime: { now: now.toISOString(), signal: abortController.signal, resolveCredential: (reference) => input.runtime.resolveCredential(reference) },
-        policy: { minimumCohortSize: Number(process.env.MINIMUM_COHORT_SIZE ?? 10), retainedEvidenceDays: claimed.retentionDays, allowVerbatim: false, sensitiveTerms: [] },
-      });
+      const adapter = input.registry.resolve({ connectorId: claimed.connectorId, connectorVersion: claimed.connectorVersion, sourceClass: claimed.sourceClass, configuration: claimed.configuration });
+      if (!adapter.plan) throw new Error("budget-plan-required");
+      const proposed = adapter.plan(claimed.job);
+      const plan = Object.freeze({ currency: proposed?.currency, maxCostMicros: proposed?.maxCostMicros, maxRecords: proposed?.maxRecords, maxRequests: proposed?.maxRequests });
+      validatePlanAgainstSource(plan, claimed.policy);
+      if (await isAcquisitionCancelled(claimed.databaseJobId)) abortController.abort();
+      if (abortController.signal.aborted) throw new Error("acquisition-cancelled");
+      const authorization = await authorizeAcquisitionAttempt({ clientId: Number(claimed.job.clientId), jobId: claimed.databaseJobId, attempt, plan });
+      acquisition = createAcquisitionRequestGate(plan, authorization.attemptKey, abortController.signal);
+      const gate = acquisition;
+      const result = await adapter.run(claimed.job,
+        { now: new Date().toISOString(), signal: abortController.signal, acquisition: gate, resolveCredential: (reference) => {
+          gate.assertCredentialAccess();
+          return input.runtime.resolveCredential(reference);
+        } },
+        { minimumCohortSize: Number(process.env.MINIMUM_COHORT_SIZE ?? 10), retainedEvidenceDays: claimed.retentionDays, allowVerbatim: false, sensitiveTerms: [] },
+      );
+      providerReturned = true;
+      gate.assertResult(result.receipt.acquiredCount + result.receipt.rejectedCount);
+      gate.close();
       if (result.evidence.some((item) => item.sourceClass !== claimed.sourceClass)) throw new Error("source-class-mismatch");
       const limitFailure = acquisitionLimitFailure(claimed.policy, result.receipt);
       if (limitFailure) throw new Error(limitFailure);
@@ -66,15 +83,21 @@ export async function processAcquisitionJob(input: {
       logEvent("canonical-acquisition-succeeded", { jobId: claimed.databaseJobId, clientId: claimed.job.clientId, connectorId: claimed.connectorId, acquiredCount: result.receipt.acquiredCount, rejectedCount: result.receipt.rejectedCount, attempt });
       return "completed";
       } catch (error) {
+        acquisition?.close();
         lastError = error;
         const code = classifyAcquisitionError(error);
         if (code === "cancelled" || abortController.signal.aborted) {
+          await cancelAcquisitionJob({ clientId: Number(claimed.job.clientId), id: claimed.databaseJobId, now: new Date() });
           logEvent("canonical-acquisition-cancelled", { jobId: claimed.databaseJobId, connectorId: claimed.connectorId });
           return "cancelled";
         }
-        if (!shouldRetry(RETRY_POLICY, attempt, code)) break;
+        // A persistence/validation failure must never trigger another external acquisition.
+        // An uncertain provider failure retains its entire authorization; a retry needs a new one.
+        if (providerReturned || !shouldRetry(RETRY_POLICY, attempt, code)) break;
         logEvent("canonical-acquisition-retrying", { jobId: claimed.databaseJobId, connectorId: claimed.connectorId, attempt, errorCode: code });
         await wait(retryDelay(RETRY_POLICY, attempt));
+      } finally {
+        acquisition?.close();
       }
     }
   } finally {

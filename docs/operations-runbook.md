@@ -35,8 +35,63 @@ reviewed source configuration; revocation is not toggled away casually.
 Manual uploads and worker results recheck the current source policy inside the persistence
 transaction. Claims, completion and failures lock the source before the job, matching revocation's
 lock order. Cancellation locks the job; a late completion cannot overwrite its terminal state.
-Receipt quota counts accepted plus rejected records. Receipt cost validation is a post-acquisition
-check, not a guarantee that provider spend was prevented; shared budget reservation remains open.
+Receipt quota counts accepted plus rejected records. Receipt cost validation remains a
+post-acquisition check. Queued workers additionally require the pre-acquisition authorization below;
+in-memory manual uploads do not make external requests and retain their existing source checks.
+
+### Acquisition budget admission
+
+Apply migration `0014` before restarting workers. All clients initially have **no acquisition
+budget**, so queued adapters cannot execute until an operator supplies one. Do not invent a paid
+allowance while onboarding a client. The CLI requires an existing client and `DATABASE_URL`:
+
+```sh
+npm run budget -- show --client CLIENT_SLUG
+# Explicit example: only zero-cost requests, at most 100 records/10 requests per UTC day.
+# Replace CLIENT_SLUG only after the client approves this allowance.
+npm run budget -- set --client CLIENT_SLUG --currency DKK --daily-cost-micros 0 --daily-records 100 --daily-requests 10 --enabled true
+```
+
+`set` requires every field; use `--enabled false` with the current limits to stop new admissions.
+Changes are audited. They neither reset today's usage nor revoke an already-issued authorization.
+For an active run, cancel its job/revoke its source as appropriate; cancellation is cooperative and
+cannot undo a provider request already sent. The CLI does not expose secrets or source payloads.
+
+Cost is an integer number of micro-units (1,000,000 = one declared currency unit). Currency is fixed
+after the first authorization: changing it requires a deliberate ledger migration, never an
+implicit FX conversion or fresh allowance. Record and request counts are nonnegative safe integers.
+Each synchronous, credential-free adapter `plan(job)` declares `currency`, `maxCostMicros`,
+`maxRecords` and `maxRequests`. Missing/invalid plans, disabled budgets, currency mismatches,
+source-policy violations and exceeded daily bounds fail before `run()`/credential access.
+
+The database serializes admission across every source for a client, then rechecks current source
+rights and the running job. The ledger uses the **UTC admission day**, not provider billing day.
+Each attempt permanently consumes its full declared upper bounds for that day, even when it fails,
+is cancelled, expires, produces fewer records or costs less. An uncertain outcome is never assumed
+free. Each worker retry needs a new authorization; an already-used authorization is never replayed.
+Provider success followed by output validation or persistence failure does not trigger reacquisition.
+Budget edits retain all authorizations; raising a limit is a new explicit spending decision.
+
+Before **every** network request, including pagination and provider-internal retries, an approved
+adapter must call `context.acquisition.authorizeRequest({costMicros, maxRecords})` with defensible
+upper bounds, then perform only that bounded request. Use `attemptKey` plus a page/request suffix
+for provider idempotency where supported. Credentials require at least one request authorization.
+The request gate rejects excess requests/cost/records, closes at completion/failure and checks
+cancellation. Do not spawn detached acquisition work. Factories/planning must never perform I/O.
+This is a trusted-code contract, **not a network sandbox**: acceptance must demonstrate that a real
+adapter meters every request and that provider limits/pricing support its claimed upper bound.
+No such live adapter is activated by this change. Unknown/unbounded charges must be rejected.
+
+The old source `costLimit` has no declared currency. It is not silently interpreted as money:
+any paid plan with that field present is rejected. A free plan can use a zero source cost limit
+with a zero-cost receipt. A paid source requires deliberate removal/migration of the ambiguous
+legacy field and explicit currency-budget approval, followed by provider acceptance. Source record
+quota is checked against the preflight bound and again against the returned receipt.
+
+The ledger is an authorization ceiling, not measured spend. It must survive backup/restore and must
+not be deleted to free capacity. Reconciliation/refunds, monthly allowances, provider rate limits,
+live acceptance and an owned-surface budget editor are separate remaining work; do not claim that
+this CLI or synthetic tests demonstrate those capabilities.
 
 Run `TEST_DATABASE_URL=... pnpm test:integration` against a dedicated database whose name ends in
 `_test`. The suite applies migrations and creates synthetic tenants without truncating tables.

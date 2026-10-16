@@ -4,6 +4,7 @@ import {
   serial,
   text,
   integer,
+  bigint,
   boolean,
   real,
   timestamp,
@@ -435,6 +436,35 @@ export const sourceAcquisitionJob = pgTable("source_acquisition_job", {
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
 }, (table) => [
   unique("source_acquisition_job_client_idempotency_unique").on(table.clientId, table.idempotencyKey),
+  unique("source_acquisition_job_client_id_unique").on(table.clientId, table.id),
+]);
+
+export const acquisitionBudget = pgTable("acquisition_budget", {
+  clientId: integer("client_id").primaryKey().references(() => client.id, { onDelete: "restrict" }),
+  currency: text("currency").notNull(),
+  dailyCostMicros: bigint("daily_cost_micros", { mode: "number" }).notNull(),
+  dailyRecords: bigint("daily_records", { mode: "number" }).notNull(),
+  dailyRequests: bigint("daily_requests", { mode: "number" }).notNull(),
+  enabled: boolean("enabled").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Conservative authorization ledger: bounds are never refunded automatically,
+// even after cancellation, a crash or a successful run costing less than its bound.
+export const acquisitionAuthorization = pgTable("acquisition_authorization", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => client.id, { onDelete: "restrict" }),
+  jobId: integer("job_id").notNull(),
+  attempt: integer("attempt").notNull(),
+  currency: text("currency").notNull(),
+  maxCostMicros: bigint("max_cost_micros", { mode: "number" }).notNull(),
+  maxRecords: bigint("max_records", { mode: "number" }).notNull(),
+  maxRequests: bigint("max_requests", { mode: "number" }).notNull(),
+  authorizedAt: timestamp("authorized_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  unique("acquisition_authorization_job_attempt_unique").on(table.jobId, table.attempt),
+  foreignKey({ columns: [table.clientId, table.jobId], foreignColumns: [sourceAcquisitionJob.clientId, sourceAcquisitionJob.id] }),
+  index("acquisition_authorization_client_time_idx").on(table.clientId, table.authorizedAt),
 ]);
 
 export const sourceAcquisitionReceipt = pgTable("source_acquisition_receipt", {

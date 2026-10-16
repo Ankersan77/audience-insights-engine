@@ -1,10 +1,12 @@
 import type { EvidenceItem, QualitativeTheme, QuantitativeObservation } from "../core/contracts.ts";
 import type { SourceAcquisitionJob, SourceAcquisitionReceipt } from "../connectors/contracts.ts";
 import { assertPeopleBlind, retainEvidence, type EvidenceCandidate, type EvidencePolicy } from "./policy.ts";
+import type { AcquisitionRequestGate } from "./acquisitionBudget.ts";
 
 export type AdapterRunContext = {
   now: string;
   signal?: AbortSignal;
+  acquisition?: AcquisitionRequestGate;
   resolveCredential(reference: { provider: string; key: string }): Promise<string>;
 };
 

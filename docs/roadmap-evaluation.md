@@ -114,9 +114,16 @@ evidence, not a substitute for the open external gates below.
   evidence prevents acceptance. The packets deliberately index existing evidence and work; they
   do not yet provide expert narrative synthesis. Urgent alert delivery, late-evidence revision
   workflows and live shadow-mode quality proof remain open.
-- Quota and cost checks currently validate returned receipts. They do not reserve a shared
-  budget or prevent provider spend before collection. Provider cost units, preflight budgets,
-  pagination and quota accounting still need a defined and exercised execution contract.
+- Queued acquisition now requires an explicit operator-enabled, client-wide daily budget and a
+  synchronous adapter upper-bound plan before execution/credential access. Currency-tagged integer
+  micro-units, records and requests are authorized atomically across sources; each retry needs a
+  fresh durable authorization. Bounds remain charged on success, cancellation and unknown outcomes,
+  so this is conservative admission accounting, not a provider invoice. Per-request gates bound
+  pagination; legacy currency-less source cost limits cannot authorize paid plans. PostgreSQL
+  tests exercise concurrency, tenant isolation, retries and non-refund behavior. Live adapters must
+  still demonstrate compliant request metering and provider-enforced bounds; operator-budget UI,
+  measured-cost reconciliation and provider acceptance remain open. Local in-memory uploads do not
+  call a provider and remain subject to the existing source/receipt checks.
 - The PostgreSQL suite now exercises actual authenticated HTTP briefing reads/reviews and the
   server-rendered Market Pulse with real server sessions for synthetic identities. This does not exercise external
   OIDC login or interactive browser flows; broader product and browser verification remains open.
