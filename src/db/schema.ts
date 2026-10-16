@@ -592,6 +592,7 @@ export const researchArtifact = pgTable("research_artifact", {
   clientId: integer("client_id")
     .notNull()
     .references(() => client.id, { onDelete: "restrict" }),
+  artifactKey: text("artifact_key").notNull(),
   artifactType: text("artifact_type").notNull(),
   abilityKey: text("ability_key"),
   abilityVersion: text("ability_version"),
@@ -601,7 +602,7 @@ export const researchArtifact = pgTable("research_artifact", {
   evidenceIds: integer("evidence_ids").array().notNull().default(sql`'{}'::integer[]`),
   createdBy: integer("created_by").references(() => appUser.id, { onDelete: "restrict" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [unique("research_artifact_client_type_version_unique").on(table.clientId, table.artifactType, table.version)]);
+}, (table) => [unique("research_artifact_client_key_version_unique").on(table.clientId, table.artifactKey, table.version)]);
 
 export const campaign = pgTable("campaign", {
   id: serial("id").primaryKey(),
@@ -640,6 +641,8 @@ export const measurementPlan = pgTable("measurement_plan", {
   version: integer("version").notNull(),
   planJson: jsonb("plan_json").notNull(),
   reviewState: reviewStateEnum("review_state").notNull().default("pending"),
+  reviewedBy: integer("reviewed_by").references(() => appUser.id, { onDelete: "restrict" }),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [unique("measurement_plan_campaign_version_unique").on(table.campaignId, table.version)]);
 
@@ -656,6 +659,8 @@ export const study = pgTable("study", {
   resultJson: jsonb("result_json"),
   integrityState: text("integrity_state").notNull().default("unverified"),
   reviewState: reviewStateEnum("review_state").notNull().default("pending"),
+  reviewedBy: integer("reviewed_by").references(() => appUser.id, { onDelete: "restrict" }),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

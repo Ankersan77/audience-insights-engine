@@ -14,6 +14,7 @@ export type ProposedAnalysis = {
   evidenceIds: readonly string[];
   contradictions: readonly string[];
   uncertainty: readonly string[];
+  causalBasis?: { studyId: string; classification: "causal"; reviewed: true };
 };
 
 const CAUSAL_LANGUAGE = /\b(caused?|drove|led to|resulted in|incremental lift|because of)\b/i;
@@ -53,14 +54,24 @@ export function runAbility(input: {
   });
   const selectedIds = new Set(resolution.selected.map((item) => item.id));
   const analysisEvidenceMissing = input.analysis?.evidenceIds.some((id) => !selectedIds.has(id)) ?? false;
+  const analysisIncomplete = Boolean(input.analysis) && [
+    input.analysis!.pointOfView,
+    input.analysis!.clientRelevance,
+    input.analysis!.recommendation,
+    input.analysis!.nextDecision,
+  ].some((value) => !value.trim());
+  const unsupportedCausalMode = input.analysis?.claimMode === "causal" &&
+    input.analysis.causalBasis?.classification !== "causal";
   const causalViolation = input.analysis?.claimMode !== "causal" && CAUSAL_LANGUAGE.test(input.analysis?.pointOfView ?? "");
-  const status = !resolution.sufficient || !input.analysis || analysisEvidenceMissing || causalViolation
+  const status = !resolution.sufficient || !input.analysis || analysisEvidenceMissing || analysisIncomplete || unsupportedCausalMode || causalViolation
     ? "needs_context"
     : "ready";
   const gaps = [
     ...resolution.gaps,
     ...(!input.analysis ? ["No evidence-backed analysis has been supplied."] : []),
     ...(analysisEvidenceMissing ? ["The proposed analysis cites evidence that did not pass selection."] : []),
+    ...(analysisIncomplete ? ["Point of view, client relevance, recommendation, and next decision are all required."] : []),
+    ...(unsupportedCausalMode ? ["Causal mode requires a reviewed causal study classification."] : []),
     ...(causalViolation ? ["Causal language is not supported by the declared claim mode."] : []),
   ];
   const id = createHash("sha256")

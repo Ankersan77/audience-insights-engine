@@ -113,6 +113,41 @@ test("causal wording is blocked when the declared evidence is descriptive", () =
   assert.ok(brief.researchGaps.some((gap) => /causal language/i.test(gap)));
 });
 
+test("declaring causal mode is insufficient without a reviewed causal study", () => {
+  const items = [
+    item("e1", "official_or_public", "source-a"),
+    item("e2", "official_or_public", "source-b"),
+  ];
+  const brief = runAbility({
+    clientId: "client-a",
+    abilityId: "market-category-diagnosis",
+    question: "Did the campaign cause the change?",
+    evidence: items,
+    now: "2026-10-16T10:00:00.000Z",
+    analysis: {
+      pointOfView: "The campaign caused the observed change.",
+      clientRelevance: "This affects investment.",
+      recommendation: "Scale only after review.",
+      nextDecision: "Review the causal design.",
+      claimMode: "causal",
+      evidenceIds: items.map((item) => item.id),
+      contradictions: [],
+      uncertainty: [],
+    },
+  });
+  assert.equal(brief.status, "needs_context");
+  assert.ok(brief.researchGaps.some((gap) => gap.includes("reviewed causal study")));
+});
+
+test("an incomplete proposed analysis remains needs_context", () => {
+  const items = [item("e1", "official_or_public", "source-a"), item("e2", "official_or_public", "source-b")];
+  const brief = runAbility({
+    clientId: "client-a", abilityId: "market-category-diagnosis", question: "What changed?", evidence: items, now: "2026-10-16T10:00:00.000Z",
+    analysis: { pointOfView: "A change is visible.", clientRelevance: "", recommendation: "", nextDecision: "", claimMode: "descriptive", evidenceIds: items.map((item) => item.id), contradictions: [], uncertainty: [] },
+  });
+  assert.equal(brief.status, "needs_context");
+});
+
 test("audience output keeps attitudes distinct from observed behavior", () => {
   const brief = runAbility({
     clientId: "client-a",

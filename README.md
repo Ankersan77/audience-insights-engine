@@ -53,6 +53,10 @@ Markdown, CSV, JSON, or permitted public-link content into canonical evidence. P
 extraction must be supplied by a verified document adapter; the application never stores the raw
 upload as a substitute for that boundary.
 
+The same owned surface provides reviewed Market Twin records and persistent decision briefs.
+`/campaigns` handles campaign revisions, measurement-plan approval, lifecycle transitions, and
+study classification. Requesting Brand Lift never bypasses the deterministic causal-design gate.
+
 ## Environment variables
 
 Required and optional variables are documented in `.env.example`. Keep real values in local or hosted secret storage; never commit them.

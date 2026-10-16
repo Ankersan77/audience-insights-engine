@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Applicability, EvidenceItem, MethodDeclaration, RightsDeclaration, SourceClass } from "@/src/core/contracts";
 import { validateEvidenceItem } from "@/src/core/validation";
 import { db } from "@/src/db/client";
@@ -61,6 +61,51 @@ export async function listCanonicalEvidence(clientId: number, limit = 50): Promi
     .where(eq(canonicalEvidence.clientId, clientId))
     .orderBy(desc(canonicalEvidence.id))
     .limit(Math.min(Math.max(limit, 1), 200)) as Promise<CanonicalEvidenceListRow[]>;
+}
+
+export async function loadEvidenceItems(clientId: number, evidenceIds?: readonly number[]): Promise<EvidenceItem[]> {
+  const conditions = [eq(canonicalEvidence.clientId, clientId)];
+  if (evidenceIds) {
+    if (evidenceIds.length === 0) return [];
+    conditions.push(inArray(canonicalEvidence.id, [...evidenceIds]));
+  }
+  const rows = await db
+    .select({ evidence: canonicalEvidence, sourceClass: sourceConnection.sourceClass })
+    .from(canonicalEvidence)
+    .innerJoin(
+      sourceConnection,
+      and(
+        eq(sourceConnection.id, canonicalEvidence.sourceConnectionId),
+        eq(sourceConnection.clientId, canonicalEvidence.clientId),
+      ),
+    )
+    .where(and(...conditions));
+  return rows.map(({ evidence: row, sourceClass }) => ({
+    id: String(row.id),
+    clientId: String(row.clientId),
+    collectionId: String(row.collectionId),
+    sourceConnectionId: String(row.sourceConnectionId),
+    sourceClass: sourceClass as SourceClass,
+    externalReference: row.externalReference,
+    sourceUrl: row.safeSourceUrl ?? undefined,
+    sourceContent: row.sourceContent,
+    synthesis: row.synthesis ?? undefined,
+    publishedAt: row.publishedAt?.toISOString(),
+    observedAt: row.observedAt?.toISOString(),
+    ingestedAt: row.ingestedAt.toISOString(),
+    expiresAt: row.expiresAt.toISOString(),
+    lifecycle: row.lifecycle,
+    citationLevel: row.citationLevel,
+    rights: row.rightsJson as RightsDeclaration,
+    method: row.methodJson as MethodDeclaration,
+    applicability: row.applicabilityJson as Applicability,
+    confidence: row.confidence,
+    grade: row.grade as EvidenceItem["grade"],
+    sensitive: row.sensitive,
+    identityRisk: row.identityRisk,
+    redactions: row.redactions,
+    contentHash: row.contentHash,
+  }));
 }
 
 export type PersistAcquisitionInput = {
