@@ -45,9 +45,40 @@ isolated PostgreSQL 16 service. These tests do not certify production backup or 
 
 After building, run `TEST_HTTP=1 TEST_DATABASE_URL=... pnpm test:integration` to exercise the actual
 web server as well. The suite starts a temporary loopback-only production-build process against
-the test database with a synthetic signing key. It verifies briefing authentication, role checks,
+the test database with synthetic identities and real opaque server sessions. It verifies briefing authentication, role checks,
 tenant isolation, review transitions and the server-rendered viewer surface, then stops the
 process. CI runs this variant after the production build. This is not an external OIDC login test.
+
+## Session and membership operations
+
+Apply migration `0013` before deploying this release. Old signed-role session cookies are rejected;
+users must sign in again. New cookies contain a random 256-bit token, never identity or permission
+claims. PostgreSQL retains only its SHA-256 hash, tenant/user reference, creation, absolute
+eight-hour expiry and revocation time. Each request joins the current tenant membership and user;
+role changes take effect on the next request. Already-running actions are not cancelled by this
+check. Deleting membership cascades its sessions, so re-granting access cannot revive old tokens.
+
+OIDC authenticates identity but never creates or restores membership. A trusted operator with
+database access explicitly provisions the provider's exact subject, not a display name or email:
+
+```sh
+pnpm access grant --client CLIENT_SLUG --subject OIDC_SUBJECT --role owner --create-client-name "Client name"
+pnpm access grant --client CLIENT_SLUG --subject OIDC_SUBJECT --role reviewer
+pnpm access revoke --client CLIENT_SLUG --subject OIDC_SUBJECT
+```
+
+The first command creates a tenant only when the explicit name flag is supplied. Subsequent grants
+change the tenant role; revocation removes membership and its sessions, not research data. Each
+changed grant/revoke is audited atomically as an operator action. The CLI reads `DATABASE_URL`
+from the environment or `.env.local`; verify the deployment target before running it. No user
+or membership is automatically provisioned by a login. Re-granting requires an explicit command.
+
+Use HTTPS, a strong `SESSION_SECRET` of at least 32 characters for ten-minute OIDC flow cookies,
+and `APP_ORIGIN` set to the public web origin. A hosting proxy must sanitize Host/forwarded headers.
+Cookie-authenticated API writes without the matching Origin are rejected, including logout. The
+owned UI signs out via POST, which revokes the stored token before clearing the browser cookie.
+The canonical worker removes expired/revoked session rows, but enforcement does not depend on
+worker availability. Never log token values, flow cookies or provider error payloads.
 
 ## Scheduled review packets
 

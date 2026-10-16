@@ -4,6 +4,7 @@ import { logEvent } from "@/src/lib/metrics";
 import { dispatchQueuedAcquisitions, reconcileStaleAcquisitions } from "@/src/workers/acquisitionQueue";
 import { enforceCanonicalRetention } from "@/src/db/queries/retention";
 import { generateDueBriefings } from "@/src/db/queries/briefings";
+import { purgeAuthSessions } from "@/src/db/queries/auth_sessions";
 
 export const MONITORING_SCHEDULER_QUEUE = "market-research-monitoring-scheduler";
 
@@ -16,6 +17,7 @@ export async function startCanonicalScheduler(boss: PgBoss): Promise<void> {
   });
   await boss.schedule(MONITORING_SCHEDULER_QUEUE, "*/15 * * * *", null, { tz: "UTC" });
   await boss.work(MONITORING_SCHEDULER_QUEUE, async () => {
+    const expiredSessionsRemoved = await purgeAuthSessions();
     const retention = await enforceCanonicalRetention();
     const schedule = await enqueueDueMonitoringRuns();
     const reconciled = await reconcileMonitoringRuns();
@@ -23,7 +25,7 @@ export async function startCanonicalScheduler(boss: PgBoss): Promise<void> {
     const briefings = await generateDueBriefings();
     const staleAcquisitions = await reconcileStaleAcquisitions();
     const dispatched = await dispatchQueuedAcquisitions(boss);
-    logEvent("canonical-monitoring-scheduler", { retention, ...schedule, reconciled, qualified, briefings, staleAcquisitions, dispatched });
+    logEvent("canonical-monitoring-scheduler", { retention, ...schedule, reconciled, qualified, briefings, staleAcquisitions, dispatched, expiredSessionsRemoved });
   });
 }
 

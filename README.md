@@ -106,6 +106,15 @@ The minimum application setup requires:
 - `ONELOGIN_CLIENT_ID`
 - `ONELOGIN_CLIENT_SECRET`
 
+Before sign-in, explicitly provision the exact OIDC subject into the configured client using
+`pnpm access grant --client CLIENT_SLUG --subject OIDC_SUBJECT --role ROLE` (see the operations
+runbook for first-client creation and revocation). Identity-provider groups no longer automatically
+grant or restore membership. `APP_ORIGIN` should pin the public origin in production.
+
+Sessions use random opaque cookies backed by hashed database tokens with an eight-hour server-side
+expiry. Permissions are read from current membership on every request, and logout revokes the
+token. Upgrading to this release invalidates older signed-role cookies and requires sign-in again.
+
 New connectors must use opaque credential references and the provider-neutral contracts in the
 blueprint.
 

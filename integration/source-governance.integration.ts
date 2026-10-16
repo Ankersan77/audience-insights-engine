@@ -4,11 +4,12 @@ import test from "node:test";
 import { Pool } from "pg";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { and, eq } from "drizzle-orm";
-import { appUser, client, canonicalEvidence, researchProject, intelligenceRecord, monitoringRun, solutionProfile, sourceConnection, sourceAcquisitionJob, sourceAcquisitionReceipt, governanceAudit } from "../src/db/schema";
+import { appUser, authSession, client, clientMembership, canonicalEvidence, researchProject, intelligenceRecord, monitoringRun, solutionProfile, sourceConnection, sourceAcquisitionJob, sourceAcquisitionReceipt, governanceAudit } from "../src/db/schema";
 import { PublicWebEvidenceAdapter } from "../src/evidence/adapters";
 import type { SourceConnectionPolicy } from "../src/core/contracts";
 import { dueBriefingWindows } from "../src/monitoring/briefings";
 import { startTestHttpServer } from "./http-server";
+import { newSessionToken, sessionTokenHash, SESSION_MAX_AGE_SECONDS } from "../src/lib/authTokens";
 
 // Refuse accidental execution against the application's database. No tables are
 // truncated: each test creates uniquely named, synthetic tenant/source fixtures.
@@ -27,6 +28,8 @@ const { saveDecisionBrief } = await import("../src/db/queries/workspace_intellig
 const { runContextualResearch } = await import("../src/abilities/synthesis");
 const { createActiveSensingProfile } = await import("../src/db/queries/monitoring");
 const { generateDueBriefings, listPeriodicBriefings, reviewPeriodicBriefing } = await import("../src/db/queries/briefings");
+const { createAuthSession, resolveAuthSession, revokeAuthSession, purgeAuthSessions, resolveProvisionedIdentity } = await import("../src/db/queries/auth_sessions");
+const { setClientAccess } = await import("../src/db/queries/client_access");
 const probe = new Pool({ connectionString: url });
 const rights = { basis: "public_permitted" as const, commercialUse: true, quotationAllowed: false, restrictions: [] };
 const policy: SourceConnectionPolicy = {
@@ -222,16 +225,19 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       const reviewInput = { clientId: f.tenant.id, id: packet.id, reviewerUserId: user.id, decision: "accepted" as const, now };
       assert.equal(await reviewPeriodicBriefing({ ...reviewInput, clientId: other.tenant.id }), false);
 
-      // Opt-in HTTP proof uses the built application with a synthetic signing key and test DB only.
+      // Opt-in HTTP proof uses real opaque sessions against the isolated test database.
       if (process.env.TEST_HTTP === "1") {
         const server = await startTestHttpServer(url!);
         try {
-          const session = { id: user.id, clientId: f.tenant.id, clientSlug: f.tenant.slug, name: user.name, email: user.email, role: "reviewer", ssoSubjectId: user.ssoSubjectId };
+          await db.insert(clientMembership).values([{ userId: user.id, clientId: f.tenant.id, role: "reviewer" }, { userId: user.id, clientId: other.tenant.id, role: "reviewer" }]);
+          const session = await createAuthSession(user.id, f.tenant.id);
           assert.equal((await server.request("/api/monitoring/briefings")).status, 401);
-          const viewer = { ...session, role: "viewer" };
+          const viewerIdentity = await setClientAccess({ action: "grant", clientSlug: f.tenant.slug, subject: randomUUID(), role: "viewer" });
+          const viewer = await createAuthSession(viewerIdentity.userId!, f.tenant.id);
           assert.equal((await server.request(`/api/monitoring/briefings/${packet.id}/review`, viewer, { decision: "accepted" })).status, 403);
           assert.equal((await server.request("/api/monitoring/briefings/settings", session, { profileId: configured.databaseId, cadences: [] })).status, 403);
-          assert.equal((await server.request(`/api/monitoring/briefings/${packet.id}/review`, { ...session, clientId: other.tenant.id, clientSlug: other.tenant.slug }, { decision: "accepted" })).status, 404);
+          const otherSession = await createAuthSession(user.id, other.tenant.id);
+          assert.equal((await server.request(`/api/monitoring/briefings/${packet.id}/review`, otherSession, { decision: "accepted" })).status, 404);
           const listing = await server.request("/api/monitoring/briefings", viewer);
           assert.equal(listing.status, 200);
           assert.equal((await listing.json()).briefings.length, 1);
@@ -262,6 +268,64 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       await createActiveSolutionProfile({ clientId: f.tenant.id, createdBy: user.id, expectedActiveId: configured.databaseId, profile: { ...profile, briefingCadences: [] } });
       await assert.rejects(createActiveSolutionProfile({ clientId: f.tenant.id, createdBy: user.id, expectedActiveId: configured.databaseId, profile }), /active-solution-changed/);
       assert.equal((await generateDueBriefings(new Date(later.getTime() + 30 * 86_400_000), f.tenant.id)).created, 0);
+    });
+
+    await t.test("opaque sessions enforce expiry, live permissions, logout and non-reviving membership revocation", async () => {
+      const f = await fixture();
+      const subject = randomUUID();
+      const granted = await setClientAccess({ action: "grant", clientSlug: f.tenant.slug, subject, role: "reviewer" });
+      const userId = granted.userId!;
+      const now = new Date();
+      const token = await createAuthSession(userId, f.tenant.id, now);
+      assert.equal((await resolveAuthSession(token, now))?.role, "reviewer");
+      assert.equal(await resolveAuthSession(token, new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000)), null);
+      assert.equal(await resolveAuthSession(token, new Date(now.getTime() - 1)), null);
+      assert.equal(await resolveAuthSession(newSessionToken(), now), null);
+      const [stored] = await db.select().from(authSession).where(eq(authSession.tokenHash, sessionTokenHash(token)!));
+      assert.ok(stored);
+      assert.ok(!JSON.stringify(stored).includes(token));
+      const identity = { subject, clientSlug: f.tenant.slug, name: "Synthetic operator", email: "operator@example.invalid" };
+      assert.equal((await resolveProvisionedIdentity(identity)).role, "reviewer");
+      await assert.rejects(resolveProvisionedIdentity({ ...identity, subject: randomUUID() }), /client-access-denied/);
+      await setClientAccess({ action: "grant", clientSlug: f.tenant.slug, subject, role: "viewer" });
+      assert.equal((await resolveAuthSession(token))?.role, "viewer");
+      await setClientAccess({ action: "revoke", clientSlug: f.tenant.slug, subject });
+      assert.equal(await resolveAuthSession(token), null);
+      await assert.rejects(resolveProvisionedIdentity(identity), /client-access-denied/);
+      await assert.rejects(createAuthSession(userId, f.tenant.id), /client-access-denied/);
+      await setClientAccess({ action: "grant", clientSlug: f.tenant.slug, subject, role: "reviewer" });
+      assert.equal(await resolveAuthSession(token), null);
+      const active = await createAuthSession(userId, f.tenant.id);
+      const expired = await createAuthSession(userId, f.tenant.id, new Date(Date.now() - (SESSION_MAX_AGE_SECONDS + 1) * 1000));
+      const future = await createAuthSession(userId, f.tenant.id, new Date(Date.now() + 60_000));
+      if (process.env.TEST_HTTP === "1") {
+        const server = await startTestHttpServer(url!);
+        try {
+          for (const invalid of [expired, future, token, newSessionToken(), "legacy.signed.payload", active + ".extra"]) assert.equal((await server.request("/api/monitoring/briefings", invalid)).status, 401);
+          assert.equal((await server.request("/api/monitoring/briefings", active)).status, 200);
+          assert.equal((await server.request("/api/monitoring/briefings/999999999/review", active, { decision: "accepted" })).status, 404);
+          await setClientAccess({ action: "grant", clientSlug: f.tenant.slug, subject, role: "viewer" });
+          assert.equal((await server.request("/api/monitoring/briefings/999999999/review", active, { decision: "accepted" })).status, 403);
+          for (const origin of [null, "https://foreign.example", "null"]) assert.equal((await server.request("/api/auth/logout", active, {}, origin)).status, 403);
+          assert.equal((await server.request("/api/auth/logout", active)).status, 405);
+          assert.equal((await server.request("/api/monitoring/briefings", active)).status, 200);
+          const logout = await server.request("/api/auth/logout", active, {});
+          assert.equal(logout.status, 303);
+          assert.match(logout.headers.get("set-cookie") ?? "", /market_research_session=;/);
+          assert.equal((await server.request("/api/monitoring/briefings", active)).status, 401);
+          const revoked = await createAuthSession(userId, f.tenant.id);
+          await setClientAccess({ action: "revoke", clientSlug: f.tenant.slug, subject });
+          assert.equal((await server.request("/api/monitoring/briefings", revoked)).status, 401);
+          await setClientAccess({ action: "grant", clientSlug: f.tenant.slug, subject, role: "reviewer" });
+          assert.equal((await server.request("/api/monitoring/briefings", revoked)).status, 401);
+          assert.equal((await server.request("/api/auth/callback?code=synthetic-invalid-code")).status, 403);
+        } finally { await server.stop(); }
+      } else {
+        await revokeAuthSession(active);
+        assert.equal(await resolveAuthSession(active), null);
+      }
+      await purgeAuthSessions(new Date(Date.now() + (SESSION_MAX_AGE_SECONDS + 120) * 1000));
+      assert.equal((await db.select().from(authSession).where(eq(authSession.userId, userId))).length, 0);
     });
   } finally {
     await probe.end();

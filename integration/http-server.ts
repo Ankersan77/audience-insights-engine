@@ -1,4 +1,3 @@
-import { createHmac } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { access } from "node:fs/promises";
@@ -15,7 +14,7 @@ export async function startTestHttpServer(databaseUrl: string) {
   await new Promise<void>((resolve, reject) => allocator.close((error) => error ? reject(error) : resolve()));
   const secret = "synthetic-http-integration-signing-key-not-for-production";
   const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", String(port)], {
-    env: { ...process.env, NODE_ENV: "production", DATABASE_URL: databaseUrl, SESSION_SECRET: secret }, stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, NODE_ENV: "production", DATABASE_URL: databaseUrl, SESSION_SECRET: secret, APP_ORIGIN: `http://127.0.0.1:${port}` }, stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";
   child.stdout.on("data", (chunk) => { output = (output + chunk.toString()).slice(-4000); });
@@ -39,14 +38,11 @@ export async function startTestHttpServer(databaseUrl: string) {
   } catch (error) { await stop(); throw error; }
   return {
     stop,
-    async request(path: string, session?: Record<string, unknown>, body?: unknown) {
+    async request(path: string, token?: string, body?: unknown, origin: string | null = base) {
       const headers = new Headers();
-      if (session) {
-        const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
-        const signature = createHmac("sha256", secret).update(payload).digest("base64url");
-        headers.set("cookie", `market_research_session=${payload}.${signature}`);
-      }
+      if (token) headers.set("cookie", `market_research_session=${token}`);
       if (body !== undefined) headers.set("content-type", "application/json");
+      if (body !== undefined && origin !== null) headers.set("origin", origin);
       return fetch(`${base}${path}`, { method: body === undefined ? "GET" : "POST", headers, body: body === undefined ? undefined : JSON.stringify(body), redirect: "manual", signal: AbortSignal.timeout(20_000) });
     },
   };

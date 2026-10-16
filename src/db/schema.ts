@@ -12,6 +12,7 @@ import {
   unique,
   uniqueIndex,
   index,
+  foreignKey,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -137,6 +138,19 @@ export const clientMembership = pgTable("client_membership", {
   role: text("role").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [primaryKey({ columns: [table.clientId, table.userId] })]);
+
+export const authSession = pgTable("auth_session", {
+  tokenHash: text("token_hash").primaryKey(),
+  clientId: integer("client_id").notNull(),
+  userId: integer("user_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+}, (table) => [
+  foreignKey({ columns: [table.clientId, table.userId], foreignColumns: [clientMembership.clientId, clientMembership.userId] }).onDelete("cascade"),
+  index("auth_session_expiry_idx").on(table.expiresAt),
+  index("auth_session_membership_idx").on(table.clientId, table.userId),
+]);
 
 export const solutionProfile = pgTable("solution_profile", {
   id: serial("id").primaryKey(),

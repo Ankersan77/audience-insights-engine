@@ -94,6 +94,9 @@ dedicated PostgreSQL integration coverage in `integration/source-governance.inte
 Scheduled review packets now persist and support owned-surface review; narrative synthesis, urgent
 alert delivery and explicit late-evidence revisions are still open. Briefing HTTP authorization
 and viewer server rendering are covered with synthetic sessions; this is not a full browser pilot.
+Session hardening now uses server-side expiry/revocation, current tenant permissions, explicit
+operator provisioning and same-origin write checks. The external OIDC/deployment login proof is
+still required; migration `0013` forces older signed-role cookies through sign-in again.
 
 ## Phase 0 — Product reset and legacy isolation
 

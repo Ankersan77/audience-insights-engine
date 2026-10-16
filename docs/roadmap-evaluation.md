@@ -118,10 +118,15 @@ evidence, not a substitute for the open external gates below.
   budget or prevent provider spend before collection. Provider cost units, preflight budgets,
   pagination and quota accounting still need a defined and exercised execution contract.
 - The PostgreSQL suite now exercises actual authenticated HTTP briefing reads/reviews and the
-  server-rendered Market Pulse with synthetic signed sessions. This does not exercise external
+  server-rendered Market Pulse with real server sessions for synthetic identities. This does not exercise external
   OIDC login or interactive browser flows; broader product and browser verification remains open.
-- Session cookies currently rely on browser expiry and a signed role snapshot. Server-side
-  session expiry, membership changes and revocation need enforcement and adversarial HTTP proof.
+- Sessions now use random opaque tokens stored only as hashes, with server-enforced expiry and
+  revocation, current membership/role resolution on every request and cascading invalidation when
+  membership is removed. Explicit operator provisioning replaces automatic OIDC role grants.
+  OIDC flow cookies have independently enforced expiry; login return paths are local-only.
+  Cookie-authenticated API writes require the owned origin, and logout is a revoking POST rather
+  than a prefetchable GET. Adversarial database/HTTP tests cover these boundaries. External OIDC,
+  deployment-proxy configuration and the complete browser login flow remain unverified.
 
 These are implementation gaps, additional to the external validation register. They may not be
 closed merely by naming an adapter, adding a manifest or passing the existing unit suite.

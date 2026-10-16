@@ -34,12 +34,9 @@ function UserBadge({ user }: { user: AppShellUser }) {
         <span className="text-xs text-muted capitalize">{user.role}</span>
         {user.clientSlug ? <span className="text-xs text-muted">{user.clientSlug}</span> : null}
       </span>
-      <Link
-        href="/api/auth/logout"
-        className="ml-2 text-xs text-muted underline-offset-2 hover:text-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
-      >
-        Sign out
-      </Link>
+      <form action="/api/auth/logout" method="post">
+        <button className="ml-2 text-xs text-muted underline-offset-2 hover:text-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]">Sign out</button>
+      </form>
     </div>
   );
 }
