@@ -6,6 +6,11 @@ This register separates implemented product controls from evidence that only a c
 owner, qualified reviewer, or production operator can supply. An empty evidence field means the
 gate is open. It must not be inferred from a passing automated test.
 
+These rows are the bootstrap requirements. Per-client runtime state is recorded in the owned
+`/evaluation` surface and `external_validation_gate` table. A verified research, Brand Lift,
+monitoring, or production-operations gate additionally requires a passing scorecard of the matching
+type. Expired evidence automatically presents as `needs_context`.
+
 | Gate | Required evidence | Owner | Status | Evidence reference |
 | --- | --- | --- | --- | --- |
 | Pilot scope | Named client or approved representative dataset and signed source inventory | Unassigned | `needs_context` | — |

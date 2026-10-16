@@ -11,6 +11,8 @@ import { listDecisionBriefs, listIntelligenceRecords } from "@/src/db/queries/wo
 import { MarketTwin } from "./MarketTwin";
 import { DecisionBriefs } from "./DecisionBriefs";
 import { canResearch, canReview, isAdmin } from "@/src/lib/roles";
+import { listValidationGates } from "@/src/db/queries/evaluation";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -24,25 +26,18 @@ const REPOSITORY_CAPABILITIES = [
   ["Packaging", "Redacted solution profiles, version pins, idempotency and bounded failure handling"],
 ] as const;
 
-const EXTERNAL_GATES = [
-  "Pilot client or approved representative dataset",
-  "Permissions for each live source",
-  "Approved cohort, suppression and retention settings",
-  "Live connector credentials and provider acceptance tests",
-  "Named market-research reviewer",
-  "Named Brand Lift methodology reviewer",
-  "Production deployment owner and timed restore exercise",
-] as const;
-
 export default async function WorkspacePage() {
   const session = await requireSession("/workspace");
-  const [readiness, sources, evidence, intelligence, briefs] = await Promise.all([
+  const [readiness, sources, evidence, intelligence, briefs, validationGates] = await Promise.all([
     getWorkspaceReadiness(session.clientId),
     listSourceConnections(session.clientId),
     listCanonicalEvidence(session.clientId),
     listIntelligenceRecords(session.clientId),
     listDecisionBriefs(session.clientId),
+    listValidationGates(session.clientId),
   ]);
+  const currentVerified = validationGates.filter((gate) => gate.status === "verified" && (!gate.expiresAt || new Date(gate.expiresAt) > new Date())).length;
+  const allExternallyVerified = currentVerified === validationGates.length;
   const readinessItems = [
     ["Sources", readiness.sources],
     ["Evidence", readiness.evidence],
@@ -109,21 +104,22 @@ export default async function WorkspacePage() {
               <h2 className="text-lg font-semibold text-foreground">External validation</h2>
               <p className="mt-1 text-sm text-muted">Required before live-source or production claims.</p>
             </div>
-            <span className="rounded-full bg-[var(--status-warning-bg)] px-2.5 py-1 text-xs font-medium text-[var(--status-warning-text)]">
-              Needs context
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${allExternallyVerified ? "bg-[var(--status-success-bg)] text-[var(--status-success-text)]" : "bg-[var(--status-warning-bg)] text-[var(--status-warning-text)]"}`}>
+              {currentVerified}/{validationGates.length} verified
             </span>
           </div>
           <ul className="mt-4 flex flex-col gap-2">
-            {EXTERNAL_GATES.map((gate) => (
-              <li key={gate} className="flex items-start gap-2 rounded-md border border-border p-3 text-sm text-foreground">
-                <span aria-hidden="true" className="mt-0.5 text-[var(--status-warning-text)]">○</span>
-                <span>{gate}</span>
+            {validationGates.map((gate) => (
+              <li key={gate.key} className="flex items-start gap-2 rounded-md border border-border p-3 text-sm text-foreground">
+                <span aria-hidden="true" className={`mt-0.5 ${gate.status === "verified" ? "text-[var(--status-success-text)]" : "text-[var(--status-warning-text)]"}`}>{gate.status === "verified" ? "●" : "○"}</span>
+                <span><span className="block font-medium">{gate.key.replaceAll("_", " ")}</span><span className="text-xs text-muted">{gate.definition}</span></span>
               </li>
             ))}
           </ul>
           <p className="mt-4 text-xs text-muted">
             Market Research does not convert missing approval, unavailable data, or an unreviewed method into a silent pass.
           </p>
+          <Link href="/evaluation" className="mt-3 inline-block text-sm text-[var(--accent)] underline">Manage quality and validation evidence</Link>
         </section>
       </div>
 

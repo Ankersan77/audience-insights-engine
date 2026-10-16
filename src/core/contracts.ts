@@ -313,3 +313,61 @@ export type SolutionProfile = {
   sensingProfileId?: string;
   createdAt: ISODateTime;
 };
+
+export type EvaluationCaseClass =
+  | "representative"
+  | "sparse_context"
+  | "stale_data"
+  | "conflicting_evidence"
+  | "manipulated_signal"
+  | "small_sample"
+  | "regulated_category"
+  | "multi_market"
+  | "recovery";
+
+export type EvaluationArtifactType = "decision_brief" | "monitoring_signal" | "campaign_assessment" | "study_report" | "recovery_exercise";
+
+export type QualityDimension =
+  | "evidence_accuracy"
+  | "citation_validity"
+  | "type_causality_separation"
+  | "client_relevance"
+  | "contradiction_uncertainty"
+  | "source_quality"
+  | "strategic_value"
+  | "executive_usability"
+  | "method_validity"
+  | "privacy_tenancy"
+  | "alert_quality"
+  | "recoverability"
+  | "operational_integrity";
+
+export type QualityScorecard = {
+  clientId: ClientId;
+  caseClass: EvaluationCaseClass;
+  artifactType: EvaluationArtifactType;
+  artifactId: string;
+  rubricVersion: string;
+  scores: Partial<Record<QualityDimension, number>>;
+  thresholds: Partial<Record<QualityDimension, number>>;
+  meanThreshold: number;
+  outcome: "passed" | "needs_remediation";
+  notes: string;
+  limitations: readonly string[];
+  evidenceReference: string;
+  remediationOf?: string;
+  reviewedAt: ISODateTime;
+};
+
+export type ExternalValidationGateKey = "pilot_scope" | "source_rights" | "data_policy" | "live_connectors" | "research_quality" | "brand_lift" | "monitoring" | "production_operations";
+
+export type ExternalValidationGate = {
+  clientId: ClientId;
+  key: ExternalValidationGateKey;
+  status: "needs_context" | "verified" | "blocked";
+  owner: string;
+  scope: string;
+  evidenceReference?: string;
+  verifiedAt?: ISODateTime;
+  expiresAt?: ISODateTime;
+};

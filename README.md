@@ -60,6 +60,10 @@ the deterministic causal-design gate. `/monitoring` manages versioned sensing pr
 tenant-scoped runs; `/configuration` manages portable solution-profile versions and redacted
 exports.
 
+`/evaluation` records rubric-scored human benchmark evidence, remediation/retests, and the eight
+expiry-aware external validation gates. Method, monitoring, and operations gates cannot be marked
+verified without a passing scorecard of the matching type.
+
 ## Environment variables
 
 Required and optional variables are documented in `.env.example`. Keep real values in local or hosted secret storage; never commit them.

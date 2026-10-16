@@ -1,0 +1,3 @@
+ALTER TABLE "quality_evaluation" ADD CONSTRAINT "quality_evaluation_remediation_of_quality_evaluation_id_fk" FOREIGN KEY ("remediation_of") REFERENCES "public"."quality_evaluation"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "quality_evaluation_client_created_idx" ON "quality_evaluation" USING btree ("client_id","created_at");--> statement-breakpoint
+CREATE INDEX "quality_evaluation_client_artifact_outcome_idx" ON "quality_evaluation" USING btree ("client_id","artifact_type","outcome");

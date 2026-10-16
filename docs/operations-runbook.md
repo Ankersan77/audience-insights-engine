@@ -17,6 +17,18 @@ references to Core.
 6. Confirm `/workspace` shows the expected tenant and canonical record counts.
 7. Activate live connectors only if their external-validation entries are verified.
 
+## Quality and release evidence
+
+Use `/evaluation` to record human scorecards and per-client external validation evidence. A
+scorecard records the benchmark case class, exact artifact reference, rubric version, dimension
+scores, limitations, reviewer, remediation lineage and a durable review reference. The service
+computes the outcome; reviewers cannot manually label a failing scorecard as passed.
+
+Research-quality, Brand Lift, monitoring and production-operations gates require a passing
+decision-brief, study-report, monitoring-signal or recovery-exercise scorecard respectively. Gate
+evidence with an expiry is treated as `needs_context` after expiry. Never use a repository test or
+an unreferenced verbal approval as external release evidence.
+
 ## Backup and restore exercise
 
 The production owner chooses and documents the PostgreSQL-native backup mechanism. A valid

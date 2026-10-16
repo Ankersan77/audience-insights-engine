@@ -11,6 +11,8 @@ import {
   primaryKey,
   unique,
   uniqueIndex,
+  index,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -706,3 +708,40 @@ export const governanceAudit = pgTable("governance_audit", {
   redactedAfterJson: jsonb("redacted_after_json"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const qualityEvaluation = pgTable("quality_evaluation", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => client.id, { onDelete: "restrict" }),
+  caseClass: text("case_class").notNull(),
+  artifactType: text("artifact_type").notNull(),
+  artifactId: text("artifact_id").notNull(),
+  rubricVersion: text("rubric_version").notNull(),
+  scoresJson: jsonb("scores_json").notNull(),
+  thresholdsJson: jsonb("thresholds_json").notNull(),
+  meanThreshold: real("mean_threshold").notNull(),
+  meanScore: real("mean_score").notNull(),
+  outcome: text("outcome").notNull(),
+  notes: text("notes").notNull(),
+  limitations: text("limitations").array().notNull().default(sql`'{}'::text[]`),
+  evidenceReference: text("evidence_reference").notNull(),
+  remediationOf: integer("remediation_of").references((): AnyPgColumn => qualityEvaluation.id, { onDelete: "restrict" }),
+  reviewerUserId: integer("reviewer_user_id").notNull().references(() => appUser.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("quality_evaluation_client_created_idx").on(table.clientId, table.createdAt),
+  index("quality_evaluation_client_artifact_outcome_idx").on(table.clientId, table.artifactType, table.outcome),
+]);
+
+export const externalValidationGate = pgTable("external_validation_gate", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => client.id, { onDelete: "restrict" }),
+  gateKey: text("gate_key").notNull(),
+  status: text("status").notNull().default("needs_context"),
+  owner: text("owner").notNull(),
+  scope: text("scope").notNull(),
+  evidenceReference: text("evidence_reference"),
+  verifiedBy: integer("verified_by").references(() => appUser.id, { onDelete: "restrict" }),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [unique("external_validation_gate_client_key_unique").on(table.clientId, table.gateKey)]);

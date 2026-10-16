@@ -50,6 +50,20 @@
       "when": 1792145958462,
       "tag": "0007_faulty_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792147366942,
+      "tag": "0008_quiet_the_hunter",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792147479254,
+      "tag": "0009_cute_violations",
+      "breakpoints": true
     }
   ]
 }
