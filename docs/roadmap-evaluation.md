@@ -103,8 +103,14 @@ evidence, not a substitute for the open external gates below.
   PostgreSQL 16 test database; production migration and recovery remain unverified.
 - Research orchestration now resolves the active tenant solution, project decision and scope,
   bound sensing configuration and applicable reviewed Market Twin records with current supporting
-  evidence. Briefs retain versioned context references and record digests; changed project or
-  solution versions are rejected at persistence. Context evidence cannot substitute for an
+  evidence. New briefs retain versioned context references and canonical digests for project,
+  solution, bound sensing, used intelligence and used evidence, including methodology. Persistence
+  locks and revalidates those inputs, current source permissions and evidence eligibility; expiry
+  is checked again after potentially blocked inserts. Retention locks evidence before scanning
+  citation copies, preventing a concurrent save from escaping redaction. Database tests cover
+  changed/withdrawn context, source rights, concurrent edits and expiry during blocked persistence.
+  Historical artifacts without this snapshot remain readable, but cannot be newly persisted as
+  ready. Context evidence cannot substitute for an
   ability's primary evidence requirements. Invalid provider output and self-approved causal
   classifications fail closed. Production synthesis still returns no provider: a provider
   interface and fixture tests alone do not satisfy the expert-research requirement.

@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { researchSnapshotDigest } from "./snapshot.ts";
 import type { EvidenceItem, IntelligenceRecord, ResearchContextBasis, ResearchProject, SensingProfile, SolutionProfile } from "../core/contracts.ts";
 import { hasPromptInjection, redactIdentifiers } from "../evidence/policy.ts";
 import { resolveEvidence } from "../market-twin/resolver.ts";
@@ -80,10 +80,13 @@ export function prepareResearchContext(input: {
     marketTwin: records.map((record) => ({ id: record.id, kind: record.kind, title: record.title, statement: record.statement, evidenceIds: record.evidenceIds, contradictionIds: record.contradictionIds, confidence: record.confidence, uncertainty: record.uncertainty, reviewedAt: record.reviewedAt })),
   };
   const basis: ResearchContextBasis = {
+    snapshotVersion: 1, projectDigest: scopedProject ? researchSnapshotDigest(scopedProject) : undefined,
+    solutionDigest: researchSnapshotDigest(solution), sensingDigest: solution.sensingProfileId && sensing ? researchSnapshotDigest(sensing) : undefined,
+    evidence: evidence.map((item) => ({ id: item.id, contentDigest: researchSnapshotDigest(item) })),
     projectId: context.project?.id, projectUpdatedAt: context.project?.updatedAt,
     solutionProfileId: solution.id, solutionVersion: solution.version, sensingProfileId: context.sensing?.id, sensingVersion: context.sensing?.version,
     market, language, excludedRecordCount: input.sources.intelligence.filter((item) => item.clientId === input.clientId).length - records.length,
-    intelligence: records.map((record) => ({ id: record.id, reviewedAt: record.reviewedAt, evidenceIds: record.evidenceIds, contentDigest: createHash("sha256").update(JSON.stringify(record)).digest("hex") })),
+    intelligence: records.map((record) => ({ id: record.id, reviewedAt: record.reviewedAt, evidenceIds: record.evidenceIds, contentDigest: researchSnapshotDigest(record) })),
   };
   return { context, basis, evidence, contextEvidence: eligible.filter((item) => supportIds.has(item.id)), gaps };
 }

@@ -4,7 +4,7 @@ import { validateResearchProject } from "@/src/core/validation";
 import { db } from "@/src/db/client";
 import { researchProject } from "@/src/db/schema";
 
-function domain(row: typeof researchProject.$inferSelect): ResearchProject {
+export function researchProjectDomain(row: typeof researchProject.$inferSelect): ResearchProject {
   return {
     id: String(row.id), clientId: String(row.clientId), name: row.name, decision: row.decision,
     markets: row.markets, languages: row.languages, status: row.status as ResearchProject["status"],
@@ -13,12 +13,12 @@ function domain(row: typeof researchProject.$inferSelect): ResearchProject {
 }
 
 export async function listResearchProjects(clientId: number): Promise<ResearchProject[]> {
-  return (await db.select().from(researchProject).where(eq(researchProject.clientId, clientId)).orderBy(desc(researchProject.updatedAt))).map(domain);
+  return (await db.select().from(researchProject).where(eq(researchProject.clientId, clientId)).orderBy(desc(researchProject.updatedAt))).map(researchProjectDomain);
 }
 
 export async function getResearchProject(clientId: number, id: number): Promise<ResearchProject | null> {
   const [row] = await db.select().from(researchProject).where(and(eq(researchProject.clientId, clientId), eq(researchProject.id, id))).limit(1);
-  return row ? domain(row) : null;
+  return row ? researchProjectDomain(row) : null;
 }
 
 export async function createResearchProject(input: { clientId: number; createdBy: number; name: string; decision: string; markets: readonly string[]; languages: readonly string[]; now: Date }): Promise<ResearchProject> {
@@ -32,12 +32,12 @@ export async function createResearchProject(input: { clientId: number; createdBy
     clientId: input.clientId, name: input.name, decision: input.decision, markets: [...input.markets], languages: [...input.languages],
     status: "active", createdBy: input.createdBy, createdAt: input.now, updatedAt: input.now,
   }).returning();
-  return domain(created);
+  return researchProjectDomain(created);
 }
 
 export async function setResearchProjectStatus(input: { clientId: number; id: number; status: ResearchProject["status"]; now: Date }): Promise<ResearchProject | null> {
   const [updated] = await db.update(researchProject).set({ status: input.status, updatedAt: input.now }).where(and(
     eq(researchProject.clientId, input.clientId), eq(researchProject.id, input.id),
   )).returning();
-  return updated ? domain(updated) : null;
+  return updated ? researchProjectDomain(updated) : null;
 }

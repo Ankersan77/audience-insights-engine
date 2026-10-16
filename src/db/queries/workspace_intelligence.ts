@@ -1,10 +1,18 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
-import type { Applicability, DecisionBrief, IntelligenceKind, IntelligenceRecord, ReviewState } from "@/src/core/contracts";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import type { Applicability, DecisionBrief, IntelligenceKind, IntelligenceRecord, ReviewState, RightsDeclaration, SolutionProfile, SourceClass } from "@/src/core/contracts";
 import { validateDecisionBrief, validateIntelligenceRecord } from "@/src/core/validation";
 import { db } from "@/src/db/client";
-import { canonicalEvidence, campaign, citation, intelligenceRecord, intelligenceRelationship, researchArtifact, researchProject, solutionProfile } from "@/src/db/schema";
+import { canonicalEvidence, campaign, citation, intelligenceRecord, intelligenceRelationship, researchArtifact, researchProject, sensingProfile, solutionProfile, sourceConnection } from "@/src/db/schema";
 import { promoteIntelligence } from "@/src/core/transitions";
 import type { CampaignAssessment } from "@/src/campaigns/analysis";
+import { researchSnapshotDigest } from "@/src/abilities/snapshot";
+import { CONTEXT_EVIDENCE_REQUIREMENTS } from "@/src/abilities/context";
+import { getDecisionBriefAbility } from "@/src/abilities/catalog";
+import { resolveEvidence } from "@/src/market-twin/resolver";
+import { canonicalEvidenceItem } from "./canonical_evidence";
+import { researchProjectDomain } from "./projects";
+import { canonicalProfile } from "./monitoring";
+import { readSourceConnectionPolicy, sourceClassification, sourcePolicyFailure } from "@/src/connectors/sourcePolicy";
 
 export type IntelligenceListRow = IntelligenceRecord & { reviewerUserId?: string };
 
@@ -298,7 +306,9 @@ export async function saveDecisionBrief(input: {
   }
   await assertOwnedEvidence(input.clientId, evidenceIds);
   return db.transaction(async (tx) => {
+    let assertNotExpired = () => {};
     const basis = input.brief.contextBasis;
+    if ((input.brief.status === "ready" || evidenceIds.length > 0) && basis?.snapshotVersion !== 1) throw new Error("research-context-changed");
     if (basis && basis.projectId !== (input.projectId ? String(input.projectId) : undefined)) throw new Error("research-context-changed");
     if (input.projectId) {
       const [ownedProject] = await tx.select().from(researchProject).where(and(
@@ -306,13 +316,65 @@ export async function saveDecisionBrief(input: {
       )).limit(1).for("share");
       if (!ownedProject) throw new Error("active-project-scope-mismatch");
       if (basis && ownedProject.updatedAt.toISOString() !== basis.projectUpdatedAt) throw new Error("research-context-changed");
+      if (basis?.snapshotVersion === 1 && researchSnapshotDigest(researchProjectDomain(ownedProject)) !== basis.projectDigest) throw new Error("research-context-changed");
     }
     if (basis) {
-      const [activeSolution] = await tx.select({ id: solutionProfile.id }).from(solutionProfile).where(and(
+      // Bundle imports lock sensing before solution; preserve that ordering here.
+      if (basis.sensingProfileId) {
+        const [sensing] = await tx.select().from(sensingProfile).where(and(eq(sensingProfile.clientId, input.clientId), eq(sensingProfile.id, Number(basis.sensingProfileId)), eq(sensingProfile.version, basis.sensingVersion!))).for("share");
+        if (!sensing || researchSnapshotDigest(canonicalProfile(sensing)) !== basis.sensingDigest) throw new Error("research-context-changed");
+      }
+      const [activeSolution] = await tx.select().from(solutionProfile).where(and(
         eq(solutionProfile.id, Number(basis.solutionProfileId)), eq(solutionProfile.clientId, input.clientId),
         eq(solutionProfile.version, basis.solutionVersion), eq(solutionProfile.status, "active"),
       )).limit(1).for("share");
       if (!activeSolution) throw new Error("research-context-changed");
+      const solution = { ...activeSolution.profileJson as SolutionProfile, id: String(activeSolution.id), clientId: String(input.clientId), version: activeSolution.version, status: "active" as const };
+      if (basis.snapshotVersion === 1 && researchSnapshotDigest(solution) !== basis.solutionDigest) throw new Error("research-context-changed");
+
+      const seed = evidenceIds.length ? await tx.select({ sourceId: canonicalEvidence.sourceConnectionId }).from(canonicalEvidence)
+        .where(and(eq(canonicalEvidence.clientId, input.clientId), inArray(canonicalEvidence.id, evidenceIds))) : [];
+      const sourceIds = [...new Set(seed.map((row) => row.sourceId))];
+      // Sources → evidence → intelligence, ordered within each table. Revocation and retention
+      // cannot invalidate these records between revalidation and the atomic artifact/citation insert.
+      const sources = sourceIds.length ? await tx.select().from(sourceConnection).where(and(eq(sourceConnection.clientId, input.clientId), inArray(sourceConnection.id, sourceIds))).orderBy(asc(sourceConnection.id)).for("share") : [];
+      const rows = evidenceIds.length ? await tx.select().from(canonicalEvidence).where(and(eq(canonicalEvidence.clientId, input.clientId), inArray(canonicalEvidence.id, evidenceIds))).orderBy(asc(canonicalEvidence.id)).for("share") : [];
+      const recordIds = basis.intelligence.map((item) => Number(item.id));
+      if (recordIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new Error("research-context-changed");
+      const records = recordIds.length ? await tx.select().from(intelligenceRecord).where(and(eq(intelligenceRecord.clientId, input.clientId), inArray(intelligenceRecord.id, recordIds))).orderBy(asc(intelligenceRecord.id)).for("share") : [];
+      const now = new Date().toISOString();
+      const sourceMap = new Map(sources.map((source) => [source.id, source]));
+      const aliases = new Set(Object.values(solution.providerBindings));
+      if (sources.some((source) => !aliases.has(source.connectorId) || sourcePolicyFailure({ health: source.health, rights: source.rightsJson as RightsDeclaration,
+        policy: readSourceConnectionPolicy(source.configurationJson), dataClassification: sourceClassification(source.sourceClass as SourceClass),
+        request: { operation: "research", filters: { markets: [basis.market], languages: [basis.language], purpose: "market-research" } }, now }))) throw new Error("research-context-changed");
+      if (rows.length !== new Set(evidenceIds).size || records.length !== recordIds.length || rows.some((row) => !sourceMap.has(row.sourceConnectionId))) throw new Error("research-context-changed");
+      const currentEvidence = rows.map((row) => canonicalEvidenceItem({ evidence: row, sourceClass: sourceMap.get(row.sourceConnectionId)!.sourceClass }));
+      const snapshots = new Map(basis.evidence?.map((item) => [item.id, item.contentDigest]));
+      if (snapshots.size !== evidenceIds.length || currentEvidence.some((item) => snapshots.get(item.id) !== researchSnapshotDigest(item))) throw new Error("research-context-changed");
+      const eligibility = resolveEvidence({ clientId: String(input.clientId), evidence: currentEvidence, now, market: basis.market, language: basis.language, requirements: CONTEXT_EVIDENCE_REQUIREMENTS });
+      if (eligibility.selected.length !== currentEvidence.length) throw new Error("research-context-changed");
+      const recordSnapshots = new Map(basis.intelligence.map((item) => [item.id, item.contentDigest]));
+      if (records.some((row) => row.reviewState !== "accepted" || row.lifecycle !== "live" || !row.reviewedAt || row.reviewedAt > new Date(now)
+        || (row.decayAt && row.decayAt <= new Date(now)) || !row.evidenceIds.length || row.evidenceIds.some((id) => !evidenceIdSet.has(id))
+        || researchSnapshotDigest(toIntelligence(row)) !== recordSnapshots.get(String(row.id)))) throw new Error("research-context-changed");
+      if (input.brief.status === "ready") {
+        const ability = getDecisionBriefAbility(input.brief.abilityId);
+        if (!records.length || !ability || !solution.enabledAbilities.some((item) => item.id === ability.id && item.version === ability.version)
+          || !resolveEvidence({ clientId: String(input.clientId), evidence: currentEvidence, now, market: basis.market, language: basis.language, requirements: ability.evidenceRequirements }).sufficient) throw new Error("research-context-changed");
+      }
+      const ability = getDecisionBriefAbility(input.brief.abilityId);
+      const currentPrimary = new Set(ability ? resolveEvidence({ clientId: String(input.clientId), evidence: currentEvidence, now, market: basis.market, language: basis.language, requirements: ability.evidenceRequirements }).selected.map((item) => item.id) : []);
+      if (basis.snapshotVersion === 1 && (!basis.primaryEvidenceIds || basis.primaryEvidenceIds.some((id) => !currentPrimary.has(id)))) throw new Error("research-context-changed");
+      assertNotExpired = () => {
+        const checkAt = new Date().toISOString();
+        const permitted = resolveEvidence({ clientId: String(input.clientId), evidence: currentEvidence, now: checkAt, market: basis.market, language: basis.language, requirements: CONTEXT_EVIDENCE_REQUIREMENTS });
+        const primary = ability ? resolveEvidence({ clientId: String(input.clientId), evidence: currentEvidence, now: checkAt, market: basis.market, language: basis.language, requirements: ability.evidenceRequirements }) : undefined;
+        if (permitted.selected.length !== currentEvidence.length || records.some((row) => row.decayAt && row.decayAt <= new Date(checkAt))
+          || sources.some((source) => { const expiry = (source.rightsJson as RightsDeclaration).expiresAt; return expiry && Date.parse(expiry) <= Date.parse(checkAt); })
+          || basis.primaryEvidenceIds?.some((id) => !primary?.selected.some((item) => item.id === id))
+          || (input.brief.status === "ready" && !primary?.sufficient)) throw new Error("research-context-changed");
+      };
     }
     const [created] = await tx.insert(researchArtifact).values({
       clientId: input.clientId,
@@ -351,6 +413,8 @@ export async function saveDecisionBrief(input: {
         expiresAt: item.expiresAt ? new Date(item.expiresAt) : null,
       })));
     }
+    // Inserts may have waited on another transaction; expiry is a clock boundary, not a row lock.
+    assertNotExpired();
     return { id: row.id, artifactKey: row.artifactKey, version: row.version, status: row.status, brief: row.payloadJson as DecisionBrief, createdAt: row.createdAt, projectId: row.projectId };
   });
 }

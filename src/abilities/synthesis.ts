@@ -3,6 +3,8 @@ import type { ProposedAnalysis } from "./engine.ts";
 import { runAbility } from "./engine.ts";
 import { prepareResearchContext, type ResearchContext, type ResearchContextSources } from "./context.ts";
 import { assertPeopleBlind, redactIdentifiers } from "../evidence/policy.ts";
+import { resolveEvidence } from "../market-twin/resolver.ts";
+import { getDecisionBriefAbility } from "./catalog.ts";
 
 export type ResearchSynthesisInput = {
   clientId: string;
@@ -86,17 +88,22 @@ export async function runContextualResearch(input: {
   sources: ResearchContextSources; analysis?: ProposedAnalysis; provider?: ResearchSynthesisProvider;
 }): Promise<DecisionBrief> {
   const prepared = prepareResearchContext(input);
+  const basisFor = (brief: DecisionBrief) => prepared.basis ? {
+    ...prepared.basis, evidence: prepared.basis.evidence?.filter((item) => brief.evidenceIds.includes(item.id)),
+    primaryEvidenceIds: resolveEvidence({ clientId: input.clientId, now: input.now, market: prepared.context?.market, language: prepared.context?.language,
+      requirements: getDecisionBriefAbility(input.abilityId)!.evidenceRequirements, evidence: prepared.evidence }).selected.map((item) => item.id),
+  } : undefined;
   const execution = { clientId: input.clientId, abilityId: input.abilityId, question: input.question, now: input.now,
     market: prepared.context?.market ?? input.market, language: prepared.context?.language ?? input.language,
     evidence: prepared.evidence, contextEvidence: prepared.contextEvidence,
   };
   if (prepared.gaps.length) {
     const brief = runAbility(execution);
-    return { ...brief, status: "needs_context", researchGaps: [...prepared.gaps, ...brief.researchGaps], contextBasis: prepared.basis };
+    return { ...brief, status: "needs_context", researchGaps: [...prepared.gaps, ...brief.researchGaps], contextBasis: basisFor(brief) };
   }
   const brief = input.analysis ? runAbility({ ...execution, analysis: input.analysis })
     : await runAbilityWithSynthesis({ ...execution, provider: input.provider, context: prepared.context });
   const contradictions = prepared.context!.marketTwin.flatMap((record) => record.contradictionIds.map((id) => `Reviewed Market Twin record ${record.id} references a contradiction with record ${id}.`));
-  return { ...brief, contextBasis: prepared.basis, contradictions: [...new Set([...brief.contradictions, ...contradictions])] };
+  return { ...brief, contextBasis: basisFor(brief), contradictions: [...new Set([...brief.contradictions, ...contradictions])] };
 }
 

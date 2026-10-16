@@ -95,6 +95,13 @@ Scheduled review packets now persist and support owned-surface review; narrative
 alert delivery and explicit late-evidence revisions are still open. Briefing HTTP authorization
 and viewer server rendering are covered with synthetic sessions; this is not a full browser pilot.
 
+New decision briefs preserve fingerprints of their used evidence/methods and reviewed Market Twin
+records as well as their project, solution and bound sensing versions. Saving revalidates and locks
+that basis, rejects changed rights/context, and rolls back if inputs expire while waiting to write.
+Concurrency tests cover strategy edits and retention races. This guarantees the checked basis at
+save time, not perpetual freshness or automatic re-analysis of historical work; analogous campaign
+assessment snapshot and read-time availability coverage still needs its own audit.
+
 Queued acquisitions now reserve explicit currency-denominated cost, record and request upper bounds
 against one client-wide UTC-day allowance before adapter execution. Retries require new durable
 authorizations; cancellation, crashes and cheaper-than-planned success do not automatically refund

@@ -223,6 +223,13 @@ export type DecisionBrief = {
 };
 
 export type ResearchContextBasis = {
+  /** Optional only for reading historical artifacts; new ready briefs require version 1. */
+  snapshotVersion?: 1;
+  projectDigest?: string;
+  solutionDigest?: string;
+  sensingDigest?: string;
+  evidence?: readonly { id: string; contentDigest: string }[];
+  primaryEvidenceIds?: readonly string[];
   projectId?: string;
   projectUpdatedAt?: string;
   solutionProfileId: string;

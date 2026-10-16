@@ -4,7 +4,7 @@ import test from "node:test";
 import { Pool } from "pg";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { and, eq } from "drizzle-orm";
-import { acquisitionAuthorization, appUser, authSession, client, clientMembership, canonicalEvidence, researchProject, intelligenceRecord, monitoringRun, solutionProfile, sourceConnection, sourceAcquisitionJob, sourceAcquisitionReceipt, governanceAudit } from "../src/db/schema";
+import { acquisitionAuthorization, appUser, authSession, client, clientMembership, canonicalEvidence, citation, researchArtifact, researchProject, intelligenceRecord, monitoringRun, sensingProfile, solutionProfile, sourceConnection, sourceAcquisitionJob, sourceAcquisitionReceipt, governanceAudit } from "../src/db/schema";
 import { AcquisitionAdapterRegistry } from "../src/evidence/registry";
 import { PublicWebEvidenceAdapter } from "../src/evidence/adapters";
 import type { SourceConnectionPolicy } from "../src/core/contracts";
@@ -33,6 +33,7 @@ const { createAuthSession, resolveAuthSession, revokeAuthSession, purgeAuthSessi
 const { setClientAccess } = await import("../src/db/queries/client_access");
 const { setAcquisitionBudget, inspectAcquisitionBudget, authorizeAcquisitionAttempt } = await import("../src/db/queries/acquisition_budget");
 const { processAcquisitionJob, reconcileStaleAcquisitions } = await import("../src/workers/acquisitionQueue");
+const { enforceCanonicalRetention } = await import("../src/db/queries/retention");
 const probe = new Pool({ connectionString: url });
 const rights = { basis: "public_permitted" as const, commercialUse: true, quotationAllowed: false, restrictions: [] };
 const policy: SourceConnectionPolicy = {
@@ -161,7 +162,7 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       assert.equal(source.health, "unavailable");
     });
 
-    await t.test("research loads tenant context and rejects changed project or solution snapshots", async () => {
+    await t.test("research snapshots reject changed context and expiry during concurrent persistence", async () => {
       const first = await fixture();
       const second = await fixture(first.tenant);
       const outsider = await fixture();
@@ -171,7 +172,8 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       const now = new Date();
       const [project] = await db.insert(researchProject).values({ clientId: first.tenant.id, name: "Synthetic decision", decision: "Choose the next bounded category study.", markets: ["DK"], languages: ["da"], createdBy: user.id, updatedAt: now }).returning();
       const [record] = await db.insert(intelligenceRecord).values({ clientId: first.tenant.id, kind: "fact", title: "Reviewed category context", statement: "A descriptive category pattern warrants research.", lifecycle: "live", reviewState: "accepted", evidenceIds: [...one.evidenceIds], contradictionIds: [], dependencyIds: [], applicabilityJson: first.input.applicability, confidence: 0.8, uncertainty: ["Synthetic fixture only."], synthesisBy: "human", reviewedBy: user.id, reviewedAt: now }).returning();
-      const profile = { enabledAbilities: [{ id: "market-category-diagnosis", version: "1.0.0" }], providerBindings: { first: first.source.connectorId, second: second.source.connectorId }, markets: ["DK"], languages: ["da"], reviewRoles: { research: ["reviewer"] }, retention: { evidenceDays: 30, rawHours: 0, auditDays: 365 } };
+      const [sensing] = await db.insert(sensingProfile).values({ clientId: first.tenant.id, version: 1, status: "active", profileJson: { themes: ["category"], markets: ["DK"] } }).returning();
+      const profile = { sensingProfileId: String(sensing.id), enabledAbilities: [{ id: "market-category-diagnosis", version: "1.0.0" }], providerBindings: { first: first.source.connectorId, second: second.source.connectorId }, markets: ["DK"], languages: ["da"], reviewRoles: { research: ["reviewer"] }, retention: { evidenceDays: 30, rawHours: 0, auditDays: 365 } };
       const solution = await createActiveSolutionProfile({ clientId: first.tenant.id, createdBy: user.id, profile });
       const sources = await loadResearchContextSources({ clientId: first.tenant.id, projectId: project.id, evidenceIds: two.evidenceIds });
       assert.equal(sources.project?.decision, project.decision);
@@ -189,6 +191,89 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       const input = { clientId: first.tenant.id, createdBy: user.id, projectId: project.id, brief };
       const saved = await saveDecisionBrief(input);
       assert.deepEqual(saved.brief.contextBasis, JSON.parse(JSON.stringify(brief.contextBasis)));
+      assert.deepEqual(brief.contextBasis?.evidence?.map((item) => item.id).sort(), brief.evidenceIds.slice().sort());
+      await assert.rejects(saveDecisionBrief({ ...input, brief: { ...brief, contextBasis: undefined } }), /research-context-changed/);
+      const [originalEvidence] = await db.select().from(canonicalEvidence).where(eq(canonicalEvidence.id, one.evidenceIds[0]));
+      const originalSource = await db.select().from(sourceConnection).where(eq(sourceConnection.id, first.source.id));
+      const variants: [string, () => Promise<unknown>, () => Promise<unknown>][] = [
+        ["changed statement", () => db.update(intelligenceRecord).set({ statement: "A materially changed strategy." }).where(eq(intelligenceRecord.id, record.id)), () => db.update(intelligenceRecord).set({ statement: record.statement }).where(eq(intelligenceRecord.id, record.id))],
+        ["expired intelligence", () => db.update(intelligenceRecord).set({ decayAt: new Date(0) }).where(eq(intelligenceRecord.id, record.id)), () => db.update(intelligenceRecord).set({ decayAt: null }).where(eq(intelligenceRecord.id, record.id))],
+        ["withdrawn review", () => db.update(intelligenceRecord).set({ reviewState: "revision_requested" }).where(eq(intelligenceRecord.id, record.id)), () => db.update(intelligenceRecord).set({ reviewState: record.reviewState }).where(eq(intelligenceRecord.id, record.id))],
+        ["changed evidence", () => db.update(canonicalEvidence).set({ sourceContent: "Changed findings with unchanged legacy content hash." }).where(eq(canonicalEvidence.id, originalEvidence.id)), () => db.update(canonicalEvidence).set({ sourceContent: originalEvidence.sourceContent }).where(eq(canonicalEvidence.id, originalEvidence.id))],
+        ["changed method", () => db.update(canonicalEvidence).set({ methodJson: { method: "Different sample", limitations: ["Changed universe"] } }).where(eq(canonicalEvidence.id, originalEvidence.id)), () => db.update(canonicalEvidence).set({ methodJson: originalEvidence.methodJson }).where(eq(canonicalEvidence.id, originalEvidence.id))],
+        ["quarantined evidence", () => db.update(canonicalEvidence).set({ lifecycle: "quarantined" }).where(eq(canonicalEvidence.id, originalEvidence.id)), () => db.update(canonicalEvidence).set({ lifecycle: originalEvidence.lifecycle }).where(eq(canonicalEvidence.id, originalEvidence.id))],
+        ["source purpose removed", () => db.update(sourceConnection).set({ configurationJson: { ...policy, permittedPurposes: ["other"] } }).where(eq(sourceConnection.id, first.source.id)), () => db.update(sourceConnection).set({ configurationJson: originalSource[0].configurationJson }).where(eq(sourceConnection.id, first.source.id))],
+        ["source rights removed", () => db.update(sourceConnection).set({ rightsJson: { ...rights, commercialUse: false } }).where(eq(sourceConnection.id, first.source.id)), () => db.update(sourceConnection).set({ rightsJson: rights }).where(eq(sourceConnection.id, first.source.id))],
+        ["source revoked", () => db.update(sourceConnection).set({ health: "unavailable" }).where(eq(sourceConnection.id, first.source.id)), () => db.update(sourceConnection).set({ health: originalSource[0].health }).where(eq(sourceConnection.id, first.source.id))],
+        ["changed sensing", () => db.update(sensingProfile).set({ profileJson: { ...sensing.profileJson as object, themes: ["different priority"] } }).where(eq(sensingProfile.id, sensing.id)), () => db.update(sensingProfile).set({ profileJson: sensing.profileJson }).where(eq(sensingProfile.id, sensing.id))],
+      ];
+      for (const [name, change, restore] of variants) {
+        await change();
+        await assert.rejects(saveDecisionBrief({ ...input, brief: { ...brief, id: randomUUID() } }), /research-context-changed/, name);
+        await restore();
+      }
+      assert.equal((await db.select().from(researchArtifact).where(eq(researchArtifact.clientId, first.tenant.id))).length, 1);
+      assert.equal((await db.select().from(citation).where(eq(citation.artifactId, saved.id))).length, brief.citations.length);
+      assert.equal((await saveDecisionBrief(input)).id, saved.id);
+
+      // A concurrent strategy edit wins its row lock; the waiting save must observe the change.
+      const editor = await probe.connect();
+      try {
+        await editor.query("begin");
+        await editor.query("update intelligence_record set statement = $1 where id = $2", ["Concurrent reviewed strategy edit.", record.id]);
+        const saving = assert.rejects(saveDecisionBrief({ ...input, brief: { ...brief, id: randomUUID() } }), /research-context-changed/);
+        await waitForBlocked(1);
+        await editor.query("commit");
+        await saving;
+      } finally { await editor.query("rollback"); editor.release(); }
+      await db.update(intelligenceRecord).set({ statement: record.statement }).where(eq(intelligenceRecord.id, record.id));
+
+      if (process.env.TEST_HTTP === "1") {
+        await db.insert(clientMembership).values({ clientId: first.tenant.id, userId: user.id, role: "researcher" });
+        const token = await createAuthSession(user.id, first.tenant.id);
+        const server = await startTestHttpServer(url!);
+        const changing = await probe.connect();
+        try {
+          await changing.query("begin");
+          await changing.query("update intelligence_record set statement = $1 where id = $2", ["Concurrent API strategy edit.", record.id]);
+          const response = server.request("/api/workspace/briefs", token, { projectId: project.id, abilityId: brief.abilityId, question: project.decision,
+            evidenceIds: brief.evidenceIds, pointOfView: brief.pointOfView, clientRelevance: brief.clientRelevance, recommendation: brief.recommendation,
+            nextDecision: brief.nextDecision, claimMode: "descriptive", market: "DK", language: "da" });
+          await waitForBlocked(1);
+          await changing.query("commit");
+          const conflict = await response;
+          assert.equal(conflict.status, 409);
+          assert.deepEqual(await conflict.json(), { error: "Research context changed during analysis. Refresh and run again." });
+        } finally { await changing.query("rollback"); changing.release(); await server.stop(); }
+        await db.update(intelligenceRecord).set({ statement: record.statement }).where(eq(intelligenceRecord.id, record.id));
+      }
+
+      // Hold the insert after snapshot validation. Expiry while waiting must roll back both
+      // artifact and citations; retention must wait for evidence locks before scanning copies.
+      const expiresAt = new Date(Date.now() + 1500);
+      await db.update(canonicalEvidence).set({ expiresAt }).where(eq(canonicalEvidence.id, originalEvidence.id));
+      const expiringSources = await loadResearchContextSources({ clientId: first.tenant.id, projectId: project.id });
+      const expiringBrief = await runContextualResearch({ clientId: String(first.tenant.id), abilityId: brief.abilityId, question: project.decision, projectId: String(project.id), now: new Date().toISOString(), sources: expiringSources,
+        analysis: { pointOfView: brief.pointOfView, clientRelevance: brief.clientRelevance, recommendation: brief.recommendation, nextDecision: brief.nextDecision, claimMode: "descriptive", evidenceIds: brief.evidenceIds, contradictions: [], uncertainty: [] } });
+      assert.equal(expiringBrief.status, "ready");
+      const barrier = await probe.connect();
+      try {
+        await barrier.query("begin");
+        await barrier.query("lock table research_artifact in share mode");
+        const blockedSave = assert.rejects(saveDecisionBrief({ ...input, brief: { ...expiringBrief, id: randomUUID() } }), /research-context-changed/);
+        await waitForBlocked(1);
+        await new Promise((resolve) => setTimeout(resolve, Math.max(0, expiresAt.getTime() - Date.now()) + 30));
+        const retained = enforceCanonicalRetention(new Date(), first.tenant.id);
+        await waitForBlocked(2);
+        await barrier.query("commit");
+        await blockedSave;
+        await retained;
+      } finally { await barrier.query("rollback"); barrier.release(); }
+      assert.equal((await db.select().from(researchArtifact).where(eq(researchArtifact.clientId, first.tenant.id))).length, 1);
+      const [redactedCitation] = await db.select().from(citation).where(and(eq(citation.artifactId, saved.id), eq(citation.evidenceId, originalEvidence.id)));
+      assert.equal(redactedCitation.safeReference, "[expired evidence]");
+      // Restore this synthetic row so the remaining independent project/version assertions apply.
+      await db.update(canonicalEvidence).set(originalEvidence).where(eq(canonicalEvidence.id, originalEvidence.id));
       await assert.rejects(saveDecisionBrief({ ...input, projectId: undefined }), /research-context-changed/);
       await db.update(researchProject).set({ updatedAt: new Date(now.getTime() + 1000) }).where(eq(researchProject.id, project.id));
       await assert.rejects(saveDecisionBrief(input), /research-context-changed/);

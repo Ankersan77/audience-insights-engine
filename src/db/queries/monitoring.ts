@@ -24,7 +24,7 @@ export type MonitoringScheduleSummary = {
   failedConfiguration: number;
 };
 
-function canonicalProfile(row: typeof sensingProfile.$inferSelect): SensingProfile {
+export function canonicalProfile(row: typeof sensingProfile.$inferSelect): SensingProfile {
   const payload = row.profileJson as Partial<SensingProfile>;
   return {
     id: String(row.id),

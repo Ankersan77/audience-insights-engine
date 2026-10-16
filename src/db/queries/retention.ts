@@ -1,4 +1,4 @@
-import { and, eq, inArray, lte } from "drizzle-orm";
+import { and, asc, eq, inArray, lte } from "drizzle-orm";
 import { db } from "@/src/db/client";
 import {
   canonicalEvidence,
@@ -40,7 +40,7 @@ export async function enforceCanonicalRetention(now = new Date(), clientId?: num
       clientId
         ? and(eq(canonicalEvidence.clientId, clientId), lte(canonicalEvidence.expiresAt, now), inArray(canonicalEvidence.lifecycle, ["candidate", "live", "quarantined"]))
         : and(lte(canonicalEvidence.expiresAt, now), inArray(canonicalEvidence.lifecycle, ["candidate", "live", "quarantined"])),
-    ).limit(1000);
+    ).orderBy(asc(canonicalEvidence.id)).limit(1000).for("update");
     const evidenceIds = expiredEvidence.map((item) => item.id);
     const affectedClientIds = [...new Set(expiredEvidence.map((item) => item.clientId))];
     let observationsRemoved = 0;

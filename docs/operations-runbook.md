@@ -98,6 +98,26 @@ Run `TEST_DATABASE_URL=... pnpm test:integration` against a dedicated database w
 It exercises actual PostgreSQL locks and both revocation/completion orderings. CI supplies an
 isolated PostgreSQL 16 service. These tests do not certify production backup or restore.
 
+### Research snapshot conflicts
+
+New decision briefs require a version-1 context snapshot: content digests for the project,
+solution, pinned sensing profile, selected evidence (including methodology) and used reviewed
+Market Twin records. Digests use canonical JSON key ordering, survive JSONB serialization and
+contain no copied strategy text. Existing historical briefs remain readable without a migration;
+they are not retrospectively certified by the new checks.
+
+Persistence shares locks on the pinned configuration and on sources, evidence and intelligence,
+checks current rights/scope/review/decay, and rechecks temporal eligibility after inserts in case
+they waited. On `research-context-changed`, the existing API returns HTTP 409: refresh and rerun
+the analysis against current inputs; do not retry saving the old brief unchanged. Artifact and
+citations are one transaction and roll back together. Retention locks expired evidence before
+scanning/redacting citation copies, so a waiting concurrent insertion cannot escape that scan.
+
+This is an as-of-save guarantee for the inputs actually used. New unrelated evidence does not
+rewrite history; a newly published sensing version does not replace a deliberately pinned one.
+It does not assert that a historical recommendation remains current forever. Review-time
+availability, campaign assessment snapshots and pilot-quality review are separate requirements.
+
 After building, run `TEST_HTTP=1 TEST_DATABASE_URL=... pnpm test:integration` to exercise the actual
 web server as well. The suite starts a temporary loopback-only production-build process against
 the test database with synthetic identities and real opaque server sessions. It verifies briefing authentication, role checks,
