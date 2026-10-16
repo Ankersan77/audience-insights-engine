@@ -11,7 +11,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "worker": "tsx src/workers/index.ts",
-    "test": "node scripts/run-tests.mjs"
+    "test": "node scripts/run-tests.mjs",
+    "check:source-of-truth": "node scripts/check-source-of-truth.mjs"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",

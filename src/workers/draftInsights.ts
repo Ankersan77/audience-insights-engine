@@ -187,7 +187,7 @@ function estimateConfidence(itemCount: number): number {
 
 // --- LLM drafting -------------------------------------------------------------
 
-/** Thrown when no LLM credential is configured — the honest-degradation path (same pattern as Slack/Drive in E5), never faked. */
+/** Thrown when no LLM credential is configured — an honest degradation path, never faked. */
 export class LlmNotConfiguredError extends Error {
   constructor(message = "Insight drafting isn't configured yet (no LLM credential).") {
     super(message);

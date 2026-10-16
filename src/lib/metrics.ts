@@ -11,11 +11,8 @@
  * Call sites (not duplicated here, just imported from):
  *  - src/workers/runQueue.ts — Run success/failure + duration, per-source
  *    Evidence counts per Run, the 10-minute Run SLO.
- *  - src/lib/rill.ts — allowlist rejections and stripped-measure events
- *    (already audit-logged per E8; this adds the same signal as a structured
- *    log event too, for the metrics/alerting layer specifically).
- *  - app/api/insights/[id]/decision/route.ts — Slack/Drive delivery
- *    failures, the 30-second delivery SLO.
+ * Connector-specific telemetry belongs behind the provider-neutral adapter
+ * boundary and must not introduce provider names into this core module.
  */
 
 export type MetricFields = Record<string, unknown>;
@@ -44,22 +41,5 @@ export const RUN_COMPLETION_SLO_MS = 10 * 60 * 1000;
 export function checkRunSlo(fields: { runId: number; brandId: number; marketId: number | null; durationMs: number }): void {
   if (fields.durationMs > RUN_COMPLETION_SLO_MS) {
     logEvent("run-slo-breached", { ...fields, sloMs: RUN_COMPLETION_SLO_MS });
-  }
-}
-
-/** An Insight's delivery latency ceiling: from its review decision
- * (`insight.reviewed_at`) to delivery completing (`insight.routed_at`) —
- * both columns already exist and are set by T22/T23's query helpers. */
-export const DELIVERY_SLO_MS = 30 * 1000;
-
-export function checkDeliverySlo(
-  insightId: number,
-  reviewedAt: Date | null,
-  routedAt: Date | null,
-): void {
-  if (!reviewedAt || !routedAt) return;
-  const durationMs = routedAt.getTime() - reviewedAt.getTime();
-  if (durationMs > DELIVERY_SLO_MS) {
-    logEvent("insight-delivery-slo-breached", { insightId, durationMs, sloMs: DELIVERY_SLO_MS });
   }
 }

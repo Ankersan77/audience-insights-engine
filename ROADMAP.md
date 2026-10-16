@@ -23,7 +23,7 @@ legacy schema, and internal-tool assumptions are not the target architecture.
 7. Use client configuration and ability packages instead of client-specific conditionals.
 8. Treat human benchmark evidence as a release artifact.
 
-## 3. Current baseline
+## 3. Baseline at roadmap approval
 
 The repository currently contains:
 
@@ -33,8 +33,8 @@ The repository currently contains:
 - authentication, roles, audit helpers, and health checks;
 - brand, market, research-run, evidence, and insight concepts;
 - a pinned `last30days` research submodule and worker boundary;
-- legacy Slack delivery and Rill ingestion code;
-- legacy Better Collective-oriented product documents and operational procedures.
+- legacy provider-specific delivery and ingestion code;
+- legacy client-specific product documents and operational procedures.
 
 This baseline should be reused where it conforms to the blueprint. It is not proof that the new
 product model, privacy boundary, research methods, or client portability exist.
@@ -54,6 +54,11 @@ product model, privacy boundary, research methods, or client portability exist.
 | 8 | Client packaging, hardening, and pilot proof | Phases 0–7 |
 
 ## Phase 0 — Product reset and legacy isolation
+
+**Status: complete (2026-10-16).** Evidence: `docs/phase-0-legacy-inventory.md`,
+`src/connectors/contracts.ts`, connector contract tests, and the CI-enforced
+`check:source-of-truth` command. Legacy database structures remain only under the additive-migration
+exception documented in the inventory.
 
 ### Outcome
 
@@ -475,28 +480,27 @@ Brand Lift claim.
 
 ### Now
 
-1. Complete Phase 0 inventory and remove/gate Slack and Rill.
-2. Write canonical schemas for client, source, evidence, citations, Market Twin, abilities,
+1. Write canonical schemas for client, source, evidence, citations, Market Twin, abilities,
    campaigns, studies, and learning.
-3. Design additive migrations from the current schema.
-4. Build the people-blind ingestion/redaction test harness.
-5. Select the first pilot and confirm its source inventory and permissions.
+2. Design additive migrations from the current schema.
+3. Build the people-blind ingestion/redaction test harness.
+4. Select the first pilot and confirm its source inventory and permissions.
 
 ### Next
 
-6. Implement file/report and public-web adapters.
-7. Implement Market Twin onboarding and contradiction review.
-8. Implement the decision brief and first four research abilities.
-9. Add campaign pre-flight and post-campaign readback.
-10. Add measurement-plan and Brand Lift classification.
+5. Implement file/report and public-web adapters.
+6. Implement Market Twin onboarding and contradiction review.
+7. Implement the decision brief and first four research abilities.
+8. Add campaign pre-flight and post-campaign readback.
+9. Add measurement-plan and Brand Lift classification.
 
 ### Later
 
-11. Add licensed social/listening providers source by source.
-12. Add live campaign monitoring and proactive schedules.
-13. Add survey/panel and platform study adapters.
-14. Add industry packs after the first pilot establishes the reusable boundary.
-15. Prove second-client portability and production handoff.
+10. Add licensed social/listening providers source by source.
+11. Add live campaign monitoring and proactive schedules.
+12. Add survey/panel and platform study adapters.
+13. Add industry packs after the first pilot establishes the reusable boundary.
+14. Prove second-client portability and production handoff.
 
 ## 7. Cross-cutting test matrix
 

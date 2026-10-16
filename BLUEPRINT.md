@@ -559,7 +559,7 @@ The minimum proof must demonstrate:
 
 ## 21. Locked product decisions
 
-1. Market Research is a D4WN-compatible, reusable client product, not a Better Collective internal
+1. Market Research is a D4WN-compatible, reusable client product, not a client-specific internal
    tool.
 2. The Market Twin is the client-specific intelligence center; it is an evidence model, not a
    simulation claim.

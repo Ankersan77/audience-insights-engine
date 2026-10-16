@@ -26,8 +26,8 @@ without building consumer profiles or cross-platform identity graphs.
 - A pinned `last30days` research engine in `vendor/last30days`, retained only while it can satisfy
   the blueprint's source-rights, provenance, and people-blind ingestion contracts
 
-The current codebase still contains legacy Slack and Rill implementation. Phase 0 of the roadmap
-removes or generalizes it; neither is part of the product contract.
+Provider-specific integrations belong behind the connector contracts in
+`src/connectors/contracts.ts`; none is required to build or run the core product.
 
 ## Requirements
 
@@ -61,8 +61,7 @@ The minimum application setup requires:
 - `ONELOGIN_CLIENT_ID`
 - `ONELOGIN_CLIENT_SECRET`
 
-Provider-specific variables are optional and may be removed as legacy adapters are retired. New
-connectors must use opaque credential references and the provider-neutral contracts in the
+New connectors must use opaque credential references and the provider-neutral contracts in the
 blueprint.
 
 ## Commands
@@ -72,6 +71,7 @@ pnpm dev          # local development
 pnpm lint         # ESLint
 pnpm typecheck    # generated Next.js types plus TypeScript
 pnpm test         # test suite
+pnpm check:source-of-truth # canonical documentation check
 pnpm build        # production build
 pnpm worker       # background worker
 pnpm db:generate  # create Drizzle migrations
@@ -91,8 +91,5 @@ docker run --rm --env-file .env.local -p 3000:3000 market-research
 ## Continuous integration
 
 `.github/workflows/ci.yml` installs dependencies, lints, type-checks, tests, and builds on pull requests and pushes to `main`.
-
-`.github/workflows/rill-schema-check.yml` is a legacy integration check scheduled for removal or
-replacement in roadmap Phase 0.
 
 Deployment infrastructure is intentionally not coupled to a specific hosting platform. Add deployment configuration only after a target environment has been selected.

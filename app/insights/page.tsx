@@ -7,7 +7,7 @@ import { InsightsQueue } from "./InsightsQueue";
 
 export const dynamic = "force-dynamic";
 
-const VALID_FILTERS: QueueFilter[] = ["pending", "accepted", "discarded", "delivery-failed"];
+const VALID_FILTERS: QueueFilter[] = ["pending", "accepted", "discarded"];
 
 function parseFilter(value: string | undefined): QueueFilter {
   return VALID_FILTERS.includes(value as QueueFilter) ? (value as QueueFilter) : "pending";
@@ -32,7 +32,7 @@ export default async function InsightsPage({
     <AppShell user={session}>
       <PageHeader
         title="Insights"
-        description="The global review queue, across every brand — accept, edit, discard, or retry a failed delivery."
+        description="The global review queue across every brand — inspect evidence, edit, accept, or discard."
       />
       <InsightsQueue
         initialInsights={insights}

@@ -1,6 +1,6 @@
 # Product specification — superseded
 
-The original **Audience Insights Engine** specification described a Better Collective-specific
+The original **Audience Insights Engine** specification described a client-specific
 internal tool built around Rill, Slack, and an approval queue. That product definition was
 superseded on 2026-10-16.
 

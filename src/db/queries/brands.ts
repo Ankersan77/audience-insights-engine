@@ -1,11 +1,10 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/src/db/client";
-import { brand, brandMarket, insightRoute, market, researchInstruction } from "@/src/db/schema";
+import { brand, brandMarket, market, researchInstruction } from "@/src/db/schema";
 
 export type BrandReadiness =
   | "ready to run"
-  | "not ready — no research instructions"
-  | "not ready — no channel mapped";
+  | "not ready — no research instructions";
 
 export type BrandListRow = {
   id: number;
@@ -79,19 +78,6 @@ export async function listBrands(): Promise<BrandListRow[]> {
     .from(researchInstruction)
     .where(inArray(researchInstruction.brandId, brandIds));
 
-  const brandRouteRows = await db
-    .selectDistinct({ brandId: insightRoute.brandId })
-    .from(insightRoute)
-    .where(and(inArray(insightRoute.brandId, brandIds)));
-
-  // A global mapping (insight_route.brand_id IS NULL) routes every brand's
-  // insights of that type, so it counts toward every brand's readiness too.
-  const [globalRoute] = await db
-    .select({ id: insightRoute.id })
-    .from(insightRoute)
-    .where(isNull(insightRoute.brandId))
-    .limit(1);
-
   const marketsByBrand = new Map<number, string[]>();
   for (const row of marketRows) {
     const list = marketsByBrand.get(row.brandId) ?? [];
@@ -100,16 +86,11 @@ export async function listBrands(): Promise<BrandListRow[]> {
   }
 
   const brandIdsWithInstruction = new Set(instructionRows.map((r) => r.brandId));
-  const brandIdsWithRoute = new Set(
-    brandRouteRows.map((r) => r.brandId).filter((id): id is number => id !== null),
-  );
 
   return brands.map((b) => {
     let readiness: BrandReadiness;
     if (!brandIdsWithInstruction.has(b.id)) {
       readiness = "not ready — no research instructions";
-    } else if (!globalRoute && !brandIdsWithRoute.has(b.id)) {
-      readiness = "not ready — no channel mapped";
     } else {
       readiness = "ready to run";
     }

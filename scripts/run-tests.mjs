@@ -9,7 +9,7 @@
 // collides with Node's own `--run <script>` CLI flag, which errors
 // ("--run requires an argument") if passed through bare. This wrapper strips
 // a trailing `--run` before forwarding everything else — including an
-// explicit file path, e.g. `pnpm test src/lib/rillAllowlist.test.ts` — to
+// explicit file path, e.g. `pnpm test src/connectors/contracts.test.ts` — to
 // `node --test`.
 import { spawnSync } from "node:child_process";
 

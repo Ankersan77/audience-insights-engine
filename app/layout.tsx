@@ -21,7 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     title: appName,
-    description: `${appName} — audience research and insights`,
+    description: `${appName} — evidence-backed market intelligence`,
   };
 }
 

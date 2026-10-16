@@ -1,13 +1,2 @@
-# CODEOWNERS
-#
-# ADR 0001 (decisions/0001-rill-allowlist.md) requires a named data-governance
-# approver — not an engineer alone — on any diff touching the Rill
-# measure-and-dimension allowlist. This is the single control standing
-# between this product and Rill's revenue/NDC-bearing views, so the review
-# gate on it is intentional friction, not an oversight.
-#
-# Placeholder team handle below: no specific data-governance approver has
-# been named yet (product-spec.md section 16, open item). Replace
-# `@BetterCollective/data-governance` with the actual named approver/team
-# once one is confirmed.
-src/lib/rillAllowlist.ts @BetterCollective/data-governance
+# Market Research repository ownership.
+* @man-D4wn

@@ -16,6 +16,9 @@ import { sql } from "drizzle-orm";
 
 // --- Enums -----------------------------------------------------------------
 
+// Phase 0 legacy compatibility only. These types/tables remain in the Drizzle
+// model so existing databases are not destructively rewritten. New features
+// must use the provider-neutral connector contracts.
 export const channelTypeEnum = pgEnum("channel_type", [
   "slack_channel",
   "drive_folder",
@@ -131,7 +134,7 @@ export const researchInstruction = pgTable("research_instruction", {
   ),
 ]);
 
-// --- Channels and routing ----------------------------------------------------
+// --- Legacy channels and routing (inactive; migration compatibility) --------
 
 export const channel = pgTable("channel", {
   id: serial("id").primaryKey(),
@@ -192,6 +195,8 @@ export const evidence = pgTable("evidence", {
   source: text("source").notNull(),
   externalId: text("external_id").notNull(),
   url: text("url"),
+  // Legacy identity-bearing field. Phase 2 must migrate or purge it before
+  // production ingestion; new connector contracts do not expose this field.
   authorHandle: text("author_handle"),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   textSnippet: text("text_snippet"),
@@ -231,6 +236,8 @@ export const insight = pgTable("insight", {
     onDelete: "restrict",
   }),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  // Legacy external-delivery fields, retained until an additive migration can
+  // safely remove them from existing deployments.
   routedAt: timestamp("routed_at", { withTimezone: true }),
   deliveryStatus: insightDeliveryStatusEnum("delivery_status")
     .notNull()

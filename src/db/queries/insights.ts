@@ -8,15 +8,9 @@ import { brand, evidence, insight, insightEvidence, market } from "@/src/db/sche
 
 export type InsightStatus = "pending" | "accepted" | "discarded";
 export type ShiftOrBlip = "shift" | "blip";
-export type InsightDeliveryStatus = "not_attempted" | "delivered" | "failed";
 
-/**
- * The global insight queue's filter (T23, spec §17): three review states plus
- * a fourth, distinct state for "accepted but delivery failed" — which is a
- * `delivery_status` value, not a `status` value, so it is handled as its own
- * branch in {@link listInsights} rather than folded into `InsightStatus`.
- */
-export type QueueFilter = "pending" | "accepted" | "discarded" | "delivery-failed";
+/** The owned-product review queue has three explicit editorial states. */
+export type QueueFilter = "pending" | "accepted" | "discarded";
 
 export type InsightRow = {
   id: number;
@@ -31,8 +25,6 @@ export type InsightRow = {
   status: InsightStatus;
   reviewedBy: number | null;
   reviewedAt: Date | null;
-  routedAt: Date | null;
-  deliveryStatus: InsightDeliveryStatus;
 };
 
 export type InsightListRow = InsightRow & {
@@ -63,8 +55,6 @@ function toRow(row: typeof insight.$inferSelect): InsightRow {
     status: row.status as InsightStatus,
     reviewedBy: row.reviewedBy,
     reviewedAt: row.reviewedAt,
-    routedAt: row.routedAt,
-    deliveryStatus: row.deliveryStatus,
   };
 }
 
@@ -108,17 +98,14 @@ export async function createInsightWithEvidence(input: {
   return toRow(created);
 }
 
-/** The global queue (T23): every brand, filterable by status or by the
- * distinct "delivery failed" state. Newest first. */
+/** The global queue: every brand, filterable by review status. Newest first. */
 export async function listInsights(filter: {
   queueFilter?: QueueFilter;
   brandId?: number;
 }): Promise<InsightListRow[]> {
   const conditions = [];
   if (filter.brandId) conditions.push(eq(insight.brandId, filter.brandId));
-  if (filter.queueFilter === "delivery-failed") {
-    conditions.push(eq(insight.deliveryStatus, "failed"));
-  } else if (filter.queueFilter) {
+  if (filter.queueFilter) {
     conditions.push(eq(insight.status, filter.queueFilter));
   }
 
@@ -166,7 +153,6 @@ export async function updateInsightText(
     .returning();
   return updated ? toRow(updated) : null;
 }
-
 /** Accept/discard decision (T23) — the review state, independent of delivery. */
 export async function markInsightDecision(
   id: number,
@@ -175,19 +161,6 @@ export async function markInsightDecision(
   const [updated] = await db
     .update(insight)
     .set({ status: input.status, reviewedBy: input.reviewedBy, reviewedAt: new Date() })
-    .where(eq(insight.id, id))
-    .returning();
-  return updated ? toRow(updated) : null;
-}
-
-/** Records the outcome of a delivery attempt (accept or retry), separate from the review decision (T23). */
-export async function markInsightDelivery(
-  id: number,
-  deliveryStatus: "delivered" | "failed",
-): Promise<InsightRow | null> {
-  const [updated] = await db
-    .update(insight)
-    .set({ deliveryStatus, routedAt: new Date() })
     .where(eq(insight.id, id))
     .returning();
   return updated ? toRow(updated) : null;

@@ -1,8 +1,6 @@
-// The full set of run and insight statuses named in product-spec.md:
+// The active run and insight review statuses:
 // Run status (FR12): queued | running | succeeded | failed | cancelled.
 // Insight status (FR16/FR17): pending | accepted | discarded.
-// Insight delivery state (FR18a): "delivery failed", shown as its own
-// distinct badge rather than folded into `pending`/`accepted`/`discarded`.
 export type Status =
   | "queued"
   | "running"
@@ -11,8 +9,7 @@ export type Status =
   | "cancelled"
   | "pending"
   | "accepted"
-  | "discarded"
-  | "delivery failed";
+  | "discarded";
 
 type StatusConfig = { label: string; bg: string; text: string };
 
@@ -56,11 +53,6 @@ const STATUS_CONFIG: Record<Status, StatusConfig> = {
     label: "Discarded",
     bg: "var(--status-neutral-bg)",
     text: "var(--status-neutral-text)",
-  },
-  "delivery failed": {
-    label: "Delivery failed",
-    bg: "var(--status-danger-bg)",
-    text: "var(--status-danger-text)",
   },
 };
 

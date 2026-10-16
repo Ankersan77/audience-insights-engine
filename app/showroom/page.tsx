@@ -33,15 +33,15 @@ const RUN_COLUMNS: DataTableColumn<SampleRun>[] = [
   },
 ];
 
-const SAMPLE_CHANNELS: ComboboxOption[] = [
-  { id: "c1", label: "#casumo-sweden-insights", description: "Slack · Casumo" },
-  { id: "c2", label: "#leovegas-denmark-insights", description: "Slack · LeoVegas" },
-  { id: "c3", label: "#mrgreen-greece-insights", description: "Slack · Mr Green" },
+const SAMPLE_SOURCES: ComboboxOption[] = [
+  { id: "s1", label: "Brand tracker", description: "Quantitative · Sweden" },
+  { id: "s2", label: "Campaign report", description: "Client evidence · Denmark" },
+  { id: "s3", label: "Category forum themes", description: "Public conversation · Greece" },
 ];
 
-async function searchChannels(query: string): Promise<ComboboxOption[]> {
+async function searchSources(query: string): Promise<ComboboxOption[]> {
   await new Promise((resolve) => setTimeout(resolve, 150));
-  return SAMPLE_CHANNELS.filter((option) =>
+  return SAMPLE_SOURCES.filter((option) =>
     option.label.toLowerCase().includes(query.toLowerCase()),
   );
 }
@@ -132,31 +132,31 @@ export default function ShowroomPage() {
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <AsyncCombobox
             label="Loading demo"
-            placeholder="Search channels…"
+            placeholder="Search sources…"
             search={neverResolves}
             onSelect={noop}
             initialQuery="lo"
           />
           <AsyncCombobox
             label="Empty demo"
-            placeholder="Search channels…"
+            placeholder="Search sources…"
             search={alwaysEmpty}
             onSelect={noop}
             initialQuery="zzz"
           />
           <AsyncCombobox
             label="Error demo"
-            placeholder="Search channels…"
+            placeholder="Search sources…"
             search={alwaysErrors}
             onSelect={noop}
             initialQuery="er"
           />
           <AsyncCombobox
             label="Success demo — type to search, arrow keys to move, Enter to select"
-            placeholder="Search channels…"
-            search={searchChannels}
+            placeholder="Search sources…"
+            search={searchSources}
             onSelect={noop}
-            initialQuery="insights"
+            initialQuery="report"
           />
         </div>
       </section>
@@ -192,7 +192,7 @@ export default function ShowroomPage() {
         <ConfirmDialog
           open={dialog === "default"}
           title="Accept this insight?"
-          body="It will be marked accepted and routed to its mapped Slack channel."
+          body="It will be marked accepted as the approved in-product version."
           confirmLabel="Accept"
           cancelLabel="Cancel"
           onConfirm={() => setDialog("none")}

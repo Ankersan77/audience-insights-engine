@@ -35,6 +35,7 @@ has_script() {
 }
 
 if [ -f package.json ]; then
+  has_script check:source-of-truth && run "source-of-truth" npm run --silent check:source-of-truth
   has_script typecheck && run "type check" npm run --silent typecheck
   [ -f tsconfig.json ] && ! has_script typecheck && run "type check" npx --no-install tsc --noEmit
   has_script lint && run "lint" npm run --silent lint

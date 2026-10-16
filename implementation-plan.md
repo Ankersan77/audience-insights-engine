@@ -1,7 +1,7 @@
 # Implementation plan — superseded
 
 The original implementation plan applied to the legacy Audience Insights Engine and its
-Better Collective, Slack, and Rill-specific delivery model. It was superseded on 2026-10-16.
+client-specific integration and delivery model. It was superseded on 2026-10-16.
 
 The canonical build plan is now [`ROADMAP.md`](ROADMAP.md).
 

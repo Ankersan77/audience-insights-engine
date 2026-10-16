@@ -15,15 +15,10 @@ import type { InsightEvidenceDetail } from "@/src/db/queries/insights";
 
 type BrandOption = { id: number; name: string };
 
-type ChannelPreview = { channelId: number; channelType: "slack_channel" | "drive_folder"; displayName: string };
-
-type DeliveryResult = { channelId: number; channelType: string; displayName: string; ok: boolean; message: string };
-
 const FILTERS: { value: QueueFilter; label: string }[] = [
   { value: "pending", label: "Pending" },
   { value: "accepted", label: "Accepted" },
   { value: "discarded", label: "Discarded" },
-  { value: "delivery-failed", label: "Delivery failed" },
 ];
 
 type Props = {
@@ -34,7 +29,7 @@ type Props = {
   currentBrandId: number | null;
 };
 
-type ConfirmMode = "accept" | "discard" | "retry" | null;
+type ConfirmMode = "accept" | "discard" | null;
 
 export function InsightsQueue({ initialInsights, brands, isAdmin, currentFilter, currentBrandId }: Props) {
   const router = useRouter();
@@ -42,12 +37,10 @@ export function InsightsQueue({ initialInsights, brands, isAdmin, currentFilter,
   const [draftTitle, setDraftTitle] = useState("");
   const [draftSummary, setDraftSummary] = useState("");
   const [evidence, setEvidence] = useState<InsightEvidenceDetail[]>([]);
-  const [channelPreview, setChannelPreview] = useState<ChannelPreview[]>([]);
   const [acknowledged, setAcknowledged] = useState(false);
   const [confirmMode, setConfirmMode] = useState<ConfirmMode>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [lastDelivery, setLastDelivery] = useState<DeliveryResult[] | null>(null);
 
   function navigate(next: { status?: QueueFilter; brandId?: number | null }) {
     const status = next.status ?? currentFilter;
@@ -63,14 +56,11 @@ export function InsightsQueue({ initialInsights, brands, isAdmin, currentFilter,
     setDraftSummary(row.summary);
     setAcknowledged(false);
     setActionError(null);
-    setLastDelivery(null);
     setEvidence([]);
-    setChannelPreview([]);
     const response = await fetch(`/api/insights/${row.id}/decision`);
     if (response.ok) {
-      const data = (await response.json()) as { evidence: InsightEvidenceDetail[]; channels: ChannelPreview[] };
+      const data = (await response.json()) as { evidence: InsightEvidenceDetail[] };
       setEvidence(data.evidence);
-      setChannelPreview(data.channels);
     }
   }
 
@@ -81,7 +71,7 @@ export function InsightsQueue({ initialInsights, brands, isAdmin, currentFilter,
 
   const hasSensitiveEvidence = evidence.some((e) => e.sensitivityFlag === true);
 
-  async function submitDecision(action: "accept" | "discard" | "retry") {
+  async function submitDecision(action: "accept" | "discard") {
     if (!selected) return;
     setBusy(true);
     setActionError(null);
@@ -101,13 +91,8 @@ export function InsightsQueue({ initialInsights, brands, isAdmin, currentFilter,
         setActionError(data.error ?? "That action could not be completed.");
         return;
       }
-      setLastDelivery(data.delivery ?? null);
       router.refresh();
-      if (action === "discard") {
-        closeDetail();
-      } else {
-        setConfirmMode(null);
-      }
+      closeDetail();
     } finally {
       setBusy(false);
     }
@@ -128,18 +113,6 @@ export function InsightsQueue({ initialInsights, brands, isAdmin, currentFilter,
       render: (r) => r.confidence.toFixed(2),
     },
     { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status as Status} /> },
-    {
-      key: "delivery",
-      header: "Delivery",
-      render: (r) =>
-        r.deliveryStatus === "not_attempted" ? (
-          "—"
-        ) : r.deliveryStatus === "delivered" ? (
-          <span className="text-sm text-[var(--status-success-text)]">Delivered</span>
-        ) : (
-          <StatusBadge status="delivery failed" />
-        ),
-    },
     {
       key: "actions",
       header: "Actions",
@@ -287,17 +260,6 @@ export function InsightsQueue({ initialInsights, brands, isAdmin, currentFilter,
 
           {actionError ? <p className="text-sm text-[var(--status-danger-text)]">{actionError}</p> : null}
 
-          {lastDelivery ? (
-            <div className="flex flex-col gap-1 rounded-md border border-border p-3 text-sm">
-              <span className="font-medium text-foreground">Delivery attempt</span>
-              {lastDelivery.map((r, i) => (
-                <span key={i} className={r.ok ? "text-[var(--status-success-text)]" : "text-[var(--status-danger-text)]"}>
-                  {r.channelType === "slack_channel" ? "Slack" : "Drive"} · {r.displayName}: {r.message}
-                </span>
-              ))}
-            </div>
-          ) : null}
-
           {isAdmin ? (
             <div className="flex flex-wrap gap-2">
               {selected.status === "pending" ? (
@@ -308,7 +270,7 @@ export function InsightsQueue({ initialInsights, brands, isAdmin, currentFilter,
                     onClick={() => setConfirmMode("accept")}
                     className="rounded-md bg-[var(--button-primary-bg)] px-3 py-2 text-sm font-medium text-[var(--button-primary-text)] disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                   >
-                    Accept &amp; send
+                    Accept insight
                   </button>
                   <button
                     type="button"
@@ -318,15 +280,6 @@ export function InsightsQueue({ initialInsights, brands, isAdmin, currentFilter,
                     Discard
                   </button>
                 </>
-              ) : null}
-              {selected.status === "accepted" && selected.deliveryStatus === "failed" ? (
-                <button
-                  type="button"
-                  onClick={() => setConfirmMode("retry")}
-                  className="rounded-md border border-[var(--button-secondary-border)] px-3 py-2 text-sm font-medium text-[var(--button-secondary-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
-                >
-                  Retry delivery
-                </button>
               ) : null}
             </div>
           ) : null}
@@ -338,29 +291,20 @@ export function InsightsQueue({ initialInsights, brands, isAdmin, currentFilter,
         title={
           confirmMode === "discard"
             ? "Discard this insight?"
-            : confirmMode === "retry"
-              ? "Retry delivery?"
-              : "Send this insight?"
+            : "Accept this insight?"
         }
         body={
           confirmMode === "discard" ? (
-            <p>This insight will be marked discarded and never delivered.</p>
+            <p>This insight will be marked discarded.</p>
           ) : (
             <div className="flex flex-col gap-2">
               <p className="font-medium text-foreground">{draftTitle}</p>
               <p>{draftSummary}</p>
-              <p className="text-xs text-muted">
-                Destination:{" "}
-                {channelPreview.length === 0
-                  ? "No channel mapped — delivery will fail."
-                  : channelPreview
-                      .map((c) => `${c.channelType === "slack_channel" ? "Slack" : "Drive"}: ${c.displayName}`)
-                      .join(", ")}
-              </p>
+              <p className="text-xs text-muted">This records the approved version in Market Research.</p>
             </div>
           )
         }
-        confirmLabel={busy ? "Working…" : confirmMode === "discard" ? "Discard" : confirmMode === "retry" ? "Retry" : "Send"}
+        confirmLabel={busy ? "Working…" : confirmMode === "discard" ? "Discard" : "Accept"}
         destructive={confirmMode === "discard"}
         onConfirm={() => confirmMode && submitDecision(confirmMode)}
         onCancel={() => setConfirmMode(null)}

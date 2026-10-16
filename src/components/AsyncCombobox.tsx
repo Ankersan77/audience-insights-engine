@@ -32,7 +32,7 @@ type Status = "idle" | "loading" | "error" | "empty" | "success";
 const DEBOUNCE_MS = 250;
 
 /**
- * Async-searchable combobox used for both the Slack-channel and Drive-folder
+ * Provider-neutral async-searchable combobox used for remote option
  * pickers (UX review required finding 6 / FR7a — the flagged highest
  * accessibility-risk component). Implements the WAI-ARIA 1.2 editable-combobox
  * pattern: `role="combobox"` on the input, `role="listbox"`/`role="option"` on

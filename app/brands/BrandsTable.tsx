@@ -14,7 +14,6 @@ type Props = {
 const READINESS_TOKEN: Record<BrandListRow["readiness"], string> = {
   "ready to run": "text-[var(--status-success-text)]",
   "not ready — no research instructions": "text-muted",
-  "not ready — no channel mapped": "text-muted",
 };
 
 /**

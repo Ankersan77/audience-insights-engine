@@ -18,9 +18,7 @@ export default function Home() {
   return (
     <>
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-10 px-6 py-20">
-        <p className="font-display text-sm tracking-[0.35em] text-accent uppercase">
-          Better Collective
-        </p>
+        <p className="font-display text-sm tracking-[0.35em] text-accent uppercase">D4WN</p>
 
         <div className="flex flex-col gap-5">
           <h1 className="font-display text-6xl leading-none tracking-wide break-words uppercase sm:text-8xl">
@@ -30,8 +28,8 @@ export default function Home() {
         </div>
 
         <p className="max-w-xl text-lg leading-relaxed text-muted">
-          Audience research, evidence, insights, and delivery workflows in one
-          place.
+          Evidence-backed market intelligence, behavioral trends, brand
+          positioning, and campaign learning in one place.
         </p>
 
         <dl className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3">

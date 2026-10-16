@@ -5,14 +5,13 @@ import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import type { Role } from "@/src/lib/auth";
 
-// The four sections of the admin panel (spec epics E4/E5/E7/E6). "Settings" is
+// The three active sections of the product. "Settings" is
 // not a v1 destination — nothing in this plan builds one yet. Every item here
 // is visible to both roles (spec: no per-brand access restriction); it is the
 // admin-only controls *inside* each page (add brand, edit instructions, ...)
 // that are role-gated, at the page level — see src/lib/roles.ts.
 const NAV_ITEMS = [
   { label: "Brands", href: "/brands" },
-  { label: "Channels", href: "/channels" },
   { label: "Insights", href: "/insights" },
   { label: "Runs", href: "/runs" },
 ] as const;
@@ -100,7 +99,7 @@ export function AppShell({
         className={`${navOpen ? "flex" : "hidden"} w-full flex-col gap-1 border-b border-[var(--nav-border)] bg-[var(--nav-bg)] px-2 pb-3 md:flex md:w-60 md:shrink-0 md:flex-col md:border-r md:border-b-0 md:px-3 md:py-6`}
       >
         <div className="hidden px-3 pb-4 text-xs font-semibold tracking-widest text-muted uppercase md:block">
-          Audience Insights
+          Market Research
         </div>
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);

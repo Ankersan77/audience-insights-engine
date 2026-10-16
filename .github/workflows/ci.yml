@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check canonical product documents
+        run: pnpm check:source-of-truth
+
       - name: Lint
         run: pnpm lint
 
