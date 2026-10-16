@@ -467,6 +467,45 @@ export const acquisitionAuthorization = pgTable("acquisition_authorization", {
   index("acquisition_authorization_client_time_idx").on(table.clientId, table.authorizedAt),
 ]);
 
+// Separate from acquisition: a source allowance never authorizes model spend.
+export const synthesisBudget = pgTable("synthesis_budget", {
+  clientId: integer("client_id").primaryKey().references(() => client.id, { onDelete: "restrict" }),
+  currency: text("currency").notNull(),
+  dailyCostMicros: bigint("daily_cost_micros", { mode: "number" }).notNull(),
+  dailyRequests: bigint("daily_requests", { mode: "number" }).notNull(),
+  enabled: boolean("enabled").notNull().default(false),
+  version: integer("version").notNull().default(1),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const synthesisAuthorization = pgTable("synthesis_authorization", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => client.id, { onDelete: "restrict" }),
+  attemptKey: text("attempt_key").notNull(),
+  abilityId: text("ability_id").notNull(),
+  inputDigest: text("input_digest").notNull(),
+  providerId: text("provider_id").notNull(),
+  providerVersion: text("provider_version").notNull(),
+  model: text("model").notNull(),
+  approvalReference: text("approval_reference").notNull(),
+  currency: text("currency").notNull(),
+  maxCostMicros: bigint("max_cost_micros", { mode: "number" }).notNull(),
+  maxInputBytes: integer("max_input_bytes").notNull(),
+  maxOutputTokens: integer("max_output_tokens").notNull(),
+  maxDurationMs: integer("max_duration_ms").notNull(),
+  budgetVersion: integer("budget_version").notNull(),
+  status: text("status").notNull().default("reserved"),
+  authorizedAt: timestamp("authorized_at", { withTimezone: true }).notNull().defaultNow(),
+  dispatchBy: timestamp("dispatch_by", { withTimezone: true }).notNull(),
+  bindingExpiresAt: timestamp("binding_expires_at", { withTimezone: true }).notNull(),
+  dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
+  executionDeadline: timestamp("execution_deadline", { withTimezone: true }),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+}, (table) => [
+  unique("synthesis_authorization_client_attempt_unique").on(table.clientId, table.attemptKey),
+  index("synthesis_authorization_client_time_idx").on(table.clientId, table.authorizedAt),
+]);
+
 export const sourceAcquisitionReceipt = pgTable("source_acquisition_receipt", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id")

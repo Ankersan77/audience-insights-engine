@@ -98,9 +98,13 @@ and viewer server rendering are covered with synthetic sessions; this is not a f
 An optional Responses synthesis transport now implements the provider-neutral seam, with an
 ability-owned versioned prompt, explicit client/model/scope/retention binding, finite resource
 limits, strict response-envelope handling and synthetic HTTP/Core tests. It is not production
-activation or live model acceptance. Durable synthesis spend admission, binding/processing
-acceptance, provider usage/audit integration and human benchmarks remain open; the production
-factory deliberately still returns no provider. See `docs/synthesis-provider-acceptance.md`.
+activation or live model acceptance. Separate synthesis budget admission now has a provider-neutral
+wrapper, daily client-wide currency/request limits, single-use dispatch, budget-version revocation,
+deadline/expiry checks, atomic audit and operator crash reconciliation (migration `0015`). Synthetic
+PostgreSQL tests exercise contention and late-result suppression. Selected-provider factory wiring,
+trusted binding/processing acceptance, actual usage reconciliation, scheduled reconciliation,
+owned-surface budget administration and human benchmarks remain open; the production factory still
+returns no provider. See `docs/synthesis-provider-acceptance.md`.
 
 New decision briefs preserve fingerprints of their used evidence/methods and reviewed Market Twin
 records as well as their project, solution and bound sensing versions. Saving revalidates and locks

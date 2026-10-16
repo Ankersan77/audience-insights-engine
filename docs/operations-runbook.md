@@ -22,6 +22,39 @@ does not automatically use any environment API key or authorize model spend. Fol
 `docs/synthesis-provider-acceptance.md` before integrating a provider; source acquisition budgets
 are not synthesis budgets, and synthetic transport tests are not live provider acceptance.
 
+### Synthesis budget admission
+
+Apply migration `0015` before connecting a synthesis provider. It grants **no client budget**.
+The operator must explicitly configure a separate allowance, in integer micro-units (1,000,000 =
+one currency unit), and the approved provider factory must use `withSynthesisBudget` with the
+PostgreSQL ledger. The CLI never selects a model, reads provider credentials or invokes a model:
+
+```sh
+npm run synthesis:budget -- show --client CLIENT_SLUG
+# Explicit zero-cost example only; replace limits solely with an approved allowance.
+npm run synthesis:budget -- set --client CLIENT_SLUG --currency DKK --daily-cost-micros 0 --daily-requests 10 --enabled true
+npm run synthesis:budget -- reconcile --client CLIENT_SLUG
+```
+
+`set` requires every field. Use `--enabled false` with the current allowance to revoke new dispatch
+and future result authorization under prior budget versions. Every edit increments the version,
+even if only increasing a limit; already-running requests may complete externally but their old
+grant cannot authorize a new result. Cancellation cannot undo provider work. Currency is fixed
+after the first reservation, and changing it requires an explicit ledger migration.
+
+Every attempt reserves the full declared cost upper bound and one request before credential access.
+Reservations count across concurrent calls and all statuses for the UTC day of admission. They
+survive budget edits and are never refunded automatically. A reservation expires for dispatch after
+60 seconds, at UTC midnight or at binding expiry, whichever is first; it cannot be stockpiled into
+the next day's allowance. A dispatched permit cannot be replayed after an unknown outcome.
+
+`show` reports conservative reserved totals, not measured spend. `reconcile` settles at most 1,000
+expired attempts per invocation; repeat explicitly if the count is 1,000. It marks unstarted work
+`cancelled` and dispatched work `unknown`, without retries/refunds. Reconciliation is currently an
+operator action, not a scheduled worker. Preserve the ledger in backup/restore; never delete it to
+free capacity. Run application/database clocks in sync. A provider's price ceiling, actual usage,
+source-processing permission and client/model approval still require separate acceptance.
+
 Canonical monitoring creates durable database jobs and dispatches their IDs through pg-boss. The
 worker claims each job once, resolves its adapter through `productionRegistry.ts`, runs bounded
 retry only for classified transient failures, persists canonical evidence and a redacted receipt

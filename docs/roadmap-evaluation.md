@@ -115,8 +115,12 @@ evidence, not a substitute for the open external gates below.
   classifications fail closed. An optional bounded Responses transport and a versioned,
   ability-specific synthesis prompt now have synthetic HTTP/orchestration coverage. It has no
   default model, implicit credentials, retry or production activation. Selected text is no longer
-  silently clipped before synthesis. Production synthesis still returns no provider: durable
-  synthesis spend admission, approved bindings/processing, live provider acceptance and qualified
+  silently clipped before synthesis. Durable, separate synthesis spend admission is now implemented
+  through a provider-neutral wrapper and PostgreSQL ledger: finite currency/request reservations,
+  one-use dispatch, versioned budget revocation, deadline checks, atomic audit and operator crash
+  reconciliation have synthetic unit/database coverage. Production synthesis still returns no
+  provider: trusted binding/permission resolution, actual metering and the selected factory's
+  integration remain open, alongside approved processing, live provider acceptance and qualified
   human benchmarks remain open. See `docs/synthesis-provider-acceptance.md`; adapter code and
   synthetic tests alone do not satisfy the expert-research requirement.
 - Weekly/monthly/quarterly review packets now have opt-in solution configuration, closed UTC

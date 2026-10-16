@@ -53,10 +53,13 @@ Normal ingestion, rights, minimization, reviewed excerpts and current source pol
 2. Verify account/project retention independently. `store: false` is **not** Zero Data Retention.
    Standard API abuse-monitoring retention must be explicitly accepted if applicable; a configured
    `zero_data_retention` label is not proof that OpenAI enabled it for the account/project/model.
-3. Add durable, client-scoped synthesis admission and usage/audit records. Reserve a defensible
-   currency-tagged cost ceiling before credential access or HTTP dispatch, including concurrent
-   calls and unknown outcomes. Acquisition budgets do not currently authorize synthesis requests.
-   Provider usage reconciliation, cancellation and revocation handling still need implementation.
+3. Connect the selected adapter through `withSynthesisBudget` and the PostgreSQL
+   `synthesisSpendLedger`. Migration `0015` implements separate client-scoped daily cost/request
+   admission, one-use dispatch, versioned revocation, terminal audit and crash reconciliation.
+   Acquisition budgets do not authorize synthesis. The approved planner must supply a defensible
+   currency-tagged upper bound and the adapter must perform only the bounded single request;
+   this trusted-code contract is not a network sandbox or a proof of provider pricing. Actual
+   provider usage/invoice reconciliation and live cost-bound acceptance still need implementation.
 4. Resolve bindings from trusted server configuration, not request JSON. Recheck current source
    processing permission and binding approval at dispatch; persist only normalized metadata.
 5. Run representative and adversarial tasks through the actual selected model with approved pilot
@@ -70,6 +73,35 @@ Normal ingestion, rights, minimization, reviewed excerpts and current source pol
 This is aligned with the blueprint's separation of Core, abilities and connectors, not a claim
 that the Python D4WN service has been integrated or that its acceptance transfers to this product.
 There is no runtime dependency on another local repository.
+
+## Durable admission implementation
+
+`src/abilities/synthesisBudget.ts` defines the provider-neutral budget/plan/ledger contract.
+`withSynthesisBudget` freezes a per-call input and plan, reserves a digest-only attempt, claims a
+one-use dispatch permit, and only then invokes the credential-owning provider factory. Provider
+identity/version must match the plan. Deadline and cancellation signals cover factory resolution
+and synthesis; a late factory cannot start a request, and a late answer cannot overwrite an unknown
+outcome. A failed ledger write suppresses the answer and never triggers an automatic paid retry.
+
+`src/db/queries/synthesis_budget.ts` serializes admissions and policy updates per client. Every
+reservation consumes its full upper bound and one request for its UTC admission day, including
+failed/cancelled/unknown attempts. Dispatch must happen within 60 seconds, before UTC midnight and
+before binding expiry; it cannot be replayed. The database supplies the execution deadline.
+Every budget update increments its version, invalidating undispatched grants and later result
+authorization for older versions. This cannot undo a request already sent to a provider.
+
+Reservation, dispatch and completion audit are atomic. Expiry is checked after potentially blocked
+audit writes as well as after acquiring locks. Successful provider execution is recorded separately
+from Core's validation and human approval; budget authorization does not certify the answer or
+promote client truth. No prompts, answers, raw usage payloads or credentials enter this ledger.
+Application/database clocks must be synchronized; database checks remain authoritative at commit.
+
+The operator CLI supports `show`, `set` and bounded `reconcile` (see the runbook). Reconciliation
+turns expired undispatched reservations into `cancelled`, and expired dispatched attempts into
+`unknown`. It never retries or refunds. A recurring reconciler and the owned-surface budget editor
+are not wired yet. Synthetic PostgreSQL tests cover concurrency, tenant isolation, revocation,
+expiry during audit contention, crash reconciliation and the actual governance wrapper. They do
+not replace real provider metering/processing acceptance or pilot quality evidence.
 
 ## Protocol references
 
