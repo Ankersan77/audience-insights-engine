@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CORE_ABILITIES } from "@/src/abilities/catalog";
+import { ABILITY_CATALOG } from "@/src/abilities/catalog";
 import { createActiveSolutionProfile, listSolutionProfiles } from "@/src/db/queries/solution_profiles";
 import { listSourceConnections } from "@/src/db/queries/sources";
 import { recordGovernanceAudit } from "@/src/lib/audit";
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   try { assertAdmin(session); } catch (error) { if (error instanceof PermissionDeniedError) return NextResponse.json({ error: "permission-denied" }, { status: 403 }); throw error; }
   const body = (await request.json()) as Record<string, unknown>;
   const enabledIds = strings(body.enabledAbilities);
-  const enabledAbilities = CORE_ABILITIES.filter((ability) => enabledIds.includes(ability.id)).map(({ id, version }) => ({ id, version }));
+  const enabledAbilities = ABILITY_CATALOG.filter((ability) => enabledIds.includes(ability.id)).map(({ id, version }) => ({ id, version }));
   const sourceIds = strings(body.sourceConnectionIds);
   const sources = await listSourceConnections(session.clientId);
   const allowedSources = new Set(sources.map((source) => source.connectorId));

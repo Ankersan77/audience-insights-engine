@@ -114,6 +114,11 @@ export function retainEvidence(candidate: EvidenceCandidate, policy: EvidencePol
     ? "quarantined"
     : "candidate";
   const safeContent = cohortSuppressed ? "[suppressed: cohort below configured minimum]" : redacted.content;
+  const retentionExpiry = addDays(candidate.ingestedAt, policy.retainedEvidenceDays);
+  const rightsExpiry = candidate.rights.expiresAt && Number.isFinite(Date.parse(candidate.rights.expiresAt))
+    ? candidate.rights.expiresAt
+    : undefined;
+  const expiresAt = rightsExpiry && Date.parse(rightsExpiry) < Date.parse(retentionExpiry) ? rightsExpiry : retentionExpiry;
 
   return {
     id: candidate.id,
@@ -128,7 +133,7 @@ export function retainEvidence(candidate: EvidenceCandidate, policy: EvidencePol
     publishedAt: candidate.publishedAt,
     observedAt: candidate.observedAt,
     ingestedAt: candidate.ingestedAt,
-    expiresAt: addDays(candidate.ingestedAt, policy.retainedEvidenceDays),
+    expiresAt,
     lifecycle,
     citationLevel: candidate.citationLevel,
     rights: candidate.rights,

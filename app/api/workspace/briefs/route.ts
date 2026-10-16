@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { ClaimMode, ProposedAnalysis } from "@/src/abilities/engine";
 import { runAbility } from "@/src/abilities/engine";
-import { getAbility } from "@/src/abilities/catalog";
+import { getDecisionBriefAbility } from "@/src/abilities/catalog";
 import { loadEvidenceItems } from "@/src/db/queries/canonical_evidence";
 import { listDecisionBriefs, saveDecisionBrief } from "@/src/db/queries/workspace_intelligence";
 import { assertPeopleBlind, redactIdentifiers } from "@/src/evidence/policy";
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   const body = (await request.json()) as Record<string, unknown>;
   const abilityId = typeof body.abilityId === "string" ? body.abilityId : "";
   const question = safeText(body.question);
-  if (!getAbility(abilityId) || !question) return NextResponse.json({ error: "A known ability and research question are required." }, { status: 400 });
+  if (!getDecisionBriefAbility(abilityId) || !question) return NextResponse.json({ error: "A decision-brief ability and research question are required." }, { status: 400 });
   const evidenceIds = ids(body.evidenceIds);
   const evidence = await loadEvidenceItems(session.clientId, evidenceIds);
   if (evidence.length !== evidenceIds.length) return NextResponse.json({ error: "One or more evidence items are outside the client scope." }, { status: 400 });

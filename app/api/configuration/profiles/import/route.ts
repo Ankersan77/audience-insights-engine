@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CORE_ABILITIES } from "@/src/abilities/catalog";
+import { ABILITY_CATALOG } from "@/src/abilities/catalog";
 import { createActiveSolutionProfile } from "@/src/db/queries/solution_profiles";
 import { listSourceConnections } from "@/src/db/queries/sources";
 import { recordGovernanceAudit } from "@/src/lib/audit";
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   }
   try {
     const portable = importSolutionProfile(await request.json());
-    const installed = new Set(CORE_ABILITIES.map((ability) => `${ability.id}@${ability.version}`));
+    const installed = new Set(ABILITY_CATALOG.map((ability) => `${ability.id}@${ability.version}`));
     if (portable.enabledAbilities.some((ability) => !installed.has(`${ability.id}@${ability.version}`))) {
       return NextResponse.json({ error: "The package references an ability version that is not installed." }, { status: 400 });
     }

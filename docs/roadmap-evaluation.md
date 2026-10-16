@@ -118,4 +118,12 @@ evidence, not a substitute for the open external gates below.
   per source, persists the full qualification result, and creates only pending-review signals.
   Missing baselines and missing public-conversation risk metadata fail closed as `needs_context` or
   risk rejection; they are never translated into a no-change claim.
+- The installed capability catalog now covers all ten blueprint abilities. Six use the governed
+  decision-brief contract; campaign pre-flight, live intelligence, post-campaign learning, and
+  Brand Lift remain versioned specialized contracts rather than being forced through a generic
+  brief handler.
+- The canonical scheduler enforces rights-aware evidence expiry. Expired source content, safe
+  references, structured observations/themes, and copied citation excerpts are removed while a
+  non-reversible lineage tombstone and tenant-scoped audit record remain. Decayed intelligence is
+  no longer left live.
 

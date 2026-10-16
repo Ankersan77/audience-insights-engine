@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { EvidenceItem, SourceClass } from "../core/contracts.ts";
-import { CORE_ABILITIES } from "./catalog.ts";
+import { ABILITY_CATALOG, DECISION_BRIEF_ABILITIES, SPECIALIZED_ABILITIES } from "./catalog.ts";
 import { runAbility } from "./engine.ts";
 
 const applicability = { markets: ["DK"], languages: ["da"], categories: ["category"], audiences: ["audience"], campaigns: [] };
@@ -43,11 +43,14 @@ const evidence = [
   item("brand-1", "client_owned", "brand-source-1"),
 ];
 
-test("all four core abilities expose versioned contracts and quality rubrics", () => {
-  assert.equal(CORE_ABILITIES.length, 4);
-  for (const ability of CORE_ABILITIES) {
+test("all ten target abilities expose versioned contracts and quality rubrics", () => {
+  assert.equal(ABILITY_CATALOG.length, 10);
+  assert.equal(DECISION_BRIEF_ABILITIES.length, 6);
+  assert.equal(SPECIALIZED_ABILITIES.length, 4);
+  assert.equal(new Set(ABILITY_CATALOG.map((ability) => ability.id)).size, 10);
+  for (const ability of ABILITY_CATALOG) {
     assert.match(ability.version, /^\d+\.\d+\.\d+$/);
-    assert.equal(ability.outputContract, "decision-brief@1");
+    assert.match(ability.outputContract, /@1$/);
     assert.ok(ability.evidenceRequirements.length > 0);
     assert.ok(ability.qualityRubric.length >= 4);
   }
@@ -169,4 +172,33 @@ test("audience output keeps attitudes distinct from observed behavior", () => {
   assert.equal(brief.status, "ready");
   assert.match(brief.pointOfView, /attitudes/i);
   assert.match(brief.pointOfView, /behavior/i);
+});
+
+test("durable decision briefs never duplicate a verbatim excerpt", () => {
+  const verbatim = {
+    ...item("quote-1", "official_or_public", "public-source-1"),
+    citationLevel: "verbatim" as const,
+    sourceContent: "A searchable exact public statement.",
+  };
+  const second = item("public-2b", "official_or_public", "public-source-2");
+  const brief = runAbility({
+    clientId: "client-a",
+    abilityId: "market-category-diagnosis",
+    question: "What was said?",
+    evidence: [verbatim, second],
+    now: "2026-10-16T00:00:00.000Z",
+    analysis: {
+      pointOfView: "Two sources contain a recurring formulation.",
+      clientRelevance: "The formulation may affect category framing.",
+      recommendation: "Review the source context before using wording.",
+      nextDecision: "Decide whether the wording itself is material.",
+      claimMode: "descriptive",
+      evidenceIds: [verbatim.id, second.id],
+      contradictions: [],
+      uncertainty: ["Exact wording remains separately governed."],
+    },
+  });
+  assert.equal(brief.status, "ready");
+  assert.equal(brief.citations.find((citation) => citation.evidenceId === verbatim.id)?.excerpt, undefined);
+  assert.match(brief.citations.find((citation) => citation.evidenceId === verbatim.id)?.reviewReason ?? "", /requires review/i);
 });

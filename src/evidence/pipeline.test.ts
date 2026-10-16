@@ -195,3 +195,17 @@ test("identifiers in document titles and expired rights quarantine retained evid
   assert.ok(result.evidence[0].redactions.includes("synthesis-email"));
   assert.ok(result.evidence[0].redactions.includes("rights-expired"));
 });
+
+test("source rights expiry shortens retained-evidence lifetime", async () => {
+  const adapter = new DocumentEvidenceAdapter([{
+    id: "rights-window",
+    title: "Licensed study",
+    content: "Aggregate category evidence.",
+    rights: { ...rights, expiresAt: "2026-11-01T00:00:00.000Z" },
+    method,
+    applicability,
+  }]);
+  const result = await adapter.run(job("job-rights-window", "documents"), context, policy);
+  assert.equal(result.evidence[0].expiresAt, "2026-11-01T00:00:00.000Z");
+  assert.equal(result.evidence[0].lifecycle, "candidate");
+});

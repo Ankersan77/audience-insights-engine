@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Citation, DecisionBrief, EvidenceItem } from "../core/contracts.ts";
-import { getAbility } from "./catalog.ts";
+import { getDecisionBriefAbility } from "./catalog.ts";
 import { resolveEvidence } from "../market-twin/resolver.ts";
 
 export type ClaimMode = "attitude" | "behavior" | "demand_proxy" | "causal" | "descriptive";
@@ -26,7 +26,9 @@ function citation(item: EvidenceItem): Citation {
     evidenceId: item.id,
     level: item.citationLevel,
     safeReference: item.externalReference,
-    excerpt: item.citationLevel === "verbatim" ? item.sourceContent : undefined,
+    // Exact wording remains in the governed evidence record until its own
+    // expiry; duplicating it into durable briefs would bypass retention.
+    excerpt: undefined,
     reviewReason: item.citationLevel === "verbatim" ? "Verbatim wording is material and requires review." : undefined,
     expiresAt: item.citationLevel === "verbatim" ? item.expiresAt : undefined,
   };
@@ -42,7 +44,7 @@ export function runAbility(input: {
   language?: string;
   now: string;
 }): DecisionBrief {
-  const ability = getAbility(input.abilityId);
+  const ability = getDecisionBriefAbility(input.abilityId);
   if (!ability) throw new Error(`unknown-ability:${input.abilityId}`);
   const resolution = resolveEvidence({
     clientId: input.clientId,

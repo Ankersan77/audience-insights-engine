@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CORE_ABILITIES } from "../abilities/catalog.ts";
+import { ABILITY_CATALOG, DECISION_BRIEF_ABILITIES } from "../abilities/catalog.ts";
 import { runAbility } from "../abilities/engine.ts";
 import { assessPreflight } from "../campaigns/analysis.ts";
 import type { Campaign, MeasurementPlan, SolutionProfile } from "../core/contracts.ts";
@@ -65,7 +65,7 @@ test("reference pilot proves the repository-verifiable roadmap as one governed v
   assert.equal(twin.list(clientId)[0].lifecycle, "live");
   assert.equal(onboarding.methodByCandidateId[onboarding.candidates[0].id].weighting, "Age, gender, region");
 
-  for (const ability of CORE_ABILITIES) {
+  for (const ability of DECISION_BRIEF_ABILITIES) {
     const selected = resolveEvidence({
       clientId,
       now,
@@ -160,7 +160,7 @@ test("reference pilot proves the repository-verifiable roadmap as one governed v
 
   const profile: SolutionProfile = {
     id: "profile-1", clientId, version: 1, status: "active",
-    enabledAbilities: CORE_ABILITIES.map(({ id, version }) => ({ id, version })), providerBindings: {}, markets: ["DK"], languages: ["da"],
+    enabledAbilities: ABILITY_CATALOG.map(({ id, version }) => ({ id, version })), providerBindings: {}, markets: ["DK"], languages: ["da"],
     reviewRoles: { learning: ["reviewer"], brand_lift: ["method-reviewer"] }, retention: { evidenceDays: 180, rawHours: 24, auditDays: 365 },
     sensingProfileId: "sensing-1", createdAt: now,
   };

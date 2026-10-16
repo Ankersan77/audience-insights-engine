@@ -104,6 +104,18 @@ test("evidence resolution excludes cross-client, stale, unlicensed, and inapplic
   assert.ok(resolution.basis.find((item) => item.evidenceId === "other-client")?.reasons.includes("different-client"));
 });
 
+test("declared evidence dimensions are enforced rather than treated as documentation", () => {
+  const resolution = resolveEvidence({
+    clientId: "client-a",
+    now: "2026-10-16T00:00:00.000Z",
+    requirements: [{ sourceClasses: ["official_or_public"], minimumItems: 1, minimumSourceDiversity: 1, requiredDimensions: ["audience"] }],
+    evidence: [evidence({ id: "missing-audience", applicability: { ...applicability, audiences: [] } })],
+  });
+  assert.equal(resolution.sufficient, false);
+  assert.deepEqual(resolution.selected, []);
+  assert.ok(resolution.basis[0].reasons.includes("missing-required-applicability-dimension"));
+});
+
 test("contradictory candidates stay visible instead of being resolved by ingestion order", () => {
   const source = extractOnboardingCandidates({
     clientId: "client-a",

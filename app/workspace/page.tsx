@@ -1,6 +1,6 @@
 import { AppShell } from "@/src/components/AppShell";
 import { PageHeader } from "@/src/components/PageHeader";
-import { CORE_ABILITIES } from "@/src/abilities/catalog";
+import { DECISION_BRIEF_ABILITIES } from "@/src/abilities/catalog";
 import { requireSession } from "@/src/lib/auth";
 import { getWorkspaceReadiness } from "@/src/db/queries/workspace";
 import { listSourceConnections } from "@/src/db/queries/sources";
@@ -127,7 +127,7 @@ export default async function WorkspacePage() {
         <h2 className="text-lg font-semibold text-foreground">Core research abilities</h2>
         <p className="mt-1 text-sm text-muted">All abilities share the same evidence-resolution and decision-brief contracts.</p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {CORE_ABILITIES.map((ability) => (
+          {DECISION_BRIEF_ABILITIES.map((ability) => (
             <article key={ability.id} className="rounded-md border border-border p-4">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="font-medium text-foreground">{ability.id.replaceAll("-", " ")}</h3>
@@ -143,7 +143,7 @@ export default async function WorkspacePage() {
       <SourceConnections initialSources={sources} isAdmin={isAdmin(session)} />
       <EvidenceOnboarding initialEvidence={evidence} sources={sources} canResearch={canResearch(session)} />
       <MarketTwin initialRecords={intelligence} evidence={evidence} canResearch={canResearch(session)} canReview={canReview(session)} />
-      <DecisionBriefs abilities={CORE_ABILITIES} evidence={evidence} initialBriefs={briefs} canResearch={canResearch(session)} />
+      <DecisionBriefs abilities={DECISION_BRIEF_ABILITIES} evidence={evidence} initialBriefs={briefs} canResearch={canResearch(session)} />
     </AppShell>
   );
 }

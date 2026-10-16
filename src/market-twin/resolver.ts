@@ -20,6 +20,17 @@ function daysBetween(older: string, newer: string): number {
   return Math.max(0, (new Date(newer).getTime() - new Date(older).getTime()) / 86_400_000);
 }
 
+function hasRequiredDimensions(item: EvidenceItem, requirement: EvidenceRequirement): boolean {
+  return requirement.requiredDimensions.every((dimension) => {
+    if (dimension === "market") return item.applicability.markets.length > 0;
+    if (dimension === "language") return item.applicability.languages.length > 0;
+    if (dimension === "category") return item.applicability.categories.length > 0;
+    if (dimension === "audience") return item.applicability.audiences.length > 0;
+    if (dimension === "campaign") return item.applicability.campaigns.length > 0;
+    return false;
+  });
+}
+
 export function resolveEvidence(input: {
   clientId: string;
   now: string;
@@ -46,10 +57,12 @@ export function resolveEvidence(input: {
       reasons.push("language-not-applicable");
     }
 
-    const compatibleRequirement = input.requirements.find((requirement) =>
+    const sourceCompatible = input.requirements.filter((requirement) =>
       requirement.sourceClasses.includes(item.sourceClass),
     );
-    if (!compatibleRequirement) reasons.push("source-class-not-required");
+    const compatibleRequirement = sourceCompatible.find((requirement) => hasRequiredDimensions(item, requirement));
+    if (sourceCompatible.length === 0) reasons.push("source-class-not-required");
+    else if (!compatibleRequirement) reasons.push("missing-required-applicability-dimension");
     if (compatibleRequirement?.maximumAgeDays !== undefined) {
       const observed = item.observedAt ?? item.publishedAt ?? item.ingestedAt;
       if (daysBetween(observed, input.now) > compatibleRequirement.maximumAgeDays) reasons.push("stale");
@@ -69,7 +82,7 @@ export function resolveEvidence(input: {
   const selected = candidates.map((candidate) => candidate.item);
   const gaps: string[] = [];
   for (const requirement of input.requirements) {
-    const matching = selected.filter((item) => requirement.sourceClasses.includes(item.sourceClass));
+    const matching = selected.filter((item) => requirement.sourceClasses.includes(item.sourceClass) && hasRequiredDimensions(item, requirement));
     if (matching.length < requirement.minimumItems) {
       gaps.push(`needs ${requirement.minimumItems - matching.length} more item(s) from ${requirement.sourceClasses.join("/")}`);
     }

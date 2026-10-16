@@ -102,11 +102,16 @@ jobs, receipts, logs, exports or the product surface.
 
 The repository implements and tests the canonical contracts, additive data model, tenant scope,
 people-blind evidence boundary, Market Twin transitions and resolution, four core research
+abilities plus cultural/trend and research-planning briefs, four specialized campaign/study
 abilities, campaign lifecycle analysis, measurement and Brand Lift guardrails, selective
 monitoring, solution packaging, and operational resilience. `/workspace` is the owned, tenant-
 scoped control surface. Runtime permissions distinguish owner, administrator, researcher,
 reviewer, and viewer responsibilities; product actions are protected at the API boundary rather
 than only hidden in the interface.
+
+The canonical worker also applies source-rights-aware expiry: expired evidence is reduced to a
+non-reversible lineage tombstone, structured sidecars and copied citation wording are removed, and
+decayed Market Twin intelligence is marked expired with a tenant-scoped audit entry.
 
 Live-source activation and production readiness still require the named external evidence in
 `docs/external-validation-register.md`; code and deterministic fixtures never silently satisfy
