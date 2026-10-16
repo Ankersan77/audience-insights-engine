@@ -50,12 +50,36 @@ survive budget edits and are never refunded automatically. A reservation expires
 60 seconds, at UTC midnight or at binding expiry, whichever is first; it cannot be stockpiled into
 the next day's allowance. A dispatched permit cannot be replayed after an unknown outcome.
 
-`show` reports conservative reserved totals, not measured spend. `reconcile` settles at most 1,000
-expired attempts per invocation; repeat explicitly if the count is 1,000. It marks unstarted work
-`cancelled` and dispatched work `unknown`, without retries/refunds. Reconciliation is currently an
-operator action, not a scheduled worker. Preserve the ledger in backup/restore; never delete it to
-free capacity. Run application/database clocks in sync. A provider's price ceiling, actual usage,
-source-processing permission and client/model approval still require separate acceptance.
+`show` reports conservative reserved totals, not measured spend. Its `usage` covers the current
+UTC authorization day; `backlog` covers **all days**, including the oldest expired unresolved
+deadline and unknown outcomes. Unknown is a terminal accounting uncertainty, not an instruction
+to retry. `reconcile` settles at most 1,000 expired attempts per invocation; repeat explicitly if
+the count is 1,000. It marks unstarted work `cancelled` and dispatched work `unknown`, without
+retries/refunds. Preserve the ledger in backup/restore; never delete it to free capacity. Run
+application/database clocks in sync. A provider's price ceiling, actual usage, source-processing
+permission and client/model approval still require separate acceptance.
+
+### Automatic synthesis recovery
+
+Apply migration `0016` (partial pending-deadline indexes) before restarting the worker. The normal
+`npm run worker` process registers `market-research-synthesis-maintenance` independently of the
+monitoring queue, on `*/5 * * * *` UTC. No model credentials or client budget activation are needed.
+Each tick selects up to 20 clients with the oldest expired work and settles up to 50 attempts per
+client, including prior days. It uses the same tenant lock as admission/dispatch/completion but
+skips an already-held lock. Each client's status changes and audits commit together; failed writes
+roll back that client. Database statements have a five-second timeout and lock waits a one-second
+timeout. A failure requests at most two queue retries with backoff; retries perform metadata
+reconciliation only, never another provider call. Duplicate workers cannot double-finalize attempts.
+
+Observe `synthesis-maintenance` logs: `examinedClients`, `reconciledAttempts`, `busyClients`,
+`failedClients`, and `batchFull` (a batch limit was reached; not an exact remaining count).
+`synthesis-maintenance-failed` has only a redacted operational error code. Configure deployment
+alerts for failed queue jobs, absent heartbeat logs for more than two scheduled intervals, repeated
+full/busy batches, and an increasing all-day backlog age. Those alerts need the deployment's log
+collector and owner; this repository does not claim they have been configured. Sustained contention
+or more than 20 busy tenants can delay other clients; inspect locks and use the per-client CLI for
+targeted recovery. Never reset attempts or erase the ledger to bypass an unknown provider outcome.
+Worker downtime is caught up from database state after restart; no missed provider call is replayed.
 
 Canonical monitoring creates durable database jobs and dispatches their IDs through pg-boss. The
 worker claims each job once, resolves its adapter through `productionRegistry.ts`, runs bounded

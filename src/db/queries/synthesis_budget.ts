@@ -1,4 +1,4 @@
-import { and, eq, gte, lt, sql } from "drizzle-orm";
+import { and, eq, gte, lt, sql, type SQL } from "drizzle-orm";
 import { db } from "@/src/db/client";
 import { client, governanceAudit, synthesisAuthorization, synthesisBudget } from "@/src/db/schema";
 import { validateSynthesisAttempt, validateSynthesisBudget, type SynthesisBudgetPolicy, type SynthesisAttempt, type SynthesisPermit, type SynthesisOutcome, type SynthesisSpendLedger } from "@/src/abilities/synthesisBudget";
@@ -146,23 +146,60 @@ export async function finishSynthesisAttempt(permit: SynthesisPermit, outcome: S
   });
 }
 
+function expiredAttempts(now: Date | SQL) {
+  return sql`((${synthesisAuthorization.status} = 'reserved' and ${synthesisAuthorization.dispatchBy} <= ${now}) or (${synthesisAuthorization.status} = 'dispatched' and ${synthesisAuthorization.executionDeadline} <= ${now}))`;
+}
+const attemptDeadline = sql`case when ${synthesisAuthorization.status} = 'reserved' then ${synthesisAuthorization.dispatchBy} else ${synthesisAuthorization.executionDeadline} end`;
+
+/** Caller holds the same tenant lock as admission, dispatch and completion. */
+async function reconcileClient(tx: Tx, clientId: number, limit: number): Promise<number> {
+  const now = await clock(tx);
+  const expired = await tx.select().from(synthesisAuthorization).where(and(eq(synthesisAuthorization.clientId, clientId), expiredAttempts(now)))
+    .orderBy(attemptDeadline, synthesisAuthorization.id).limit(limit).for("update");
+  for (const row of expired) {
+    const status = row.status === "reserved" ? "cancelled" : "unknown";
+    await tx.update(synthesisAuthorization).set({ status, finishedAt: now }).where(eq(synthesisAuthorization.id, row.id));
+    await audit(tx, clientId, row.id, "reconcile_synthesis", { status, resultAuthorized: false });
+  }
+  return expired.length;
+}
+
 /** Reconcile crashes without retrying calls or refunding reservations. Bounded per invocation. */
 export async function reconcileSynthesisAttempts(clientSlug: string): Promise<number> {
   return db.transaction(async (tx) => {
     const [tenant] = await tx.select({ id: client.id }).from(client).where(eq(client.slug, clientSlug));
     if (!tenant) throw new Error("synthesis-budget-client-not-found");
     await lock(tx, tenant.id);
-    const now = await clock(tx);
-    const expired = await tx.select().from(synthesisAuthorization).where(and(eq(synthesisAuthorization.clientId, tenant.id),
-      sql`((${synthesisAuthorization.status} = 'reserved' and ${synthesisAuthorization.dispatchBy} <= ${now}) or (${synthesisAuthorization.status} = 'dispatched' and ${synthesisAuthorization.executionDeadline} <= ${now}))`))
-      .orderBy(synthesisAuthorization.id).limit(1000).for("update");
-    for (const row of expired) {
-      const status = row.status === "reserved" ? "cancelled" : "unknown";
-      await tx.update(synthesisAuthorization).set({ status, finishedAt: now }).where(eq(synthesisAuthorization.id, row.id));
-      await audit(tx, tenant.id, row.id, "reconcile_synthesis", { status, resultAuthorized: false });
-    }
-    return expired.length;
+    return reconcileClient(tx, tenant.id, 1000);
   });
+}
+
+/** Independent worker maintenance: bounded, oldest-first and safe to repeat across processes.
+ * Busy tenants are deferred, not allowed to hold up other tenants. Each tenant commits separately;
+ * an audit/write failure rolls back that tenant and is reported without exposing database errors.
+ */
+export async function reconcileDueSynthesisAttempts() {
+  const tenants = await db.transaction(async (tx) => {
+    await tx.execute(sql`set local statement_timeout = '5s'`);
+    return tx.select({ clientId: synthesisAuthorization.clientId }).from(synthesisAuthorization)
+      .where(expiredAttempts(sql`statement_timestamp()`)).groupBy(synthesisAuthorization.clientId)
+      .orderBy(sql`min(${attemptDeadline})`, synthesisAuthorization.clientId).limit(20);
+  });
+  const result = { examinedClients: tenants.length, reconciledAttempts: 0, busyClients: 0, failedClients: 0, batchFull: tenants.length === 20 };
+  for (const tenant of tenants) {
+    try {
+      const count = await db.transaction(async (tx) => {
+        await tx.execute(sql`set local lock_timeout = '1s'`);
+        await tx.execute(sql`set local statement_timeout = '5s'`);
+        const acquired = await tx.execute<{ locked: boolean }>(sql`select pg_try_advisory_xact_lock(73008, ${tenant.clientId}) as locked`);
+        if (!acquired.rows[0].locked) return null;
+        return reconcileClient(tx, tenant.clientId, 50);
+      });
+      if (count === null) result.busyClients++;
+      else { result.reconciledAttempts += count; if (count === 50) result.batchFull = true; }
+    } catch { result.failedClients++; }
+  }
+  return result;
 }
 
 export async function inspectSynthesisBudget(clientSlug: string) {
@@ -177,7 +214,13 @@ export async function inspectSynthesisBudget(clientSlug: string) {
   }).from(synthesisAuthorization).where(and(eq(synthesisAuthorization.clientId, tenant.id),
     sql`${synthesisAuthorization.authorizedAt} >= (date_trunc('day', current_timestamp at time zone 'UTC') at time zone 'UTC')`,
     sql`${synthesisAuthorization.authorizedAt} < (date_trunc('day', current_timestamp at time zone 'UTC') at time zone 'UTC') + interval '1 day'`));
-  return { policy: policy ?? null, usage, window: "UTC authorization day", accounting: "Reserved upper bounds, not measured provider charges. No automatic refunds or replay." };
+  // Recovery is not a daily cost window: yesterday's crashed work must remain visible.
+  const [backlog] = await db.select({
+    expiredUnresolvedAttempts: sql<string>`count(*) filter (where ${expiredAttempts(sql`statement_timestamp()`)})::text`,
+    unknownAttempts: sql<string>`count(*) filter (where ${synthesisAuthorization.status} = 'unknown')::text`,
+    oldestExpiredAt: sql<string | null>`min(${attemptDeadline}) filter (where ${expiredAttempts(sql`statement_timestamp()`)})::text`,
+  }).from(synthesisAuthorization).where(eq(synthesisAuthorization.clientId, tenant.id));
+  return { policy: policy ?? null, usage, backlog, backlogWindow: "All authorization days", window: "UTC authorization day", accounting: "Reserved upper bounds, not measured provider charges. No automatic refunds or replay." };
 }
 
 export const synthesisSpendLedger: SynthesisSpendLedger = {

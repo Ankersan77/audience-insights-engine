@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { TestContext } from "node:test";
 import type { Pool } from "pg";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { client, governanceAudit, synthesisAuthorization } from "../src/db/schema";
 import { withSynthesisBudget } from "../src/abilities/governedSynthesis";
 import type { SynthesisSpendPlan, SynthesisAttempt } from "../src/abilities/synthesisBudget";
@@ -11,7 +11,7 @@ import type { ResearchSynthesisInput } from "../src/abilities/synthesis";
 // Called from the existing migrated integration suite, not a second concurrent migrator.
 export async function runSynthesisBudgetCases(t: TestContext, db: typeof import("../src/db/client").db, probe: Pool) {
   const { setSynthesisBudget, inspectSynthesisBudget, reserveSynthesisAttempt, dispatchSynthesisAttempt,
-    finishSynthesisAttempt, reconcileSynthesisAttempts, synthesisSpendLedger } = await import("../src/db/queries/synthesis_budget");
+    finishSynthesisAttempt, reconcileSynthesisAttempts, reconcileDueSynthesisAttempts, synthesisSpendLedger } = await import("../src/db/queries/synthesis_budget");
   const settings = { currency: "DKK", dailyCostMicros: 100, dailyRequests: 2, enabled: true };
   const plan = (): SynthesisSpendPlan => ({ currency: "DKK", maxCostMicros: 50, providerId: "synthetic", providerVersion: "1",
     model: "fixture-model", approvalReference: "acceptance:synthetic-only", bindingExpiresAt: new Date(Date.now() + 60_000).toISOString(),
@@ -40,7 +40,7 @@ export async function runSynthesisBudgetCases(t: TestContext, db: typeof import(
     assert.equal((await inspectSynthesisBudget(owner.slug)).policy, null);
     await setSynthesisBudget(owner.slug, settings);
     await assert.rejects(reserveSynthesisAttempt(attempt(owner.id, { currency: "EUR" })), /currency-mismatch/);
-    await assert.rejects(reserveSynthesisAttempt(attempt(owner.id, { bindingExpiresAt: new Date(Date.now() - 1).toISOString() })), /binding-expired/);
+    await assert.rejects(reserveSynthesisAttempt(attempt(owner.id, { bindingExpiresAt: new Date(Date.now() - 60_000).toISOString() })), /binding-expired/);
     const results = await Promise.allSettled(Array.from({ length: 5 }, () => reserveSynthesisAttempt(attempt(owner.id))));
     assert.equal(results.filter((result) => result.status === "fulfilled").length, 2);
     assert.equal(results.filter((result) => result.status === "rejected").length, 3);
@@ -107,7 +107,7 @@ export async function runSynthesisBudgetCases(t: TestContext, db: typeof import(
     const owner = await tenant(); await setSynthesisBudget(owner.slug, settings);
     const reserved = await reserveSynthesisAttempt(attempt(owner.id));
     const dispatched = await reserveSynthesisAttempt(attempt(owner.id)); await dispatchSynthesisAttempt(dispatched);
-    await db.update(synthesisAuthorization).set({ dispatchBy: new Date(Date.now() - 1), executionDeadline: new Date(Date.now() - 1) }).where(eq(synthesisAuthorization.clientId, owner.id));
+    await db.update(synthesisAuthorization).set({ dispatchBy: sql`clock_timestamp() - interval '1 second'`, executionDeadline: sql`clock_timestamp() - interval '1 second'` }).where(eq(synthesisAuthorization.clientId, owner.id));
     assert.equal((await inspectSynthesisBudget(owner.slug)).usage.expiredUnresolvedAttempts, "2");
     await assert.rejects(dispatchSynthesisAttempt(reserved), /expired/);
     assert.equal(await reconcileSynthesisAttempts(owner.slug), 2); assert.equal(await reconcileSynthesisAttempts(owner.slug), 0);
@@ -158,5 +158,112 @@ export async function runSynthesisBudgetCases(t: TestContext, db: typeof import(
     const audits = await db.select().from(governanceAudit).where(eq(governanceAudit.clientId, owner.id));
     assert.ok(!JSON.stringify({ rows, audits }).includes("Synthetic private decision"));
     assert.ok(!JSON.stringify({ rows, audits }).includes("privateResult"));
+  });
+
+  await t.test("scheduled reconciliation drains bounded historical batches and preserves active/terminal work", async () => {
+    const owner = await tenant();
+    await setSynthesisBudget(owner.slug, { ...settings, dailyRequests: 100, dailyCostMicros: 5000 });
+    const permits = [];
+    for (let i = 0; i < 51; i++) permits.push(await reserveSynthesisAttempt(attempt(owner.id)));
+    await dispatchSynthesisAttempt(permits[0]);
+    const yesterday = new Date(Date.now() - 86_400_000);
+    await db.update(synthesisAuthorization).set({ authorizedAt: yesterday, dispatchBy: yesterday, executionDeadline: yesterday }).where(eq(synthesisAuthorization.clientId, owner.id));
+    const live = await reserveSynthesisAttempt(attempt(owner.id, { maxDurationMs: 60_000 }));
+    await dispatchSynthesisAttempt(live);
+    const completed = await reserveSynthesisAttempt(attempt(owner.id));
+    await dispatchSynthesisAttempt(completed); await finishSynthesisAttempt(completed, "succeeded");
+    const before = await inspectSynthesisBudget(owner.slug);
+    assert.equal(before.usage.expiredUnresolvedAttempts, "0");
+    assert.equal(before.backlog.expiredUnresolvedAttempts, "51");
+    assert.ok(before.backlog.oldestExpiredAt);
+    await setSynthesisBudget(owner.slug, { ...settings, enabled: false }); // Recovery must not depend on an enabled budget.
+    const first = await reconcileDueSynthesisAttempts();
+    assert.equal(first.failedClients, 0); assert.equal(first.batchFull, true);
+    assert.equal((await inspectSynthesisBudget(owner.slug)).backlog.expiredUnresolvedAttempts, "1");
+    const concurrent = await Promise.all([reconcileDueSynthesisAttempts(), reconcileDueSynthesisAttempts()]);
+    assert.ok(concurrent.every((entry) => entry.failedClients === 0));
+    const after = await inspectSynthesisBudget(owner.slug);
+    assert.equal(after.backlog.expiredUnresolvedAttempts, "0"); assert.equal(after.backlog.oldestExpiredAt, null);
+    assert.equal(after.backlog.unknownAttempts, "1");
+    assert.equal(after.usage.authorizedCostMicros, "100"); // Historical reservations are not shifted or refunded.
+    const rows = await db.select().from(synthesisAuthorization).where(eq(synthesisAuthorization.clientId, owner.id));
+    assert.equal(rows.find((row) => row.id === Number(live.id))?.status, "dispatched");
+    assert.equal(rows.find((row) => row.id === Number(completed.id))?.status, "succeeded");
+    assert.equal(rows.filter((row) => row.status === "cancelled").length, 50);
+    const audits = await db.select().from(governanceAudit).where(and(eq(governanceAudit.clientId, owner.id), eq(governanceAudit.action, "reconcile_synthesis")));
+    assert.equal(audits.length, 51); assert.equal(new Set(audits.map((entry) => entry.entityId)).size, 51);
+    assert.equal((await finishSynthesisAttempt(permits[0], "succeeded")).accepted, false);
+    await finishSynthesisAttempt(live, "cancelled");
+  });
+
+  await t.test("reconciliation skips busy tenants and rolls back both status and audit on write contention", async () => {
+    const busy = await tenant(); const other = await tenant();
+    for (const owner of [busy, other]) {
+      await setSynthesisBudget(owner.slug, settings);
+      await reserveSynthesisAttempt(attempt(owner.id));
+      await db.update(synthesisAuthorization).set({ dispatchBy: sql`clock_timestamp() - interval '1 second'` }).where(eq(synthesisAuthorization.clientId, owner.id));
+    }
+    const barrier = await probe.connect();
+    try {
+      await barrier.query("begin"); await barrier.query("select pg_advisory_xact_lock(73008, $1)", [busy.id]);
+      const run = await reconcileDueSynthesisAttempts();
+      assert.ok(run.busyClients >= 1); assert.equal(run.failedClients, 0);
+      assert.equal((await inspectSynthesisBudget(busy.slug)).backlog.expiredUnresolvedAttempts, "1");
+      assert.equal((await inspectSynthesisBudget(other.slug)).backlog.expiredUnresolvedAttempts, "0");
+      await barrier.query("commit");
+      await barrier.query("begin"); await barrier.query("lock table governance_audit in access exclusive mode");
+      const failed = await reconcileDueSynthesisAttempts();
+      assert.ok(failed.failedClients >= 1);
+      assert.equal((await inspectSynthesisBudget(busy.slug)).backlog.expiredUnresolvedAttempts, "1");
+      await barrier.query("commit");
+      const audits = await db.select().from(governanceAudit).where(and(eq(governanceAudit.clientId, busy.id), eq(governanceAudit.action, "reconcile_synthesis")));
+      assert.equal(audits.length, 0);
+      assert.equal(await reconcileSynthesisAttempts(busy.slug), 1);
+      await assert.rejects(reserveSynthesisAttempt(attempt(other.id, { maxCostMicros: 100 })), /daily-limit/);
+    } finally { await barrier.query("rollback"); barrier.release(); }
+  });
+
+  await t.test("scheduled recovery bounds tenant fan-out and drains the remaining oldest work on later ticks", async () => {
+    const owners = [];
+    for (let i = 0; i < 21; i++) {
+      const owner = await tenant(); owners.push(owner);
+      await setSynthesisBudget(owner.slug, settings); await reserveSynthesisAttempt(attempt(owner.id));
+      await db.update(synthesisAuthorization).set({ dispatchBy: sql`clock_timestamp() - interval '10 days'` }).where(eq(synthesisAuthorization.clientId, owner.id));
+    }
+    const first = await reconcileDueSynthesisAttempts();
+    assert.equal(first.examinedClients, 20); assert.equal(first.batchFull, true); assert.equal(first.failedClients, 0);
+    const backlog = await Promise.all(owners.map(async (owner) => Number((await inspectSynthesisBudget(owner.slug)).backlog.expiredUnresolvedAttempts)));
+    assert.equal(backlog.reduce((a, b) => a + b, 0), 1);
+    await reconcileDueSynthesisAttempts();
+    const remaining = await Promise.all(owners.map(async (owner) => Number((await inspectSynthesisBudget(owner.slug)).backlog.expiredUnresolvedAttempts)));
+    assert.equal(remaining.reduce((a, b) => a + b, 0), 0);
+  });
+
+  await t.test("real pg-boss registration and job execution perform metadata-only recovery", async () => {
+    const { PgBoss } = await import("pg-boss");
+    const { startSynthesisMaintenance, SYNTHESIS_MAINTENANCE_QUEUE } = await import("../src/workers/synthesisMaintenance");
+    const owner = await tenant(); await setSynthesisBudget(owner.slug, settings);
+    await reserveSynthesisAttempt(attempt(owner.id));
+    await db.update(synthesisAuthorization).set({ dispatchBy: sql`clock_timestamp() - interval '1 second'` }).where(eq(synthesisAuthorization.clientId, owner.id));
+    const errors: unknown[] = [];
+    const boss = new PgBoss({ connectionString: process.env.TEST_DATABASE_URL });
+    boss.on("error", (error) => errors.push(error));
+    try {
+      await boss.start(); await startSynthesisMaintenance(boss);
+      const schedule = await boss.getSchedule(SYNTHESIS_MAINTENANCE_QUEUE);
+      assert.equal(schedule?.cron, "*/5 * * * *"); assert.equal(schedule?.timezone, "UTC");
+      const jobId = await boss.send(SYNTHESIS_MAINTENANCE_QUEUE, null); assert.ok(jobId);
+      const deadline = Date.now() + 15_000;
+      let completed = false;
+      while (Date.now() < deadline) {
+        const [job] = await boss.findJobs(SYNTHESIS_MAINTENANCE_QUEUE, { id: jobId });
+        assert.notEqual(job?.state, "failed");
+        if (job?.state === "completed") { completed = true; break; }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      assert.equal(completed, true); assert.deepEqual(errors, []);
+      assert.equal((await inspectSynthesisBudget(owner.slug)).backlog.expiredUnresolvedAttempts, "0");
+      assert.equal((await inspectSynthesisBudget(owner.slug)).usage.authorizedCostMicros, "50");
+    } finally { await boss.stop({ graceful: true, timeout: 5000 }); }
   });
 }

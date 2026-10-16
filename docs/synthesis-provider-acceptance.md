@@ -181,10 +181,14 @@ Application/database clocks must be synchronized; database checks remain authori
 
 The operator CLI supports `show`, `set` and bounded `reconcile` (see the runbook). Reconciliation
 turns expired undispatched reservations into `cancelled`, and expired dispatched attempts into
-`unknown`. It never retries or refunds. A recurring reconciler and the owned-surface budget editor
-are not wired yet. Synthetic PostgreSQL tests cover concurrency, tenant isolation, revocation,
-expiry during audit contention, crash reconciliation and the actual governance wrapper. They do
-not replace real provider metering/processing acceptance or pilot quality evidence.
+`unknown`. It never retries or refunds. The worker now registers an independent five-minute
+reconciliation queue with bounded, oldest-first tenant batches, busy-lock deferral and redacted
+failure telemetry. `show` exposes an all-day backlog separately from daily authorized totals.
+Migration `0016` adds partial pending-deadline indexes. The owned-surface budget editor remains open.
+Synthetic PostgreSQL tests cover concurrency, tenant isolation, revocation, expiry during audit
+contention, crash reconciliation, batch limits and actual pg-boss execution as well as the governance
+wrapper. They do not replace production scheduling/alert proof, real provider metering/processing
+acceptance or pilot quality evidence.
 
 ## Protocol references
 

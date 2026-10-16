@@ -504,6 +504,8 @@ export const synthesisAuthorization = pgTable("synthesis_authorization", {
 }, (table) => [
   unique("synthesis_authorization_client_attempt_unique").on(table.clientId, table.attemptKey),
   index("synthesis_authorization_client_time_idx").on(table.clientId, table.authorizedAt),
+  index("synthesis_reserved_deadline_idx").on(table.dispatchBy, table.clientId).where(sql`${table.status} = 'reserved'`),
+  index("synthesis_dispatched_deadline_idx").on(table.executionDeadline, table.clientId).where(sql`${table.status} = 'dispatched'`),
 ]);
 
 export const sourceAcquisitionReceipt = pgTable("source_acquisition_receipt", {

@@ -106,7 +106,10 @@ resolves exact client bindings from server configuration and requires matching u
 processing/quality gates, approved current source IDs and locked evidence/Market Twin revalidation
 at reservation, dispatch and completion. Synthetic transport/database tests cover the actual
 factory; authenticated HTTP proves absent configuration remains disabled. No real client is enabled.
-Live acceptance, actual usage reconciliation, scheduled reconciliation, owned-surface budget
+An independent five-minute worker now reconciles expired attempts across authorization days in
+bounded, tenant-locked batches without replay or refund. Partial deadline indexes (`0016`),
+all-day backlog visibility and synthetic real-pg-boss execution cover this recovery path.
+Live acceptance, actual usage reconciliation, owned-surface budget
 administration, live-provider HTTP proof and human benchmarks remain open. See
 `docs/synthesis-provider-acceptance.md`.
 

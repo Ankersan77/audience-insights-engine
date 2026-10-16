@@ -118,7 +118,12 @@ evidence, not a substitute for the open external gates below.
   silently clipped before synthesis. Durable, separate synthesis spend admission is now implemented
   through a provider-neutral wrapper and PostgreSQL ledger: finite currency/request reservations,
   one-use dispatch, versioned budget revocation, deadline checks, atomic audit and operator crash
-  reconciliation have synthetic unit/database coverage. The production composition root now binds
+  reconciliation have synthetic unit/database coverage. A separate five-minute pg-boss maintenance
+  queue now drains expired work across days in bounded tenant batches, skips busy tenant locks and
+  rolls back status/audit together on failure. Partial deadline indexes and all-day backlog counts
+  support recovery; synthetic tests cover actual queue execution, concurrency and write contention.
+  This does not reconcile provider invoices or prove production scheduler availability.
+  The production composition root now binds
   the authenticated tenant to explicit server configuration, exact processing/quality acceptance
   scopes, approved source IDs and the budget wrapper. Locked checks repeat at reservation, dispatch
   and completion; current rights, evidence/methods, reviewed context and revoked configuration/gates

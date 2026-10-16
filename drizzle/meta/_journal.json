@@ -106,6 +106,13 @@
       "when": 1792169891901,
       "tag": "0015_synthesis_spend_admission",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792173504329,
+      "tag": "0016_synthesis_recovery_indexes",
+      "breakpoints": true
     }
   ]
 }
