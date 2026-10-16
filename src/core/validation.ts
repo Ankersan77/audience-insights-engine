@@ -110,6 +110,21 @@ export function validateMeasurementPlan(value: MeasurementPlan): ValidationResul
   if (value.metrics.length === 0) errors.push("at least one metric is required");
   const keys = value.metrics.map((metric) => metric.key);
   if (new Set(keys).size !== keys.length) errors.push("metric keys must be unique");
+  for (const metric of value.metrics) {
+    required(metric.key, "metrics.key", errors);
+    required(metric.label, `metrics.${metric.key || "unknown"}.label`, errors);
+    required(metric.unit, `metrics.${metric.key || "unknown"}.unit`, errors);
+    required(metric.population, `metrics.${metric.key || "unknown"}.population`, errors);
+  }
+  const metricKeys = new Set(keys);
+  for (const [field, record] of [["baseline", value.baseline], ["targets", value.targets], ["materialityThresholds", value.materialityThresholds]] as const) {
+    const recordKeys = Object.keys(record);
+    if (recordKeys.some((key) => !metricKeys.has(key))) errors.push(`${field} contains an unknown metric key`);
+    if (keys.some((key) => !(key in record))) errors.push(`${field} must cover every metric key`);
+    if (Object.values(record).some((item) => !Number.isFinite(item))) errors.push(`${field} values must be finite`);
+  }
+  if (value.checkpoints.some((checkpoint) => !Number.isFinite(Date.parse(checkpoint)))) errors.push("checkpoints must be valid dates");
+  if (Object.values(value.materialityThresholds).some((threshold) => threshold < 0)) errors.push("materiality thresholds cannot be negative");
   return result(errors);
 }
 
@@ -118,6 +133,15 @@ export function validateStudyDesign(value: StudyDesign): ValidationResult {
   required(value.clientId, "clientId", errors);
   required(value.measurementPlanId, "measurementPlanId", errors);
   required(value.outcomeInstrument, "outcomeInstrument", errors);
+  for (const [field, size] of [["sampleSizeTreatment", value.sampleSizeTreatment], ["sampleSizeControl", value.sampleSizeControl]] as const) {
+    if (size !== undefined && (!Number.isInteger(size) || size <= 0)) errors.push(`${field} must be a positive integer`);
+  }
+  if (value.fieldworkWindow) {
+    const start = Date.parse(value.fieldworkWindow.start);
+    const end = Date.parse(value.fieldworkWindow.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) errors.push("fieldwork window must contain valid dates");
+    else if (start >= end) errors.push("fieldwork window end must be after start");
+  }
   return result(errors);
 }
 
@@ -127,7 +151,11 @@ export function validateSolutionProfile(value: SolutionProfile): ValidationResul
   if (value.version < 1) errors.push("version must be positive");
   if (value.retention.evidenceDays <= 0) errors.push("evidence retention must be positive");
   if (value.retention.rawHours < 0) errors.push("raw retention cannot be negative");
+  if (value.retention.auditDays <= 0) errors.push("audit retention must be positive");
   if (value.enabledAbilities.length === 0) errors.push("at least one ability must be enabled");
+  if (value.markets.length === 0) errors.push("at least one market is required");
+  if (value.languages.length === 0) errors.push("at least one language is required");
+  if (value.enabledAbilities.some((ability) => !ability.id.trim() || !ability.version.trim())) errors.push("ability references must include id and version");
   return result(errors);
 }
 
@@ -185,11 +213,19 @@ export function validateSensingProfile(value: SensingProfile): ValidationResult 
   const errors: string[] = [];
   required(value.clientId, "clientId", errors);
   required(value.cadence, "cadence", errors);
+  if (!["hourly", "daily", "weekly", "monthly"].includes(value.cadence)) errors.push("unsupported-monitoring-cadence");
   if (value.version < 1) errors.push("version must be positive");
   confidence(value.confidenceThreshold, "confidenceThreshold", errors);
   if (value.materialityThreshold < 0) errors.push("materialityThreshold cannot be negative");
   if (value.freshnessDays <= 0) errors.push("freshnessDays must be positive");
   if (value.minimumCorroboration < 1) errors.push("minimumCorroboration must be positive");
   if (value.sourceConnectionIds.length === 0) errors.push("at least one source connection is required");
+  if (value.themes.length === 0) errors.push("at least one theme is required");
+  if (value.markets.length === 0) errors.push("at least one market is required");
+  for (const period of value.quietPeriods) {
+    const start = Date.parse(period.start);
+    const end = Date.parse(period.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) errors.push("quiet periods must contain an ordered valid window");
+  }
   return result(errors);
 }

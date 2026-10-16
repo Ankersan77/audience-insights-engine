@@ -11,11 +11,11 @@ function commaList(value: FormDataEntryValue | null): string[] {
 export function EvidenceOnboarding({
   initialEvidence,
   sources,
-  isAdmin,
+  canResearch,
 }: {
   initialEvidence: CanonicalEvidenceListRow[];
   sources: SourceConnectionListRow[];
-  isAdmin: boolean;
+  canResearch: boolean;
 }) {
   const [evidence, setEvidence] = useState(initialEvidence);
   const [open, setOpen] = useState(false);
@@ -94,7 +94,7 @@ export function EvidenceOnboarding({
           <h2 className="text-lg font-semibold text-foreground">Evidence onboarding</h2>
           <p className="mt-1 text-sm text-muted">Only minimized canonical evidence is retained; raw provider payloads are not accepted.</p>
         </div>
-        {isAdmin && eligibleSources.length > 0 ? (
+        {canResearch && eligibleSources.length > 0 ? (
           <button type="button" onClick={() => setOpen((value) => !value)} className="rounded-md bg-[var(--button-primary-bg)] px-3 py-2 text-sm font-medium text-[var(--button-primary-text)]">
             {open ? "Cancel" : "Onboard evidence"}
           </button>

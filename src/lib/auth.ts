@@ -14,6 +14,7 @@ import {
 } from "openid-client";
 import { db } from "@/src/db/client";
 import { appUser, client, clientMembership } from "@/src/db/schema";
+import type { TenantRole } from "@/src/core/tenancy";
 
 /**
  * OneLogin OIDC sign-in (Rule 7: company SSO for an internal tool, no local
@@ -23,7 +24,7 @@ import { appUser, client, clientMembership } from "@/src/db/schema";
  * the cookie carries the already-resolved `app_user` row.
  */
 
-export type Role = "admin" | "viewer";
+export type Role = TenantRole;
 
 export type SessionUser = {
   id: number;
@@ -141,11 +142,16 @@ export async function startSignIn(redirectUri: string, returnTo: string) {
 
 /** Maps the OIDC groups/role claim to this app's two-role model (Rule 7). Unrecognised users default to viewer. */
 function mapRole(claims: Record<string, unknown>): Role {
-  const adminGroup = (process.env.ONELOGIN_ADMIN_GROUP ?? "admin").toLowerCase();
   const raw = claims.groups ?? claims.role ?? claims.roles;
-  const values = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
-  const isAdmin = values.some((value) => String(value).toLowerCase() === adminGroup);
-  return isAdmin ? "admin" : "viewer";
+  const values = (Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [])
+    .map((value) => String(value).toLowerCase());
+  const mappings: readonly [Role, string][] = [
+    ["owner", process.env.ONELOGIN_OWNER_GROUP ?? "owner"],
+    ["admin", process.env.ONELOGIN_ADMIN_GROUP ?? "admin"],
+    ["researcher", process.env.ONELOGIN_RESEARCHER_GROUP ?? "researcher"],
+    ["reviewer", process.env.ONELOGIN_REVIEWER_GROUP ?? "reviewer"],
+  ];
+  return mappings.find(([, group]) => values.includes(group.toLowerCase()))?.[0] ?? "viewer";
 }
 
 /** Inserts or updates `app_user` on `sso_subject_id`, per T10's acceptance criterion. */
@@ -184,7 +190,7 @@ async function upsertAppUser(input: {
 async function resolveClientMembership(
   userId: number,
   role: Role,
-): Promise<{ clientId: number; clientSlug: string }> {
+): Promise<{ clientId: number; clientSlug: string; role: Role }> {
   const configuredSlug = process.env.MARKET_RESEARCH_CLIENT_SLUG?.trim() || "default-client";
   const configuredName = process.env.MARKET_RESEARCH_CLIENT_NAME?.trim() || "Default Client";
 
@@ -211,12 +217,12 @@ async function resolveClientMembership(
     .limit(1);
   if (!membership) throw new Error("Client membership could not be resolved.");
 
-  return { clientId: clientRow.id, clientSlug: clientRow.slug };
+  return { clientId: clientRow.id, clientSlug: clientRow.slug, role };
 }
 
 function toSessionUser(
   row: typeof appUser.$inferSelect,
-  membership: { clientId: number; clientSlug: string },
+  membership: { clientId: number; clientSlug: string; role: Role },
 ): SessionUser {
   return {
     id: row.id,
@@ -224,7 +230,7 @@ function toSessionUser(
     clientSlug: membership.clientSlug,
     email: row.email,
     name: row.name,
-    role: row.role === "admin" ? "admin" : "viewer",
+    role: membership.role,
     ssoSubjectId: row.ssoSubjectId,
   };
 }
@@ -298,7 +304,7 @@ export function encodeSessionCookie(user: SessionUser): string {
 export async function getSession(): Promise<SessionUser | null> {
   const store = await cookies();
   const session = decodeSigned<SessionUser>(store.get(SESSION_COOKIE)?.value);
-  if (!session || !Number.isInteger(session.clientId) || !session.clientSlug) return null;
+  if (!session || !Number.isInteger(session.clientId) || !session.clientSlug || !["owner", "admin", "researcher", "reviewer", "viewer"].includes(session.role)) return null;
   return session;
 }
 

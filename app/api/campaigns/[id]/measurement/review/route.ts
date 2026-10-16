@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { reviewMeasurementPlan } from "@/src/db/queries/campaign_workspace";
 import { recordGovernanceAudit } from "@/src/lib/audit";
 import { getSession } from "@/src/lib/auth";
-import { assertAdmin, PermissionDeniedError } from "@/src/lib/roles";
+import { assertReview, PermissionDeniedError } from "@/src/lib/roles";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const session = await getSession();
-  try { assertAdmin(session); } catch (error) {
+  try { assertReview(session); } catch (error) {
     if (error instanceof PermissionDeniedError) return NextResponse.json({ error: "permission-denied" }, { status: 403 });
     throw error;
   }

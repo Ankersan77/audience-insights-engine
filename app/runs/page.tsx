@@ -4,6 +4,7 @@ import { requireSession } from "@/src/lib/auth";
 import { listRuns } from "@/src/db/queries/research_runs";
 import { RunsTable } from "./RunsTable";
 import { legacyLast30DaysEnabled } from "@/src/lib/featureFlags";
+import { isAdmin } from "@/src/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export default async function RunsPage() {
           Legacy ingestion is disabled by default because it does not satisfy the canonical people-blind evidence contract.
         </div>
       ) : null}
-      <RunsTable runs={runs} isAdmin={session.role === "admin"} />
+      <RunsTable runs={runs} isAdmin={isAdmin(session)} />
     </AppShell>
   );
 }

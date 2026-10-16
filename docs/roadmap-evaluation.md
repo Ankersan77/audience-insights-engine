@@ -73,6 +73,24 @@ attached:
 
 The application must display these as `unverified` or `needs_context`, never infer that they passed.
 
+## Repository execution result
+
+The optimized vertical-slice plan is implemented through the repository-verifiable portion of all
+eight phases. The owned application now exposes:
+
+- client-scoped evidence onboarding, Market Twin review and decision briefs;
+- versioned campaigns with a ready pre-flight approval gate, descriptive live readback and
+  evidence-linked post-campaign assessment;
+- separate measurement-plan and study review, including deterministic Brand Lift language gates;
+- a candidate-learning path that requires reviewer promotion before it becomes durable learning;
+- versioned sensing and solution profiles, tenant-scoped manual/durable scheduling, and redacted
+  configuration export; and
+- owner, administrator, researcher, reviewer and viewer permissions enforced server-side.
+
+The clean verification gate covers source-of-truth checks, generated route types, TypeScript,
+lint, deterministic tests, migration drift and a production Webpack build. This is implementation
+evidence, not a substitute for the open external gates below.
+
 ## Architectural decisions
 
 - PostgreSQL remains the system of record; canonical records receive a direct `client_id` even
@@ -88,4 +106,10 @@ The application must display these as `unverified` or `needs_context`, never inf
 - Model-assisted synthesis may draft, but deterministic policy gates decide whether evidence is
   sufficient and which claim language is allowed.
 - External delivery stays optional. The owned product surface is the authoritative MVP output.
+- Campaign approval requires both an accepted measurement plan and a saved `ready` pre-flight
+  assessment. Completion-to-learning review requires an accepted learning explicitly scoped to
+  that campaign.
+- Version allocation for solution profiles, sensing profiles, measurement plans, campaign
+  revisions and campaign assessments is serialized with transaction-scoped PostgreSQL advisory
+  locks; unique constraints remain the final integrity boundary.
 

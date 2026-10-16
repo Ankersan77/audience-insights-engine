@@ -1,4 +1,5 @@
 import { getSession, type Role, type SessionUser } from "@/src/lib/auth";
+import { canResearchRole, canReviewRole, isAdminRole } from "@/src/lib/rolePolicy";
 
 /**
  * Server-side role helper (UX review required finding 1 / FR22): every
@@ -13,7 +14,15 @@ export async function getCurrentRole(): Promise<Role | null> {
 }
 
 export function isAdmin(user: SessionUser | null): boolean {
-  return user?.role === "admin";
+  return isAdminRole(user?.role);
+}
+
+export function canResearch(user: SessionUser | null): boolean {
+  return canResearchRole(user?.role);
+}
+
+export function canReview(user: SessionUser | null): boolean {
+  return canReviewRole(user?.role);
 }
 
 /**
@@ -32,4 +41,12 @@ export function assertAdmin(user: SessionUser | null): asserts user is SessionUs
   if (!isAdmin(user)) {
     throw new PermissionDeniedError();
   }
+}
+
+export function assertResearchWrite(user: SessionUser | null): asserts user is SessionUser {
+  if (!canResearch(user)) throw new PermissionDeniedError("research-write-denied");
+}
+
+export function assertReview(user: SessionUser | null): asserts user is SessionUser {
+  if (!canReview(user)) throw new PermissionDeniedError("review-denied");
 }

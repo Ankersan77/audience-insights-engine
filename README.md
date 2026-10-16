@@ -54,8 +54,11 @@ extraction must be supplied by a verified document adapter; the application neve
 upload as a substitute for that boundary.
 
 The same owned surface provides reviewed Market Twin records and persistent decision briefs.
-`/campaigns` handles campaign revisions, measurement-plan approval, lifecycle transitions, and
-study classification. Requesting Brand Lift never bypasses the deterministic causal-design gate.
+`/campaigns` handles campaign revisions, measurement-plan and study review, pre-flight/live/post
+assessments, governed learning, and lifecycle transitions. Requesting Brand Lift never bypasses
+the deterministic causal-design gate. `/monitoring` manages versioned sensing profiles and durable
+tenant-scoped runs; `/configuration` manages portable solution-profile versions and redacted
+exports.
 
 ## Environment variables
 
@@ -81,7 +84,9 @@ The repository implements and tests the canonical contracts, additive data model
 people-blind evidence boundary, Market Twin transitions and resolution, four core research
 abilities, campaign lifecycle analysis, measurement and Brand Lift guardrails, selective
 monitoring, solution packaging, and operational resilience. `/workspace` is the owned, tenant-
-scoped control surface.
+scoped control surface. Runtime permissions distinguish owner, administrator, researcher,
+reviewer, and viewer responsibilities; product actions are protected at the API boundary rather
+than only hidden in the interface.
 
 Live-source activation and production readiness still require the named external evidence in
 `docs/external-validation-register.md`; code and deterministic fixtures never silently satisfy

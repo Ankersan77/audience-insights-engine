@@ -10,6 +10,7 @@ import { EvidenceOnboarding } from "./EvidenceOnboarding";
 import { listDecisionBriefs, listIntelligenceRecords } from "@/src/db/queries/workspace_intelligence";
 import { MarketTwin } from "./MarketTwin";
 import { DecisionBriefs } from "./DecisionBriefs";
+import { canResearch, canReview, isAdmin } from "@/src/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -143,10 +144,10 @@ export default async function WorkspacePage() {
         </div>
       </section>
 
-      <SourceConnections initialSources={sources} isAdmin={session.role === "admin"} />
-      <EvidenceOnboarding initialEvidence={evidence} sources={sources} isAdmin={session.role === "admin"} />
-      <MarketTwin initialRecords={intelligence} evidence={evidence} isAdmin={session.role === "admin"} />
-      <DecisionBriefs abilities={CORE_ABILITIES} evidence={evidence} initialBriefs={briefs} isAdmin={session.role === "admin"} />
+      <SourceConnections initialSources={sources} isAdmin={isAdmin(session)} />
+      <EvidenceOnboarding initialEvidence={evidence} sources={sources} canResearch={canResearch(session)} />
+      <MarketTwin initialRecords={intelligence} evidence={evidence} canResearch={canResearch(session)} canReview={canReview(session)} />
+      <DecisionBriefs abilities={CORE_ABILITIES} evidence={evidence} initialBriefs={briefs} canResearch={canResearch(session)} />
     </AppShell>
   );
 }

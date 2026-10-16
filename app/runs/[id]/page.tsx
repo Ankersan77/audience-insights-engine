@@ -7,6 +7,7 @@ import { getBrandById, getMarketById } from "@/src/db/queries/brands";
 import { getRunById } from "@/src/db/queries/research_runs";
 import { listEvidenceForRun, type EvidenceRow } from "@/src/db/queries/evidence";
 import { CancelRunButton } from "../CancelRunButton";
+import { isAdmin } from "@/src/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,7 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
         title={`Run #${run.id}`}
         description={`${brand?.name ?? "Unknown brand"} · ${market?.name ?? "No market"}`}
         actions={
-          session.role === "admin" ? <CancelRunButton runId={run.id} status={run.status} /> : null
+          isAdmin(session) ? <CancelRunButton runId={run.id} status={run.status} /> : null
         }
       />
 

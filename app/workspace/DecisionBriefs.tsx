@@ -9,7 +9,7 @@ function commaList(value: FormDataEntryValue | null): string[] {
   return typeof value === "string" ? value.split(",").map((item) => item.trim()).filter(Boolean) : [];
 }
 
-export function DecisionBriefs({ abilities, evidence, initialBriefs, isAdmin }: { abilities: readonly AbilityManifest[]; evidence: CanonicalEvidenceListRow[]; initialBriefs: DecisionBriefArtifact[]; isAdmin: boolean }) {
+export function DecisionBriefs({ abilities, evidence, initialBriefs, canResearch }: { abilities: readonly AbilityManifest[]; evidence: CanonicalEvidenceListRow[]; initialBriefs: DecisionBriefArtifact[]; canResearch: boolean }) {
   const [briefs, setBriefs] = useState(initialBriefs);
   const [open, setOpen] = useState(false);
   const [selectedEvidence, setSelectedEvidence] = useState<number[]>([]);
@@ -38,7 +38,7 @@ export function DecisionBriefs({ abilities, evidence, initialBriefs, isAdmin }: 
 
   return (
     <section className="mt-6 rounded-lg border border-border bg-surface p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">Decision briefs</h2><p className="mt-1 text-sm text-muted">Abilities return evidence-backed briefs or explicit research gaps.</p></div>{isAdmin ? <button onClick={() => setOpen((value) => !value)} className="rounded-md bg-[var(--button-primary-bg)] px-3 py-2 text-sm font-medium text-[var(--button-primary-text)]">{open ? "Cancel" : "Run ability"}</button> : null}</div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">Decision briefs</h2><p className="mt-1 text-sm text-muted">Abilities return evidence-backed briefs or explicit research gaps.</p></div>{canResearch ? <button onClick={() => setOpen((value) => !value)} className="rounded-md bg-[var(--button-primary-bg)] px-3 py-2 text-sm font-medium text-[var(--button-primary-text)]">{open ? "Cancel" : "Run ability"}</button> : null}</div>
       {open ? <form onSubmit={submit} className="mt-4 grid gap-4 rounded-md border border-border p-4 md:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm font-medium">Ability<select name="abilityId" className="rounded-md border border-border bg-background px-3 py-2 font-normal">{abilities.map((ability) => <option key={ability.id} value={ability.id}>{ability.id.replaceAll("-", " ")} · v{ability.version}</option>)}</select></label>
         <label className="flex flex-col gap-1 text-sm font-medium">Claim mode<select name="claimMode" className="rounded-md border border-border bg-background px-3 py-2 font-normal"><option value="descriptive">Descriptive</option><option value="attitude">Attitude</option><option value="behavior">Behavior</option><option value="demand_proxy">Demand proxy</option><option value="causal">Causal</option></select></label>

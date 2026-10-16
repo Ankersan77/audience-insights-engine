@@ -1,4 +1,4 @@
-import type { Campaign, DecisionBrief, EvidenceItem, MeasurementPlan } from "../core/contracts.ts";
+import type { Campaign, DecisionBrief, MeasurementPlan } from "../core/contracts.ts";
 import { assertCampaignTransition } from "../core/transitions.ts";
 
 export type CampaignAssessment = {
@@ -19,7 +19,7 @@ export function transitionCampaign(campaign: Campaign, nextState: Campaign["stat
 export function assessPreflight(input: {
   campaign: Campaign;
   measurementPlan?: MeasurementPlan;
-  strategicEvidence: readonly EvidenceItem[];
+  strategicEvidence: readonly { id: string }[];
   brandConstraints: readonly string[];
 }): CampaignAssessment {
   const gaps: string[] = [];

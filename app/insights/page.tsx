@@ -4,6 +4,7 @@ import { requireSession } from "@/src/lib/auth";
 import { listInsights, type QueueFilter } from "@/src/db/queries/insights";
 import { listBrands } from "@/src/db/queries/brands";
 import { InsightsQueue } from "./InsightsQueue";
+import { isAdmin } from "@/src/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export default async function InsightsPage({
       <InsightsQueue
         initialInsights={insights}
         brands={brands.map((b) => ({ id: b.id, name: b.name }))}
-        isAdmin={session.role === "admin"}
+        isAdmin={isAdmin(session)}
         currentFilter={status}
         currentBrandId={Number.isInteger(brandId) ? (brandId as number) : null}
       />

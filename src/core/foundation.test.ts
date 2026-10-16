@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Campaign, Citation, EvidenceItem, IntelligenceRecord, SensingProfile, SolutionProfile } from "./contracts.ts";
+import type { Campaign, Citation, EvidenceItem, IntelligenceRecord, MeasurementPlan, SensingProfile, SolutionProfile, StudyDesign } from "./contracts.ts";
 import { TenantAccessError, assertTenantReview, assertTenantScope, tenantFilter } from "./tenancy.ts";
 import { TransitionError, assertCampaignTransition, promoteIntelligence } from "./transitions.ts";
-import { validateCampaign, validateCitation, validateEvidenceItem, validateIntelligenceRecord, validateSensingProfile, validateSolutionProfile } from "./validation.ts";
+import { validateCampaign, validateCitation, validateEvidenceItem, validateIntelligenceRecord, validateMeasurementPlan, validateSensingProfile, validateSolutionProfile, validateStudyDesign } from "./validation.ts";
 
 const applicability = { markets: ["DK"], languages: ["da"], categories: [], audiences: [], campaigns: [] };
 
@@ -136,6 +136,7 @@ test("solution profiles are versioned and require retention and abilities", () =
   };
   assert.equal(validateSolutionProfile(profile).valid, true);
   assert.equal(validateSolutionProfile({ ...profile, enabledAbilities: [] }).valid, false);
+  assert.equal(validateSolutionProfile({ ...profile, markets: [] }).valid, false);
 });
 
 test("verbatim citations require bounded review metadata", () => {
@@ -189,4 +190,23 @@ test("campaign and sensing contracts enforce their release gates", () => {
   };
   assert.equal(validateSensingProfile(sensing).valid, true);
   assert.equal(validateSensingProfile({ ...sensing, minimumCorroboration: 0 }).valid, false);
+  assert.equal(validateSensingProfile({ ...sensing, cadence: "whenever" }).valid, false);
+});
+
+test("measurement and study contracts reject mismatched metrics and invalid fieldwork", () => {
+  const plan: MeasurementPlan = {
+    id: "plan-1", clientId: "client-a", campaignId: "campaign-1", objective: "Measure consideration", hypothesis: "Exposure increases consideration", population: "Category buyers",
+    metrics: [{ key: "consideration", label: "Consideration", unit: "%", direction: "increase", aggregation: "rate", population: "Category buyers" }],
+    baseline: { consideration: 20 }, targets: { consideration: 24 }, checkpoints: ["2026-11-01T00:00:00.000Z"], attributionAssumptions: [], materialityThresholds: { consideration: 2 }, decisionRules: [],
+  };
+  assert.equal(validateMeasurementPlan(plan).valid, true);
+  assert.equal(validateMeasurementPlan({ ...plan, targets: { awareness: 50 } }).valid, false);
+  assert.equal(validateMeasurementPlan({ ...plan, checkpoints: ["not-a-date"] }).valid, false);
+
+  const study: StudyDesign = {
+    id: "study-1", clientId: "client-a", measurementPlanId: "plan-1", requestedClaim: "brand_lift", hasTreatmentGroup: true, hasControlGroup: true, assignment: "randomized", baselineMeasured: true, outcomeInstrument: "Survey", sampleSizeTreatment: 500, sampleSizeControl: 500, exclusions: [], preregistered: true, contaminationRisk: "low", fieldworkWindow: { start: "2026-11-01T00:00:00.000Z", end: "2026-11-08T00:00:00.000Z" },
+  };
+  assert.equal(validateStudyDesign(study).valid, true);
+  assert.equal(validateStudyDesign({ ...study, sampleSizeTreatment: 1.5 }).valid, false);
+  assert.equal(validateStudyDesign({ ...study, fieldworkWindow: { start: study.fieldworkWindow!.end, end: study.fieldworkWindow!.start } }).valid, false);
 });

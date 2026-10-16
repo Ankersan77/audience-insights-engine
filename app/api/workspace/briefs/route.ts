@@ -7,7 +7,7 @@ import { listDecisionBriefs, saveDecisionBrief } from "@/src/db/queries/workspac
 import { assertPeopleBlind, redactIdentifiers } from "@/src/evidence/policy";
 import { recordGovernanceAudit } from "@/src/lib/audit";
 import { getSession } from "@/src/lib/auth";
-import { assertAdmin, PermissionDeniedError } from "@/src/lib/roles";
+import { assertResearchWrite, PermissionDeniedError } from "@/src/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const session = await getSession();
   try {
-    assertAdmin(session);
+    assertResearchWrite(session);
   } catch (error) {
     if (error instanceof PermissionDeniedError) return NextResponse.json({ error: "permission-denied" }, { status: 403 });
     throw error;

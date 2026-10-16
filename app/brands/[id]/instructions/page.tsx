@@ -10,6 +10,7 @@ import {
   type ResearchInstructionRow,
 } from "@/src/db/queries/research_instructions";
 import { InstructionsEditor } from "./InstructionsEditor";
+import { isAdmin } from "@/src/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,7 @@ export default async function BrandInstructionsPage({
         latestByMarket={latestMarketByScope}
         brandHistory={brandHistory}
         marketHistories={marketHistories}
-        isAdmin={session.role === "admin"}
+        isAdmin={isAdmin(session)}
         currentUser={{ name: session.name, email: session.email }}
       />
     </AppShell>

@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createStudyRecord, listCampaignWorkspace } from "@/src/db/queries/campaign_workspace";
 import { recordGovernanceAudit } from "@/src/lib/audit";
 import { getSession } from "@/src/lib/auth";
-import { assertAdmin, PermissionDeniedError } from "@/src/lib/roles";
+import { assertResearchWrite, PermissionDeniedError } from "@/src/lib/roles";
+import { redactIdentifiers } from "@/src/evidence/policy";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const session = await getSession();
-  try { assertAdmin(session); } catch (error) {
+  try { assertResearchWrite(session); } catch (error) {
     if (error instanceof PermissionDeniedError) return NextResponse.json({ error: "permission-denied" }, { status: 403 });
     throw error;
   }
@@ -18,12 +19,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const assignment = ["randomized", "matched", "observational", "none"].includes(String(body.assignment)) ? body.assignment as "randomized" | "matched" | "observational" | "none" : "none";
   const contaminationRisk = ["low", "medium", "high", "unknown"].includes(String(body.contaminationRisk)) ? body.contaminationRisk as "low" | "medium" | "high" | "unknown" : "unknown";
   try {
+    const safeOutcome = typeof body.outcomeInstrument === "string" ? redactIdentifiers(body.outcomeInstrument.trim()).content : "";
+    const safeWeighting = typeof body.weighting === "string" && body.weighting.trim() ? redactIdentifiers(body.weighting.trim()).content : undefined;
+    const safeExclusions = Array.isArray(body.exclusions) ? body.exclusions.filter((item): item is string => typeof item === "string").map((item) => redactIdentifiers(item.trim()).content).filter(Boolean) : [];
     const created = await createStudyRecord({ clientId: session.clientId, measurementPlanId: campaign.measurementPlanDbId, design: {
       requestedClaim, hasTreatmentGroup: body.hasTreatmentGroup === true, hasControlGroup: body.hasControlGroup === true, assignment,
-      baselineMeasured: body.baselineMeasured === true, outcomeInstrument: typeof body.outcomeInstrument === "string" ? body.outcomeInstrument.trim() : "",
+      baselineMeasured: body.baselineMeasured === true, outcomeInstrument: safeOutcome,
       sampleSizeTreatment: Number(body.sampleSizeTreatment) || undefined, sampleSizeControl: Number(body.sampleSizeControl) || undefined,
-      weighting: typeof body.weighting === "string" && body.weighting.trim() ? body.weighting.trim() : undefined,
-      exclusions: Array.isArray(body.exclusions) ? body.exclusions.filter((item): item is string => typeof item === "string") : [],
+      weighting: safeWeighting,
+      exclusions: safeExclusions,
       fieldworkWindow: typeof body.fieldworkStart === "string" && typeof body.fieldworkEnd === "string" && body.fieldworkStart && body.fieldworkEnd ? { start: body.fieldworkStart, end: body.fieldworkEnd } : undefined,
       preregistered: body.preregistered === true, contaminationRisk,
     } });

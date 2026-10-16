@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { reviewIntelligenceRecord } from "@/src/db/queries/workspace_intelligence";
 import { recordGovernanceAudit } from "@/src/lib/audit";
 import { getSession } from "@/src/lib/auth";
-import { assertAdmin, PermissionDeniedError } from "@/src/lib/roles";
+import { assertReview, PermissionDeniedError } from "@/src/lib/roles";
 
 export async function POST(request: NextRequest, context: RouteContext<"/api/workspace/intelligence/[id]/review">) {
   const session = await getSession();
   try {
-    assertAdmin(session);
+    assertReview(session);
   } catch (error) {
     if (error instanceof PermissionDeniedError) return NextResponse.json({ error: "permission-denied" }, { status: 403 });
     throw error;

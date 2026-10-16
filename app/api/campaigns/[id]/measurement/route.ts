@@ -3,14 +3,14 @@ import { createMeasurementPlanRecord } from "@/src/db/queries/campaign_workspace
 import { redactIdentifiers } from "@/src/evidence/policy";
 import { recordGovernanceAudit } from "@/src/lib/audit";
 import { getSession } from "@/src/lib/auth";
-import { assertAdmin, PermissionDeniedError } from "@/src/lib/roles";
+import { assertResearchWrite, PermissionDeniedError } from "@/src/lib/roles";
 
 function text(value: unknown): string { return typeof value === "string" ? redactIdentifiers(value.trim()).content : ""; }
 function strings(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map(text).filter(Boolean) : []; }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const session = await getSession();
-  try { assertAdmin(session); } catch (error) {
+  try { assertResearchWrite(session); } catch (error) {
     if (error instanceof PermissionDeniedError) return NextResponse.json({ error: "permission-denied" }, { status: 403 });
     throw error;
   }

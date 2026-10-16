@@ -79,10 +79,10 @@ evidence.
 | 2 | Adapter boundary, minimization, quarantine, redaction, citations and four deterministic source classes implemented; legacy ingestion is fail-closed | Approved sources, live adapters and provider acceptance |
 | 3 | Persistent text/CSV/JSON upload and permitted-link onboarding, method preservation, idempotency, contradictions and relevance resolution implemented | Pilot documents, qualified lineage review and any required office/PDF extraction adapter |
 | 4 | Four versioned abilities, persistent evidence selection, Market Twin review, causal guards and owned-surface decision briefs implemented | Human scorecards on representative and adversarial briefs |
-| 5 | Persistent campaign revisions, measurement-gated transitions, pre-flight/live/post logic and governed candidate-learning contracts implemented | One real campaign with aggregate result sources through the full lifecycle |
-| 6 | Persistent measurement plans with explicit review, deterministic study classification and reproducible binary-lift analysis implemented | Qualified method review and an approved live study |
-| 7 | Durable cadence scheduler, acquisition-job emission, reconciliation, signal qualification, no-change/source-health outcomes and briefing contracts implemented | Live connector execution and shadow-mode evaluation |
-| 8 | Source administration, redacted packaging, second-client proof, resilience controls and operations runbook implemented | Clean deployed environment, restore exercise, pilot scorecard and operating owners |
+| 5 | Persistent campaign revisions and evidence, ready pre-flight approval gate, versioned live/post assessments, and reviewer-promoted campaign learning implemented in the owned surface | One real campaign with aggregate result sources through the full lifecycle |
+| 6 | Persistent measurement plans and studies with separate reviewer decisions, strengthened metric/date/sample validation, deterministic classification and reproducible binary-lift analysis implemented | Qualified method review and an approved live study |
+| 7 | Versioned sensing administration, tenant-scoped durable cadence scheduling, acquisition-job emission, reconciliation, qualification, no-change/source-health outcomes, briefing contracts and governed learning promotion implemented | Live connector execution and shadow-mode evaluation |
+| 8 | Five-role runtime authorization, source/sensing/solution administration, redacted versioned packaging, second-client proof, concurrency locks, resilience controls and operations runbook implemented | Clean deployed environment, restore exercise, pilot scorecard and operating owners |
 
 Anything in the final column remains `needs_context`; it is not silently converted into completion.
 

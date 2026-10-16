@@ -1,8 +1,9 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, max, sql } from "drizzle-orm";
 import type { SensingProfile } from "@/src/core/contracts";
 import { db } from "@/src/db/client";
 import { monitoringRun, sensingProfile, sourceAcquisitionJob, sourceConnection } from "@/src/db/schema";
 import { monitoringScheduleKey, planMonitoringAcquisitions } from "@/src/monitoring/scheduler";
+import { validateSensingProfile } from "@/src/core/validation";
 
 export type MonitoringScheduleSummary = {
   scheduled: number;
@@ -30,9 +31,42 @@ function canonicalProfile(row: typeof sensingProfile.$inferSelect): SensingProfi
   };
 }
 
+export type SensingProfileRow = { databaseId: number; status: string; profile: SensingProfile; createdAt: Date };
+
+export async function listSensingProfiles(clientId: number): Promise<SensingProfileRow[]> {
+  const rows = await db.select().from(sensingProfile).where(eq(sensingProfile.clientId, clientId)).orderBy(desc(sensingProfile.version));
+  return rows.map((row) => ({ databaseId: row.id, status: row.status, profile: canonicalProfile(row), createdAt: row.createdAt }));
+}
+
+export async function createActiveSensingProfile(input: Omit<SensingProfile, "id" | "version">): Promise<SensingProfileRow> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(73002, ${Number(input.clientId)})`);
+    const [versionRow] = await tx.select({ value: max(sensingProfile.version) }).from(sensingProfile).where(eq(sensingProfile.clientId, Number(input.clientId)));
+    const version = Number(versionRow?.value ?? 0) + 1;
+    const profile: SensingProfile = { ...input, id: "pending", version };
+    const validation = validateSensingProfile(profile);
+    if (!validation.valid) throw new Error(`invalid-sensing-profile:${validation.errors.join(";")}`);
+    await tx.update(sensingProfile).set({ status: "superseded" }).where(and(eq(sensingProfile.clientId, Number(input.clientId)), eq(sensingProfile.status, "active")));
+    const [created] = await tx.insert(sensingProfile).values({ clientId: Number(input.clientId), version, profileJson: profile, status: "active" }).returning();
+    const storedProfile = { ...profile, id: String(created.id) };
+    await tx.update(sensingProfile).set({ profileJson: storedProfile }).where(eq(sensingProfile.id, created.id));
+    return { databaseId: created.id, status: created.status, profile: storedProfile, createdAt: created.createdAt };
+  });
+}
+
+export type MonitoringRunRow = typeof monitoringRun.$inferSelect;
+
+export async function listMonitoringRuns(clientId: number, limit = 50): Promise<MonitoringRunRow[]> {
+  return db.select().from(monitoringRun).where(eq(monitoringRun.clientId, clientId)).orderBy(desc(monitoringRun.id)).limit(Math.min(Math.max(limit, 1), 200));
+}
+
 /** Emits durable, idempotent acquisition jobs for each due active profile. */
-export async function enqueueDueMonitoringRuns(now = new Date()): Promise<MonitoringScheduleSummary> {
-  const profiles = await db.select().from(sensingProfile).where(eq(sensingProfile.status, "active"));
+export async function enqueueDueMonitoringRuns(now = new Date(), clientId?: number): Promise<MonitoringScheduleSummary> {
+  const profiles = await db.select().from(sensingProfile).where(
+    clientId
+      ? and(eq(sensingProfile.status, "active"), eq(sensingProfile.clientId, clientId))
+      : eq(sensingProfile.status, "active"),
+  );
   const summary: MonitoringScheduleSummary = { scheduled: 0, alreadyScheduled: 0, failedConfiguration: 0 };
 
   for (const row of profiles) {
@@ -111,11 +145,13 @@ export async function enqueueDueMonitoringRuns(now = new Date()): Promise<Monito
 }
 
 /** Reconciles acquisition completion without upgrading it to a qualified signal or learning. */
-export async function reconcileMonitoringRuns(now = new Date()): Promise<number> {
+export async function reconcileMonitoringRuns(now = new Date(), clientId?: number): Promise<number> {
   const runs = await db
     .select()
     .from(monitoringRun)
-    .where(inArray(monitoringRun.status, ["queued", "running"]));
+    .where(clientId
+      ? and(inArray(monitoringRun.status, ["queued", "running"]), eq(monitoringRun.clientId, clientId))
+      : inArray(monitoringRun.status, ["queued", "running"]));
   let changed = 0;
   for (const run of runs) {
     const jobs = await db
