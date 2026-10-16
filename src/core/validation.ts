@@ -98,6 +98,10 @@ export function validateDecisionBrief(value: DecisionBrief): ValidationResult {
   if (value.status === "needs_context" && value.researchGaps.length === 0) {
     errors.push("needs_context brief must identify a research gap");
   }
+  for (const citation of value.citations) {
+    const citationValidation = validateCitation(citation);
+    if (!citationValidation.valid) errors.push(...citationValidation.errors.map((error) => `citation:${error}`));
+  }
   return result(errors);
 }
 

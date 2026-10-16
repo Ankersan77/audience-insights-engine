@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Applicability, DecisionBrief, IntelligenceKind, IntelligenceRecord, ReviewState } from "@/src/core/contracts";
 import { validateDecisionBrief, validateIntelligenceRecord } from "@/src/core/validation";
 import { db } from "@/src/db/client";
-import { canonicalEvidence, campaign, intelligenceRecord, intelligenceRelationship, researchArtifact } from "@/src/db/schema";
+import { canonicalEvidence, campaign, citation, intelligenceRecord, intelligenceRelationship, researchArtifact } from "@/src/db/schema";
 import { promoteIntelligence } from "@/src/core/transitions";
 import type { CampaignAssessment } from "@/src/campaigns/analysis";
 
@@ -289,31 +289,49 @@ export async function saveDecisionBrief(input: {
   if (input.brief.clientId !== String(input.clientId)) throw new Error("decision-brief-client-mismatch");
   const evidenceIds = input.brief.evidenceIds.map(Number);
   if (evidenceIds.some((id) => !Number.isInteger(id))) throw new Error("decision-brief-evidence-id-invalid");
+  const evidenceIdSet = new Set(evidenceIds);
+  if (input.brief.citations.some((item) => item.clientId !== String(input.clientId) || !evidenceIdSet.has(Number(item.evidenceId)))) {
+    throw new Error("decision-brief-citation-scope-mismatch");
+  }
   await assertOwnedEvidence(input.clientId, evidenceIds);
-  const [created] = await db.insert(researchArtifact).values({
-    clientId: input.clientId,
-    artifactKey: input.brief.id,
-    artifactType: "decision_brief",
-    abilityKey: input.brief.abilityId,
-    abilityVersion: input.brief.abilityVersion,
-    status: input.brief.status,
-    version: 1,
-    payloadJson: input.brief,
-    evidenceIds,
-    createdBy: input.createdBy,
-  }).onConflictDoNothing({
-    target: [researchArtifact.clientId, researchArtifact.artifactKey, researchArtifact.version],
-  }).returning();
-  const row = created ?? (await db
-    .select()
-    .from(researchArtifact)
-    .where(and(
-      eq(researchArtifact.clientId, input.clientId),
-      eq(researchArtifact.artifactKey, input.brief.id),
-      eq(researchArtifact.version, 1),
-    ))
-    .limit(1))[0];
-  if (!row) throw new Error("decision-brief-persistence-failed");
-  return { id: row.id, artifactKey: row.artifactKey, version: row.version, status: row.status, brief: row.payloadJson as DecisionBrief, createdAt: row.createdAt };
+  return db.transaction(async (tx) => {
+    const [created] = await tx.insert(researchArtifact).values({
+      clientId: input.clientId,
+      artifactKey: input.brief.id,
+      artifactType: "decision_brief",
+      abilityKey: input.brief.abilityId,
+      abilityVersion: input.brief.abilityVersion,
+      status: input.brief.status,
+      version: 1,
+      payloadJson: input.brief,
+      evidenceIds,
+      createdBy: input.createdBy,
+    }).onConflictDoNothing({
+      target: [researchArtifact.clientId, researchArtifact.artifactKey, researchArtifact.version],
+    }).returning();
+    const row = created ?? (await tx
+      .select()
+      .from(researchArtifact)
+      .where(and(
+        eq(researchArtifact.clientId, input.clientId),
+        eq(researchArtifact.artifactKey, input.brief.id),
+        eq(researchArtifact.version, 1),
+      ))
+      .limit(1))[0];
+    if (!row) throw new Error("decision-brief-persistence-failed");
+    if (created && input.brief.citations.length > 0) {
+      await tx.insert(citation).values(input.brief.citations.map((item) => ({
+        clientId: input.clientId,
+        evidenceId: Number(item.evidenceId),
+        artifactId: row.id,
+        level: item.level,
+        safeReference: item.safeReference,
+        excerpt: item.excerpt,
+        reviewReason: item.reviewReason,
+        expiresAt: item.expiresAt ? new Date(item.expiresAt) : null,
+      })));
+    }
+    return { id: row.id, artifactKey: row.artifactKey, version: row.version, status: row.status, brief: row.payloadJson as DecisionBrief, createdAt: row.createdAt };
+  });
 }
 

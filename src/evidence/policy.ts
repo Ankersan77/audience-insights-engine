@@ -99,8 +99,9 @@ export function hasPromptInjection(content: string): boolean {
 export function retainEvidence(candidate: EvidenceCandidate, policy: EvidencePolicy): EvidenceItem {
   const redacted = redactIdentifiers(candidate.content);
   const redactedSynthesis = candidate.synthesis ? redactIdentifiers(candidate.synthesis) : undefined;
+  const redactedReference = redactIdentifiers(candidate.externalReference);
   const sourceUrl = safeSourceUrl(candidate.sourceUrl);
-  const identityRisk = redacted.identityRisk || Boolean(redactedSynthesis?.identityRisk) || sourceUrl.identityRisk;
+  const identityRisk = redacted.identityRisk || Boolean(redactedSynthesis?.identityRisk) || redactedReference.identityRisk || sourceUrl.identityRisk;
   const sensitive = policy.sensitiveTerms.some((term) =>
     redacted.content.toLocaleLowerCase().includes(term.toLocaleLowerCase()),
   );
@@ -110,7 +111,7 @@ export function retainEvidence(candidate: EvidenceCandidate, policy: EvidencePol
   const injectionRisk = hasPromptInjection(redacted.content);
   const rightsExpired = Boolean(candidate.rights.expiresAt) &&
     new Date(candidate.rights.expiresAt!).getTime() <= new Date(candidate.ingestedAt).getTime();
-  const lifecycle = sensitive || cohortSuppressed || unsafeVerbatim || injectionRisk || !candidate.rights.commercialUse || rightsExpired
+  const lifecycle = sensitive || identityRisk || cohortSuppressed || unsafeVerbatim || injectionRisk || !candidate.rights.commercialUse || rightsExpired
     ? "quarantined"
     : "candidate";
   const safeContent = cohortSuppressed ? "[suppressed: cohort below configured minimum]" : redacted.content;
@@ -119,6 +120,9 @@ export function retainEvidence(candidate: EvidenceCandidate, policy: EvidencePol
     ? candidate.rights.expiresAt
     : undefined;
   const expiresAt = rightsExpiry && Date.parse(rightsExpiry) < Date.parse(retentionExpiry) ? rightsExpiry : retentionExpiry;
+  const externalReference = redactedReference.identityRisk
+    ? `evidence-ref:${createHash("sha256").update(`${candidate.sourceConnectionId}\u0000${candidate.externalReference}`).digest("hex").slice(0, 24)}`
+    : redactedReference.content.slice(0, 512);
 
   return {
     id: candidate.id,
@@ -126,7 +130,7 @@ export function retainEvidence(candidate: EvidenceCandidate, policy: EvidencePol
     collectionId: candidate.collectionId,
     sourceConnectionId: candidate.sourceConnectionId,
     sourceClass: candidate.sourceClass,
-    externalReference: candidate.externalReference,
+    externalReference,
     sourceUrl: identityRisk ? undefined : sourceUrl.value,
     sourceContent: safeContent,
     synthesis: redactedSynthesis?.content,
@@ -146,6 +150,7 @@ export function retainEvidence(candidate: EvidenceCandidate, policy: EvidencePol
     redactions: [
       ...redacted.redactions,
       ...(redactedSynthesis?.redactions.map((name) => `synthesis-${name}`) ?? []),
+      ...(redactedReference.redactions.map((name) => `external-reference-${name}`)),
       ...(sourceUrl.redacted ? ["source-url"] : []),
       ...(cohortSuppressed ? ["small-cohort"] : []),
       ...(injectionRisk ? ["prompt-injection"] : []),

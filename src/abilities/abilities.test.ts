@@ -180,12 +180,13 @@ test("durable decision briefs never duplicate a verbatim excerpt", () => {
     citationLevel: "verbatim" as const,
     sourceContent: "A searchable exact public statement.",
   };
-  const second = item("public-2b", "official_or_public", "public-source-2");
+  const first = item("public-2a", "official_or_public", "public-source-2");
+  const second = item("public-2b", "official_or_public", "public-source-3");
   const brief = runAbility({
     clientId: "client-a",
     abilityId: "market-category-diagnosis",
     question: "What was said?",
-    evidence: [verbatim, second],
+    evidence: [verbatim, first, second],
     now: "2026-10-16T00:00:00.000Z",
     analysis: {
       pointOfView: "Two sources contain a recurring formulation.",
@@ -193,12 +194,11 @@ test("durable decision briefs never duplicate a verbatim excerpt", () => {
       recommendation: "Review the source context before using wording.",
       nextDecision: "Decide whether the wording itself is material.",
       claimMode: "descriptive",
-      evidenceIds: [verbatim.id, second.id],
+      evidenceIds: [first.id, second.id],
       contradictions: [],
       uncertainty: ["Exact wording remains separately governed."],
     },
   });
   assert.equal(brief.status, "ready");
-  assert.equal(brief.citations.find((citation) => citation.evidenceId === verbatim.id)?.excerpt, undefined);
-  assert.match(brief.citations.find((citation) => citation.evidenceId === verbatim.id)?.reviewReason ?? "", /requires review/i);
+  assert.equal(brief.citations.some((citation) => citation.evidenceId === verbatim.id), false);
 });

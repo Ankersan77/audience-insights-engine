@@ -209,3 +209,20 @@ test("source rights expiry shortens retained-evidence lifetime", async () => {
   assert.equal(result.evidence[0].expiresAt, "2026-11-01T00:00:00.000Z");
   assert.equal(result.evidence[0].lifecycle, "candidate");
 });
+
+test("unsafe external references become opaque before citation", async () => {
+  const adapter = new DocumentEvidenceAdapter([{
+    id: "u/traceable_person",
+    title: "Permitted source",
+    content: "A recurring non-sensitive theme.",
+    rights,
+    method,
+    applicability,
+  }]);
+  const result = await adapter.run(job("job-reference", "documents"), context, policy);
+  assert.match(result.evidence[0].externalReference, /^evidence-ref:[a-f0-9]{24}$/);
+  assert.equal(result.evidence[0].externalReference.includes("traceable_person"), false);
+  assert.ok(result.evidence[0].redactions.includes("external-reference-forum-handle"));
+  assert.equal(result.evidence[0].identityRisk, true);
+  assert.equal(result.evidence[0].lifecycle, "quarantined");
+});

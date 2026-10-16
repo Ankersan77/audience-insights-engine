@@ -50,6 +50,7 @@ export function resolveEvidence(input: {
     if (!item.rights.commercialUse) reasons.push("rights-do-not-permit-use");
     if (new Date(item.expiresAt) <= new Date(input.now)) reasons.push("expired");
     if (item.sensitive || item.identityRisk) reasons.push("sensitive-or-identity-risk");
+    if (item.citationLevel === "verbatim") reasons.push("verbatim-requires-explicit-citation-review");
     if (input.market && item.applicability.markets.length > 0 && !item.applicability.markets.includes(input.market)) {
       reasons.push("market-not-applicable");
     }

@@ -113,6 +113,11 @@ The canonical worker also applies source-rights-aware expiry: expired evidence i
 non-reversible lineage tombstone, structured sidecars and copied citation wording are removed, and
 decayed Market Twin intelligence is marked expired with a tenant-scoped audit entry.
 
+Decision briefs persist canonical citation rows atomically with the artifact and expose their safe
+references, method, uncertainty and contradictions in the owned product surface. Linkable source
+references are replaced with opaque identifiers at ingestion, and unreviewed verbatim evidence is
+never selected automatically for a brief.
+
 Live-source activation and production readiness still require the named external evidence in
 `docs/external-validation-register.md`; code and deterministic fixtures never silently satisfy
 those gates.

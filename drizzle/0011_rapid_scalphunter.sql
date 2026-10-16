@@ -1,0 +1,3 @@
+ALTER TABLE "citation" ADD COLUMN "artifact_id" integer;--> statement-breakpoint
+ALTER TABLE "citation" ADD CONSTRAINT "citation_artifact_id_research_artifact_id_fk" FOREIGN KEY ("artifact_id") REFERENCES "public"."research_artifact"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "citation" ADD CONSTRAINT "citation_artifact_evidence_level_unique" UNIQUE("artifact_id","evidence_id","level");

@@ -126,4 +126,8 @@ evidence, not a substitute for the open external gates below.
   references, structured observations/themes, and copied citation excerpts are removed while a
   non-reversible lineage tombstone and tenant-scoped audit record remain. Decayed intelligence is
   no longer left live.
+- External references pass through the same identifier boundary as content and become opaque when
+  linkable. Decision-brief citations are validated, tied relationally to their artifact, persisted
+  in the same transaction, and shown with the versioned method and uncertainty. Unreviewed
+  verbatim evidence is excluded from automatic brief selection.
 

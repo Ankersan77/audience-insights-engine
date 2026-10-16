@@ -537,12 +537,16 @@ export const citation = pgTable("citation", {
   evidenceId: integer("evidence_id")
     .notNull()
     .references(() => canonicalEvidence.id, { onDelete: "cascade" }),
+  artifactId: integer("artifact_id")
+    .references((): AnyPgColumn => researchArtifact.id, { onDelete: "cascade" }),
   level: citationLevelEnum("level").notNull(),
   safeReference: text("safe_reference").notNull(),
   excerpt: text("excerpt"),
   reviewReason: text("review_reason"),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
-});
+}, (table) => [
+  unique("citation_artifact_evidence_level_unique").on(table.artifactId, table.evidenceId, table.level),
+]);
 
 export const intelligenceRecord = pgTable("intelligence_record", {
   id: serial("id").primaryKey(),
