@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCampaignAssessmentRecord } from "@/src/db/queries/campaign_workspace";
 import { redactIdentifiers } from "@/src/evidence/policy";
-import { recordGovernanceAudit } from "@/src/lib/audit";
 import { getSession } from "@/src/lib/auth";
 import { assertResearchWrite, PermissionDeniedError } from "@/src/lib/roles";
 
@@ -32,6 +31,9 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/cam
   if (!Number.isInteger(campaignId) || !["preflight", "live", "post"].includes(String(stage))) {
     return NextResponse.json({ error: "A valid campaign and assessment stage are required." }, { status: 400 });
   }
+  if (stage !== "preflight" && [body.baseline, body.current, body.observedResults].some((value) => value && typeof value === "object" && Object.keys(value).length)) {
+    return NextResponse.json({ error: "Use metricSelections referencing imported observations; free-form outcome values cannot establish a source-backed assessment." }, { status: 400 });
+  }
   try {
     const artifact = await createCampaignAssessmentRecord({
       clientId: session.clientId,
@@ -39,6 +41,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/cam
       actorUserId: session.id,
       stage: stage as "preflight" | "live" | "post",
       preflightReview: body.preflightReview,
+      metricSelections: body.metricSelections,
       market: typeof body.market === "string" ? body.market.trim() : undefined,
       language: typeof body.language === "string" ? body.language.trim() : undefined,
       baseline: metrics(body.baseline),
@@ -49,14 +52,6 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/cam
       dataQualityIssues: strings(body.dataQualityIssues),
       alternativeExplanations: strings(body.alternativeExplanations),
       resultEvidenceIds: ids(body.resultEvidenceIds),
-    });
-    if (stage !== "preflight") await recordGovernanceAudit({
-      clientId: session.clientId,
-      actorUserId: session.id,
-      action: "assess",
-      entityType: "campaign",
-      entityId: String(campaignId),
-      after: { stage: artifact.assessment.stage, status: artifact.assessment.status, version: artifact.version, evidenceIds: artifact.evidenceIds },
     });
     return NextResponse.json({ artifact }, { status: 201 });
   } catch (error) {

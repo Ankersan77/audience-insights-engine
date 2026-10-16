@@ -4,15 +4,16 @@ import test from "node:test";
 import { Pool } from "pg";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { and, eq } from "drizzle-orm";
-import { acquisitionAuthorization, appUser, authSession, client, clientMembership, canonicalEvidence, citation, researchArtifact, researchProject, intelligenceRecord, monitoringRun, sensingProfile, solutionProfile, sourceConnection, sourceAcquisitionJob, sourceAcquisitionReceipt, governanceAudit } from "../src/db/schema";
+import { acquisitionAuthorization, appUser, authSession, client, clientMembership, canonicalEvidence, citation, researchArtifact, researchProject, intelligenceRecord, monitoringRun, sensingProfile, solutionProfile, sourceConnection, sourceAcquisitionJob, sourceAcquisitionReceipt, governanceAudit, quantitativeObservation } from "../src/db/schema";
 import { AcquisitionAdapterRegistry } from "../src/evidence/registry";
-import { PublicWebEvidenceAdapter } from "../src/evidence/adapters";
+import { AggregateMetricEvidenceAdapter, PublicWebEvidenceAdapter } from "../src/evidence/adapters";
 import type { SourceConnectionPolicy } from "../src/core/contracts";
 import { dueBriefingWindows } from "../src/monitoring/briefings";
 import { startTestHttpServer } from "./http-server";
 import { newSessionToken, sessionTokenHash, SESSION_MAX_AGE_SECONDS } from "../src/lib/authTokens";
 import { PREFLIGHT_DIMENSIONS } from "../src/campaigns/preflightFields";
 import type { ContextualPreflight } from "../src/campaigns/preflight";
+import type { CampaignResultAssessment } from "../src/campaigns/results";
 
 // Refuse accidental execution against the application's database. No tables are
 // truncated: each test creates uniquely named, synthetic tenant/source fixtures.
@@ -604,6 +605,69 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       await db.update(intelligenceRecord).set({ statement: "Later market knowledge does not rewrite the historical assessment." }).where(eq(intelligenceRecord.id, record.id));
       const historical = (await listCampaignWorkspace(f.tenant.id))[0].latestAssessments.preflight;
       assert.deepEqual(historical?.assessment, JSON.parse(JSON.stringify(frozen)));
+
+      // Continue the same governed campaign using actual persisted aggregate observations.
+      const metricsRights = { ...rights, basis: "client_owned" as const };
+      const metricsPolicy = { ...policy, dataClassifications: ["client-confidential" as const] };
+      const metricSource = await createSourceConnection({ clientId: f.tenant.id, connectorId: `metrics-${randomUUID()}`, connectorVersion: "1.0.0", sourceClass: "first_party_aggregate", rights: metricsRights, policy: metricsPolicy, retentionDays: 30, rawRetentionHours: 0 });
+      await createActiveSolutionProfile({ clientId: f.tenant.id, createdBy: user.id, profile: { enabledAbilities: [{ id: "live-campaign-intelligence", version: "1.0.0" }, { id: "post-campaign-learning", version: "1.0.0" }], providerBindings: { brand: f.source.connectorId, metrics: metricSource.connectorId }, markets: ["DK"], languages: ["da"], reviewRoles: { research: ["reviewer"] }, retention: { evidenceDays: 30, rawHours: 0, auditDays: 365 } } });
+      await transitionCampaignRecord({ clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id, nextState: "active" });
+      const daysAgo = (days: number) => new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+      const windows = [[daysAgo(5), daysAgo(4)], [daysAgo(2), daysAgo(1)]];
+      const metricApplicability = { ...f.input.applicability, campaigns: [String(created.id)] };
+      const metricMethod = { method: "Approved aggregate survey export", universe: plan.population, limitations: ["Manually transcribed, descriptive only"] };
+      const http = process.env.TEST_HTTP === "1" ? await startTestHttpServer(url!) : undefined;
+      const token = http ? await createAuthSession(user.id, f.tenant.id) : undefined;
+      try {
+        for (let index = 0; index < 2; index++) {
+          const aggregate = { metricKey: "consideration", value: index ? 0.4 : 0.2, unit: "rate", aggregation: "rate", cohortSize: 100, periodStart: windows[index][0], periodEnd: windows[index][1] };
+          if (http) {
+            const body = { sourceConnectionId: metricSource.id, title: "Synthetic aggregate export", content: `Synthetic export window ${index}`, method: metricMethod.method, universe: metricMethod.universe, limitations: metricMethod.limitations, ...metricApplicability, aggregate };
+            const uploaded = await http.request("/api/workspace/evidence", token!, body);
+            assert.equal(uploaded.status, 201, await uploaded.text());
+            const replay = await http.request("/api/workspace/evidence", token!, body);
+            assert.equal(replay.status, 200);
+          } else {
+            const now = new Date().toISOString(), key = randomUUID();
+            const request = { operation: "manual-document", filters: { markets: ["DK"], languages: ["da"] } };
+            const result = await new AggregateMetricEvidenceAdapter([{ id: key, content: `Synthetic export window ${index}`, rights: metricsRights, method: metricMethod, applicability: metricApplicability,
+              metric: aggregate.metricKey, value: aggregate.value, unit: aggregate.unit, cohortSize: aggregate.cohortSize, observedAt: aggregate.periodEnd, dimensions: { population: plan.population, aggregation: aggregate.aggregation, periodStart: aggregate.periodStart, periodEnd: aggregate.periodEnd, campaignId: String(created.id) } }]).run({ id: key, clientId: String(f.tenant.id), sourceId: String(metricSource.id), adapterId: metricSource.connectorId, dataClassification: "client-confidential", request, idempotencyKey: key, requestedAt: now }, { now, async resolveCredential() { throw new Error("unused"); } }, { minimumCohortSize: 10, retainedEvidenceDays: 30, allowVerbatim: false, sensitiveTerms: [] });
+            result.receipt.estimatedCost = 0;
+            await persistAcquisition({ clientId: f.tenant.id, sourceConnectionId: metricSource.id, operation: request.operation, request, idempotencyKey: key, title: "Synthetic aggregate export", rights: metricsRights, method: metricMethod, applicability: metricApplicability, collectionExpiresAt: result.evidence[0].expiresAt, result });
+          }
+        }
+        const observations = await db.select().from(quantitativeObservation).where(eq(quantitativeObservation.clientId, f.tenant.id)).orderBy(quantitativeObservation.observedAt);
+        assert.equal(observations.length, 2, "replays do not duplicate observation rows");
+        const metricSelections = [{ metricKey: "consideration", baselineObservationId: String(observations[0].id), resultObservationId: String(observations[1].id) }];
+        const assess = () => createCampaignAssessmentRecord({ clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id, stage: "live", metricSelections });
+        const live = await assess();
+        assert.equal(live.assessment.status, "ready", JSON.stringify(live.assessment.researchGaps));
+        assert.ok(Math.abs((live.assessment as CampaignResultAssessment).comparisons[0].result! - 0.4) < 1e-6);
+        assert.ok((live.assessment as CampaignResultAssessment).contextBasis?.intelligence.length);
+        if (http) {
+          const page = await http.request("/campaigns", token!);
+          assert.equal(page.status, 200);
+          assert.match(await page.text(), /Select imported aggregate observations/);
+          const manual = await http.request(`/api/campaigns/${created.id}/assessment`, token!, { stage: "live", current: { consideration: 999 }, baseline: { consideration: 0.2 } });
+          assert.equal(manual.status, 400);
+          const reconciled = await http.request(`/api/campaigns/${created.id}/assessment`, token!, { stage: "live", metricSelections });
+          assert.equal(reconciled.status, 201); assert.equal((await reconciled.json()).artifact.assessment.status, "ready");
+        }
+        await db.update(quantitativeObservation).set({ unit: "percent" }).where(eq(quantitativeObservation.id, observations[1].id));
+        assert.equal((await assess()).assessment.status, "needs_context");
+        await db.update(quantitativeObservation).set({ unit: "rate" }).where(eq(quantitativeObservation.id, observations[1].id));
+        await transitionCampaignRecord({ clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id, nextState: "completed" });
+        const post = await createCampaignAssessmentRecord({ clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id, stage: "post", metricSelections });
+        assert.equal(post.assessment.status, "ready"); assert.equal(post.assessment.candidateLearning, undefined);
+        await db.update(canonicalEvidence).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(canonicalEvidence.id, observations[1].evidenceId));
+        const projected = (await listCampaignWorkspace(f.tenant.id))[0].latestAssessments.post!.assessment as CampaignResultAssessment;
+        assert.equal(projected.comparisons[0].expired, true, "read-time projection suppresses expired copies before the worker runs");
+        await enforceCanonicalRetention(new Date(), f.tenant.id);
+        const [redacted] = await db.select().from(researchArtifact).where(eq(researchArtifact.id, post.id));
+        const comparison = (redacted.payloadJson as { assessment: CampaignResultAssessment }).assessment.comparisons[0];
+        assert.equal(comparison.expired, true); assert.equal(comparison.result, undefined); assert.equal(comparison.delta, undefined);
+        assert.equal((await createCampaignAssessmentRecord({ clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id, stage: "post", metricSelections })).assessment.status, "needs_context");
+      } finally { await http?.stop(); }
     });
   } finally {
     await probe.end();

@@ -24,7 +24,7 @@ export function EvidenceOnboarding({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const eligibleSources = sources.filter((source) =>
-    ["client_owned", "commissioned_or_licensed", "primary_research", "official_or_public"].includes(source.sourceClass),
+    ["client_owned", "commissioned_or_licensed", "primary_research", "official_or_public", "first_party_aggregate"].includes(source.sourceClass),
   );
 
   async function selectFile(file: File | undefined) {
@@ -69,6 +69,8 @@ export function EvidenceOnboarding({
           audiences: commaList(data.get("audiences")),
           campaigns: commaList(data.get("campaigns")),
           limitations: commaList(data.get("limitations")),
+          aggregate: data.get("metricKey") ? { metricKey: data.get("metricKey"), value: data.get("metricValue") === "" ? null : Number(data.get("metricValue")),
+            unit: data.get("metricUnit"), aggregation: data.get("aggregation"), cohortSize: data.get("cohortSize") === "" ? null : Number(data.get("cohortSize")), periodStart: data.get("periodStart"), periodEnd: data.get("periodEnd") } : undefined,
         }),
       });
       const result = await response.json();
@@ -143,6 +145,14 @@ export function EvidenceOnboarding({
               <input name={name} placeholder="Comma-separated" className="rounded-md border border-border bg-background px-3 py-2 font-normal" />
             </label>
           ))}
+          <details className="rounded-md border border-border p-3 md:col-span-2">
+            <summary>First-party aggregate observation (required for an aggregate source)</summary>
+            <p className="mt-2 text-xs text-muted">Transcribe one source-backed aggregate, not person-level rows. Import baseline and result separately. Universe must exactly match the measurement population; Campaigns must contain one campaign ID. Observation periods are half-open [start, end). The system validates compatibility, not the truth of a manual transcription.</p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {(["metricKey", "metricValue", "metricUnit", "cohortSize", "periodStart", "periodEnd"] as const).map((name) => <label key={name} className="text-xs">{name.replace(/([A-Z])/g, " $1")}<input name={name} type={name.startsWith("period") ? "date" : ["metricValue", "cohortSize"].includes(name) ? "number" : "text"} step={name === "cohortSize" ? "1" : "any"} className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2" /></label>)}
+              <label className="text-xs">Aggregation<select name="aggregation" className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2"><option>rate</option><option>count</option><option>sum</option><option>mean</option><option>index</option></select></label>
+            </div>
+          </details>
           {error ? <p className="text-sm text-[var(--status-danger-text)] md:col-span-2">{error}</p> : null}
           <div className="md:col-span-2">
             <button disabled={submitting} className="rounded-md bg-[var(--button-primary-bg)] px-4 py-2 text-sm font-medium text-[var(--button-primary-text)] disabled:opacity-60">

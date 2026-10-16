@@ -13,7 +13,7 @@ import type { CampaignAssessmentArtifact, CampaignRevisionPayload } from "./camp
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** Caller holds campaign → measurement advisory locks. Configuration follows sensing → solution. */
-async function lockedContext(tx: Transaction, clientId: number, market?: string, language?: string): Promise<() => ResearchContextSources> {
+export async function lockedContext(tx: Transaction, clientId: number, market?: string, language?: string): Promise<() => ResearchContextSources> {
   const [candidate] = await tx.select().from(solutionProfile).where(and(eq(solutionProfile.clientId, clientId), eq(solutionProfile.status, "active"))).orderBy(desc(solutionProfile.version)).limit(1);
   const sensingId = (candidate?.profileJson as SolutionProfile | undefined)?.sensingProfileId;
   const [sensing] = sensingId ? await tx.select().from(sensingProfile).where(and(eq(sensingProfile.clientId, clientId), eq(sensingProfile.id, Number(sensingId)))).for("share") : [];

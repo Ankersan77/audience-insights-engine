@@ -147,6 +147,37 @@ readable but no longer authorize a new approval. No database migration or provid
 required for this upgrade. Model-authored analysis, complete live/post contextual assessments,
 metric provenance and actual pilot quality are not certified by this manual workflow.
 
+### Source-backed live/post readback
+
+1. Configure an approved `first_party_aggregate` source and bind its alias in the active solution.
+   Enable `live-campaign-intelligence` and/or `post-campaign-learning` version `1.0.0`.
+2. In Evidence onboarding, select that source and expand “First-party aggregate observation”.
+   Import baseline and result separately. Supply metric key/value/unit, cohort, aggregation and
+   completed half-open `[periodStart, periodEnd)` windows, plus methodology, universe, limitations,
+   market/language and exactly one campaign ID. Universe must match the approved metric population.
+   This is explicit human transcription; the operator must verify it against the source report.
+   Ordinary CSV/text upload does not magically extract numerical observations.
+3. In an active/completed campaign, select one baseline and result observation for each planned
+   metric. The chooser lists up to 1,000 recent eligible tenant observations. Core validates all
+   selections again and refuses missing, suppressed, wrong-scope or incompatible inputs.
+4. Inspect values, differences, targets, materiality, windows, source references and the frozen
+   campaign/measurement/Market Twin basis in the saved readback. `ready` here means numerical
+   reconciliation is ready for interpretation, not strategic endorsement or causal evidence.
+
+`POST /api/campaigns/:id/assessment` uses `metricSelections` entries containing `metricKey`,
+`baselineObservationId` and `resultObservationId` strings. Free-form `baseline`, `current` or
+`observedResults` maps are rejected; a linked report ID cannot substantiate arbitrary numbers.
+The aggregate upload body uses `aggregate: { metricKey, value, unit, aggregation, cohortSize,
+periodStart, periodEnd }` alongside the existing source/method/scope fields. Replaying the same
+transcription does not add duplicate observations. No live external request or new schema migration
+is needed. The existing minimum-cohort setting is applied before retention.
+
+Different sources/methods, missing dimensional metadata, unequal count/sum windows and disagreement
+with the approved baseline require explicit remediation rather than guessed conversion. A source
+revocation or expiry suppresses copied values/deltas when read; scheduled retention also removes
+them from persisted assessment payloads, retaining minimal lineage. The numeric join deliberately
+does not emit a generic learning. Contextual interpretation and learning review remain required.
+
 After building, run `TEST_HTTP=1 TEST_DATABASE_URL=... pnpm test:integration` to exercise the actual
 web server as well. The suite starts a temporary loopback-only production-build process against
 the test database with synthetic identities and real opaque server sessions. It verifies briefing authentication, role checks,

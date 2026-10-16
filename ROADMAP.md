@@ -111,6 +111,16 @@ approval the plan is frozen. This closes the prior structural-checklist-only pre
 the automated campaign expert requirement. Live/post context, metric lineage, multi-market approval
 coverage and model-assisted interpretation remain implementation work.
 
+Live/post readbacks now select normalized baseline/result observation IDs instead of trusting
+free-form outcome numbers. Core verifies current source permission, campaign, metric dictionary,
+population, methodology, ordered windows and the frozen approved baseline, then records numerical
+comparisons and context fingerprints atomically. First-party aggregate transcription is available
+in evidence onboarding, with cohort suppression and replay protection. Read-time projection hides
+unavailable copies; retention removes copied values/deltas while keeping lineage. This is a usable
+descriptive reconciliation path, not automated detection of fatigue or a substantive campaign
+learning. Contextual interpretation, execution/checkpoint alignment and reviewed learning remain
+open; a numerical join alone no longer generates a generic learning candidate.
+
 Queued acquisitions now reserve explicit currency-denominated cost, record and request upper bounds
 against one client-wide UTC-day allowance before adapter execution. Retries require new durable
 authorizations; cancellation, crashes and cheaper-than-planned success do not automatically refund

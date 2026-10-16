@@ -75,19 +75,23 @@ export class PublicWebEvidenceAdapter extends EvidenceAdapter<CommonFixture & { 
   }
 }
 
-export class AggregateMetricEvidenceAdapter extends EvidenceAdapter<CommonFixture & { metric: string; value: number; unit: string; cohortSize: number }> {
+type AggregateRecord = CommonFixture & { metric: string; value: number; unit: string; cohortSize: number; observedAt?: string; dimensions?: Readonly<Record<string, string>>; title?: string; sourceUrl?: string };
+export class AggregateMetricEvidenceAdapter extends EvidenceAdapter<AggregateRecord> {
   readonly id = "aggregate-metric-evidence";
-  private readonly records: readonly (CommonFixture & { metric: string; value: number; unit: string; cohortSize: number })[];
-  constructor(records: readonly (CommonFixture & { metric: string; value: number; unit: string; cohortSize: number })[]) { super(); this.records = records; }
-  protected async acquireRaw(): Promise<readonly (CommonFixture & { metric: string; value: number; unit: string; cohortSize: number })[]> { return this.records; }
-  protected normalize(raw: CommonFixture & { metric: string; value: number; unit: string; cohortSize: number }, job: SourceAcquisitionJob, context: AdapterRunContext) {
+  private readonly records: readonly AggregateRecord[];
+  constructor(records: readonly AggregateRecord[]) { super(); this.records = records; }
+  protected async acquireRaw(): Promise<readonly AggregateRecord[]> { return this.records; }
+  protected normalize(raw: AggregateRecord, job: SourceAcquisitionJob, context: AdapterRunContext) {
     return candidate(raw, job, context, {
       sourceClass: "first_party_aggregate",
-      content: `${raw.metric}: ${raw.value} ${raw.unit}`,
+      content: `${raw.metric}: ${raw.value} ${raw.unit}${raw.dimensions ? `\n${raw.content}\n${JSON.stringify({ dimensions: raw.dimensions, method: raw.method, cohortSize: raw.cohortSize })}` : ""}`,
+      synthesis: raw.title,
+      sourceUrl: raw.sourceUrl,
+      observedAt: raw.observedAt,
       citationLevel: "statistical",
       cohortSize: raw.cohortSize,
       grade: "A",
-      quantitative: { metricKey: raw.metric, value: raw.value, unit: raw.unit, observedAt: context.now, dimensions: {}, cohortSize: raw.cohortSize },
+      quantitative: { metricKey: raw.metric, value: raw.value, unit: raw.unit, observedAt: raw.observedAt ?? context.now, dimensions: raw.dimensions ?? {}, cohortSize: raw.cohortSize },
     });
   }
 }

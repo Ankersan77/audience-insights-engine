@@ -168,6 +168,27 @@ source-backed metric reconciliation, multi-market approval coverage and broader 
 tests remain open. General brand/strategy evidence is reusable across campaigns when applicable;
 evidence explicitly scoped to another campaign cannot support this one.
 
+### Result-lineage correction
+
+The previous live/post path trusted free-form values plus an arbitrary linked evidence ID. The
+runtime now derives values from selected normalized observations. It checks the accepted frozen
+plan, source permission, campaign ID, metric/unit/population/aggregation, matching source and method,
+valid non-overlapping time windows and the planned baseline. Count/sum windows must have equal
+duration; no implicit unit conversion, pooling or cross-provider calibration is performed. Live
+results require a recent window. Target and absolute-materiality comparisons are descriptive only.
+
+Campaign/result/plan/Market Twin fingerprints and observation lineage are saved with an atomic
+audit, under the same campaign/plan/source/evidence lock order as approval. First-party aggregate
+transcription is supported in the owned evidence surface and ingestion API, including suppression,
+idempotency and method/scope preservation. Database and HTTP tests exercise the approved campaign
+through active/completed readbacks, reject arbitrary numbers and mismatched units, and verify
+copied-value removal. Current rights and expiry are checked at read time, before background cleanup.
+
+Manual transcription is not verified extraction or an accepted live provider. Missing exact source
+metadata yields a gap rather than guessed compatibility. Checkpoint/exposure alignment, calibrated
+cross-source reconciliation, anomaly/fatigue interpretation, real campaign data and substantive
+reviewed learning remain open. The metric join does not create a canned learning candidate.
+
 ## Architectural decisions
 
 - PostgreSQL remains the system of record; canonical records receive a direct `client_id` even

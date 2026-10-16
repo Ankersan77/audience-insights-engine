@@ -4,7 +4,8 @@ import type { Applicability, MethodDeclaration, RightsDeclaration, SourceClass }
 import { readSourceConnectionPolicy, sourceClassification, sourcePolicyFailure, SourcePolicyError } from "@/src/connectors/sourcePolicy";
 import { listCanonicalEvidence, persistAcquisition } from "@/src/db/queries/canonical_evidence";
 import { getSourceConnection } from "@/src/db/queries/sources";
-import { DocumentEvidenceAdapter, PublicWebEvidenceAdapter } from "@/src/evidence/adapters";
+import { AggregateMetricEvidenceAdapter, DocumentEvidenceAdapter, PublicWebEvidenceAdapter } from "@/src/evidence/adapters";
+import { parseManualAggregate } from "@/src/evidence/manualAggregate";
 import type { EvidencePolicy } from "@/src/evidence/policy";
 import { recordGovernanceAudit } from "@/src/lib/audit";
 import { getSession } from "@/src/lib/auth";
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
 
   const source = await getSourceConnection(session.clientId, sourceConnectionId);
   if (!source) return NextResponse.json({ error: "Source connection not found." }, { status: 404 });
-  if (!["client_owned", "commissioned_or_licensed", "primary_research", "official_or_public"].includes(source.sourceClass)) {
+  if (!["client_owned", "commissioned_or_licensed", "primary_research", "official_or_public", "first_party_aggregate"].includes(source.sourceClass)) {
     return NextResponse.json({ error: "This source class requires its dedicated aggregate or listening adapter." }, { status: 400 });
   }
   if (source.sourceClass === "official_or_public" && !sourceUrl) {
@@ -95,7 +96,12 @@ export async function POST(request: NextRequest) {
     fieldworkEnd: typeof body.fieldworkEnd === "string" && body.fieldworkEnd ? body.fieldworkEnd : undefined,
     limitations: strings(body.limitations),
   };
-  const contentHash = createHash("sha256").update(`${sourceConnectionId}\u0000${content}`).digest("hex");
+  let aggregate: ReturnType<typeof parseManualAggregate> | undefined;
+  if (source.sourceClass === "first_party_aggregate") {
+    try { aggregate = parseManualAggregate(body.aggregate, { population: method.universe, campaigns: applicability.campaigns, now: new Date().toISOString() }); }
+    catch { return NextResponse.json({ error: "An aggregate requires a finite value, cohort size, metric, unit, population, aggregation, one campaign and a valid completed observation window." }, { status: 400 }); }
+  }
+  const contentHash = createHash("sha256").update(`${sourceConnectionId}\u0000${content}${aggregate ? JSON.stringify({ aggregate, method, applicability }) : ""}`).digest("hex");
   const coreJob = {
     id: `manual:${contentHash.slice(0, 24)}`,
     clientId: String(session.clientId),
@@ -111,7 +117,7 @@ export async function POST(request: NextRequest) {
   });
   if (policyFailure) return NextResponse.json({ error: policyFailure }, { status: 403 });
   const record = { id: contentHash, title, content, sourceUrl: sourceUrl || undefined, rights, method, applicability };
-  const adapter = source.sourceClass === "official_or_public"
+  const adapter = aggregate ? new AggregateMetricEvidenceAdapter([{ ...record, ...aggregate }]) : source.sourceClass === "official_or_public"
     ? new PublicWebEvidenceAdapter([{ ...record, url: sourceUrl, permitted: true }])
     : new DocumentEvidenceAdapter(
       [record],

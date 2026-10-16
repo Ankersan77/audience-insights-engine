@@ -30,6 +30,9 @@ export function redactExpiredCitationCopies(value: unknown, expiredEvidenceIds: 
   if (Array.isArray(value)) return value.map((item) => redactExpiredCitationCopies(item, expiredEvidenceIds));
   if (!value || typeof value !== "object") return value;
   const object = value as JsonObject;
+  if (object.kind === "campaign-metric-comparison@1" && [object.baselineEvidenceId, object.resultEvidenceId].some((id) => typeof id === "string" && expiredEvidenceIds.has(id))) {
+    return { kind: object.kind, metricKey: object.metricKey, baselineEvidenceId: object.baselineEvidenceId, resultEvidenceId: object.resultEvidenceId, expired: true };
+  }
   const expiredCitation = typeof object.evidenceId === "string" && expiredEvidenceIds.has(object.evidenceId);
   const redacted: JsonObject = {};
   for (const [key, nested] of Object.entries(object)) {
