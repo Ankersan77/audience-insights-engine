@@ -2,7 +2,7 @@ import { researchSnapshotDigest } from "./snapshot.ts";
 import type { EvidenceItem, IntelligenceRecord, ResearchContextBasis, ResearchProject, SensingProfile, SolutionProfile } from "../core/contracts.ts";
 import { hasPromptInjection, redactIdentifiers } from "../evidence/policy.ts";
 import { resolveEvidence } from "../market-twin/resolver.ts";
-import { getDecisionBriefAbility } from "./catalog.ts";
+import { getAbility } from "./catalog.ts";
 
 export const CONTEXT_EVIDENCE_REQUIREMENTS = [{
   sourceClasses: ["client_owned", "first_party_aggregate", "commissioned_or_licensed", "official_or_public", "public_conversation", "primary_research"] as const,
@@ -30,13 +30,13 @@ export type ResearchContextSources = {
 };
 
 export function prepareResearchContext(input: {
-  clientId: string; abilityId: string; projectId?: string; market?: string; language?: string; now: string;
+  clientId: string; abilityId: string; projectId?: string; campaignId?: string; market?: string; language?: string; now: string;
   sources: ResearchContextSources;
 }): { context?: ResearchContext; basis?: ResearchContextBasis; evidence: readonly EvidenceItem[]; contextEvidence: readonly EvidenceItem[]; gaps: string[] } {
   const { solution, project, sensing } = input.sources;
   const gaps: string[] = [];
   const empty = () => ({ evidence: [], contextEvidence: [], gaps });
-  const ability = getDecisionBriefAbility(input.abilityId);
+  const ability = getAbility(input.abilityId);
   if (!Number.isFinite(Date.parse(input.now))) gaps.push("A valid research execution time is required.");
   if (!solution || solution.clientId !== input.clientId || solution.status !== "active") gaps.push("An active solution profile for this client is required.");
   if (input.projectId && (!project || project.id !== input.projectId || project.clientId !== input.clientId || project.status !== "active")) gaps.push("An active research project belonging to this client is required.");
@@ -56,7 +56,8 @@ export function prepareResearchContext(input: {
   const aliases = Object.values(solution.providerBindings);
   if (aliases.some((alias) => !input.sources.sourceBindings[alias])) gaps.push("One or more solution source bindings are unavailable.");
   const allowedSources = new Set(aliases.map((alias) => input.sources.sourceBindings[alias]).filter(Boolean));
-  const evidence = input.sources.evidence.filter((item) => item.clientId === input.clientId && allowedSources.has(item.sourceConnectionId));
+  const evidence = input.sources.evidence.filter((item) => item.clientId === input.clientId && allowedSources.has(item.sourceConnectionId)
+    && (!input.campaignId || !item.applicability.campaigns.length || item.applicability.campaigns.includes(input.campaignId)));
   const eligible = resolveEvidence({ clientId: input.clientId, now: input.now, requirements: CONTEXT_EVIDENCE_REQUIREMENTS, evidence, market, language }).selected;
   const evidenceIds = new Set(eligible.map((item) => item.id));
   const candidates = input.sources.intelligence.filter((record) =>
@@ -65,6 +66,7 @@ export function prepareResearchContext(input: {
     && (!record.decayAt || (Number.isFinite(Date.parse(record.decayAt)) && Date.parse(record.decayAt) > Date.parse(input.now)))
     && (!record.applicability.markets.length || record.applicability.markets.includes(market))
     && (!record.applicability.languages.length || record.applicability.languages.includes(language))
+    && (!input.campaignId || !record.applicability.campaigns.length || record.applicability.campaigns.includes(input.campaignId))
     && record.evidenceIds.length > 0 && record.evidenceIds.every((id) => evidenceIds.has(id))
     && !hasPromptInjection(JSON.stringify(record)) && !redactIdentifiers(JSON.stringify(record)).identityRisk,
   );

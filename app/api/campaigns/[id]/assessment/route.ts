@@ -38,6 +38,9 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/cam
       campaignId,
       actorUserId: session.id,
       stage: stage as "preflight" | "live" | "post",
+      preflightReview: body.preflightReview,
+      market: typeof body.market === "string" ? body.market.trim() : undefined,
+      language: typeof body.language === "string" ? body.language.trim() : undefined,
       baseline: metrics(body.baseline),
       current: metrics(body.current),
       observedResults: metrics(body.observedResults),
@@ -47,7 +50,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/cam
       alternativeExplanations: strings(body.alternativeExplanations),
       resultEvidenceIds: ids(body.resultEvidenceIds),
     });
-    await recordGovernanceAudit({
+    if (stage !== "preflight") await recordGovernanceAudit({
       clientId: session.clientId,
       actorUserId: session.id,
       action: "assess",

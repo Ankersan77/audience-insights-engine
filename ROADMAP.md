@@ -102,6 +102,15 @@ Concurrency tests cover strategy edits and retention races. This guarantees the 
 save time, not perpetual freshness or automatic re-analysis of historical work; analogous campaign
 assessment snapshot and read-time availability coverage still needs its own audit.
 
+Campaign pre-flight now has an owned-surface, analyst-authored strategic review with seven
+evidence-linked dimensions, alternatives, explicit contradiction rationale and current Market Twin
+context. Approval revalidates the latest review, exact campaign revision and accepted measurement
+version under database locks. A newer incomplete review cannot reuse an older ready verdict.
+Measurement replacement is available before approval and requires review/reassessment; after
+approval the plan is frozen. This closes the prior structural-checklist-only pre-flight path, not
+the automated campaign expert requirement. Live/post context, metric lineage, multi-market approval
+coverage and model-assisted interpretation remain implementation work.
+
 Queued acquisitions now reserve explicit currency-denominated cost, record and request upper bounds
 against one client-wide UTC-day allowance before adapter execution. Retries require new durable
 authorizations; cancellation, crashes and cheaper-than-planned success do not automatically refund

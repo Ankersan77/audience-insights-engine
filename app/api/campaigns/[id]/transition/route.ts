@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Campaign } from "@/src/core/contracts";
 import { transitionCampaignRecord } from "@/src/db/queries/campaign_workspace";
-import { recordGovernanceAudit } from "@/src/lib/audit";
 import { getSession } from "@/src/lib/auth";
 import { assertResearchWrite, assertReview, PermissionDeniedError } from "@/src/lib/roles";
 
@@ -20,7 +19,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   }
   try {
     const updated = await transitionCampaignRecord({ clientId: session.clientId, campaignId, nextState: body.nextState, actorUserId: session.id, learningRecordId: body.learningRecordId });
-    await recordGovernanceAudit({ clientId: session.clientId, actorUserId: session.id, action: "transition", entityType: "campaign", entityId: String(campaignId), after: { state: updated.state, revision: updated.currentRevision } });
     return NextResponse.json({ campaign: updated });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Campaign transition failed." }, { status: 409 }); }
 }

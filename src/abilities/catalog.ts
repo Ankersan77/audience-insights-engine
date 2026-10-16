@@ -95,7 +95,7 @@ export const SPECIALIZED_ABILITIES: readonly AbilityManifest[] = [
     version: "1.0.0",
     intent: "Evaluate a proposed campaign against strategy, brand, audience evidence, execution constraints and measurement readiness.",
     evidenceRequirements: [
-      { sourceClasses: ["client_owned", "commissioned_or_licensed", "official_or_public"], minimumItems: 1, minimumSourceDiversity: 1, minimumGrade: "C", requiredDimensions: ["campaign"] },
+      { sourceClasses: ["client_owned", "commissioned_or_licensed", "official_or_public"], minimumItems: 1, minimumSourceDiversity: 1, minimumGrade: "C", requiredDimensions: ["market"] },
     ],
     method: "Assess fit, assumptions, alternatives, risks and measurement readiness against the frozen campaign revision.",
     outputContract: "campaign-assessment@1",

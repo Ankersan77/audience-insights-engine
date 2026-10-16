@@ -16,7 +16,7 @@ import { readSourceConnectionPolicy, sourceClassification, sourcePolicyFailure }
 
 export type IntelligenceListRow = IntelligenceRecord & { reviewerUserId?: string };
 
-function toIntelligence(row: typeof intelligenceRecord.$inferSelect): IntelligenceListRow {
+export function toIntelligence(row: typeof intelligenceRecord.$inferSelect): IntelligenceListRow {
   return {
     id: String(row.id),
     clientId: String(row.clientId),

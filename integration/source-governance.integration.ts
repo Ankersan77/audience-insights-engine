@@ -11,6 +11,8 @@ import type { SourceConnectionPolicy } from "../src/core/contracts";
 import { dueBriefingWindows } from "../src/monitoring/briefings";
 import { startTestHttpServer } from "./http-server";
 import { newSessionToken, sessionTokenHash, SESSION_MAX_AGE_SECONDS } from "../src/lib/authTokens";
+import { PREFLIGHT_DIMENSIONS } from "../src/campaigns/preflightFields";
+import type { ContextualPreflight } from "../src/campaigns/preflight";
 
 // Refuse accidental execution against the application's database. No tables are
 // truncated: each test creates uniquely named, synthetic tenant/source fixtures.
@@ -34,6 +36,7 @@ const { setClientAccess } = await import("../src/db/queries/client_access");
 const { setAcquisitionBudget, inspectAcquisitionBudget, authorizeAcquisitionAttempt } = await import("../src/db/queries/acquisition_budget");
 const { processAcquisitionJob, reconcileStaleAcquisitions } = await import("../src/workers/acquisitionQueue");
 const { enforceCanonicalRetention } = await import("../src/db/queries/retention");
+const { createCampaignRecord, createMeasurementPlanRecord, reviewMeasurementPlan, createCampaignAssessmentRecord, transitionCampaignRecord, listCampaignWorkspace } = await import("../src/db/queries/campaign_workspace");
 const probe = new Pool({ connectionString: url });
 const rights = { basis: "public_permitted" as const, commercialUse: true, quotationAllowed: false, restrictions: [] };
 const policy: SourceConnectionPolicy = {
@@ -522,6 +525,85 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       await revokeSourceConnection({ clientId: stale.tenant.id, id: stale.source.id, now: new Date() });
       await assert.rejects(authorizeAcquisitionAttempt({ clientId: stale.tenant.id, jobId: revoked.id, attempt: 1, plan }), /cancelled|source-unavailable/);
       assert.equal((await db.select().from(acquisitionAuthorization).where(eq(acquisitionAuthorization.clientId, stale.tenant.id))).length, 1);
+    });
+    await t.test("campaign preflight binds analyst reasoning, current Market Twin and the exact approved plan", async () => {
+      const f = await fixture();
+      const retained = await persistAcquisition(f.input);
+      const [user] = await db.insert(appUser).values({ email: "campaign-researcher@example.invalid", name: "Synthetic campaign researcher", role: "researcher", ssoSubjectId: randomUUID() }).returning();
+      const created = await createCampaignRecord({ clientId: f.tenant.id, name: "Synthetic category campaign", objective: "Increase consideration", audience: "Declared Danish audience", proposition: "Accessible quality",
+        creativeRoutes: ["Product demonstration"], channels: ["owned"], budgetAssumptions: ["Within approved resources"], strategicEvidenceIds: retained.evidenceIds, brandConstraints: ["Descriptive claims only"] });
+      const plan = { objective: "Increase consideration", hypothesis: "Consideration changes during the campaign.", population: "Eligible Danish adults",
+        metrics: [{ key: "consideration", label: "Consideration", unit: "rate", direction: "increase" as const, aggregation: "rate" as const, population: "Eligible Danish adults" }],
+        baseline: { consideration: 0.2 }, targets: { consideration: 0.25 }, checkpoints: ["2026-11-01T00:00:00.000Z"], attributionAssumptions: ["Descriptive only"], materialityThresholds: { consideration: 0.02 }, decisionRules: ["Validate direction before acting"] };
+      await createMeasurementPlanRecord({ clientId: f.tenant.id, campaignId: created.id, plan });
+      await reviewMeasurementPlan({ clientId: f.tenant.id, campaignId: created.id, reviewerUserId: user.id, decision: "accepted" });
+      const [record] = await db.insert(intelligenceRecord).values({ clientId: f.tenant.id, kind: "fact", title: "Reviewed category strategy", statement: "The brand prioritizes accessible quality.", lifecycle: "live", reviewState: "accepted",
+        evidenceIds: [...retained.evidenceIds], contradictionIds: [], dependencyIds: [], applicabilityJson: f.input.applicability, confidence: 0.8, uncertainty: ["Synthetic only"], synthesisBy: "human", reviewedBy: user.id, reviewedAt: new Date() }).returning();
+      await createActiveSolutionProfile({ clientId: f.tenant.id, createdBy: user.id, profile: { enabledAbilities: [{ id: "campaign-preflight", version: "1.0.0" }], providerBindings: { brand: f.source.connectorId }, markets: ["DK"], languages: ["da"], reviewRoles: { research: ["reviewer"] }, retention: { evidenceDays: 30, rawHours: 0, auditDays: 365 } } });
+      const review = { pointOfView: "The proposed demonstration fits the reviewed accessible-quality strategy.", recommendation: "Submit the bounded proposal to a reviewer.", alternative: "Test an informational creative route first.", wouldChangeConclusion: "Contradictory audience research would require a revised route.",
+        findings: PREFLIGHT_DIMENSIONS.map((dimension) => ({ dimension, verdict: "aligned" as const, rationale: `The ${dimension} interpretation follows the cited strategy, subject to pilot validation.`, evidenceIds: retained.evidenceIds.map(String), intelligenceIds: [String(record.id)] })) };
+      const request = { clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id, stage: "preflight" as const, preflightReview: review };
+      assert.equal((await createCampaignAssessmentRecord({ ...request, preflightReview: undefined })).assessment.status, "needs_context");
+      const first = await createCampaignAssessmentRecord(request);
+      assert.equal(first.assessment.status, "ready");
+      assert.equal((first.assessment as ContextualPreflight).contextBasis?.intelligence[0].id, String(record.id));
+      const approve = () => transitionCampaignRecord({ clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id, nextState: "approved" });
+      // A newer incomplete assessment must not fall back to an older ready one.
+      await createCampaignAssessmentRecord({ ...request, preflightReview: undefined });
+      await assert.rejects(approve(), /current-contextual-preflight-required/);
+      await createCampaignAssessmentRecord(request);
+      // Even an accepted new measurement plan invalidates the old assessment basis.
+      await createMeasurementPlanRecord({ clientId: f.tenant.id, campaignId: created.id, plan: { ...plan, targets: { consideration: 0.3 } } });
+      await reviewMeasurementPlan({ clientId: f.tenant.id, campaignId: created.id, reviewerUserId: user.id, decision: "accepted" });
+      await assert.rejects(approve(), /campaign-context-changed/);
+      await createCampaignAssessmentRecord(request);
+      const editor = await probe.connect();
+      try {
+        await editor.query("begin");
+        await editor.query("update intelligence_record set statement = $1 where id = $2", ["A new strategic promise needs reassessment.", record.id]);
+        const approval = assert.rejects(approve(), /campaign-context-changed/);
+        await waitForBlocked(1);
+        await editor.query("commit");
+        await approval;
+      } finally { await editor.query("rollback"); editor.release(); }
+      assert.equal((await listCampaignWorkspace(f.tenant.id))[0].state, "proposed");
+      await db.update(intelligenceRecord).set({ statement: record.statement }).where(eq(intelligenceRecord.id, record.id));
+      await db.update(sourceConnection).set({ configurationJson: { ...policy, markets: ["SE"] } }).where(eq(sourceConnection.id, f.source.id));
+      assert.equal((await createCampaignAssessmentRecord(request)).assessment.status, "needs_context");
+      await db.update(sourceConnection).set({ configurationJson: policy }).where(eq(sourceConnection.id, f.source.id));
+
+      if (process.env.TEST_HTTP === "1") {
+        await db.insert(clientMembership).values({ clientId: f.tenant.id, userId: user.id, role: "researcher" });
+        const token = await createAuthSession(user.id, f.tenant.id);
+        const server = await startTestHttpServer(url!);
+        try {
+          const page = await server.request("/campaigns", token);
+          assert.equal(page.status, 200);
+          const html = await page.text();
+          assert.match(html, /Analyst-authored review/);
+          assert.match(html, /cultural permission/);
+          const response = await server.request(`/api/campaigns/${created.id}/assessment`, token, { stage: "preflight", preflightReview: review });
+          assert.equal(response.status, 201);
+          assert.equal((await response.json()).artifact.assessment.status, "ready");
+          assert.equal((await server.request(`/api/campaigns/${created.id}/transition`, token, { nextState: "approved" })).status, 403);
+          const invalid = { ...review, findings: review.findings.map((item) => ({ ...item, intelligenceIds: ["999999999"] })) };
+          const rejected = await server.request(`/api/campaigns/${created.id}/assessment`, token, { stage: "preflight", preflightReview: invalid });
+          assert.equal(rejected.status, 201);
+          assert.equal((await rejected.json()).artifact.assessment.status, "needs_context");
+        } finally { await server.stop(); }
+      }
+      const final = await createCampaignAssessmentRecord(request);
+      const frozen = structuredClone(final.assessment);
+      assert.equal((await approve()).state, "approved");
+      const workspace = (await listCampaignWorkspace(f.tenant.id))[0];
+      assert.equal(workspace.payload.approvedPreflightId, final.id);
+      const approvalAudit = await db.select().from(governanceAudit).where(and(eq(governanceAudit.clientId, f.tenant.id), eq(governanceAudit.action, "transition")));
+      assert.equal(approvalAudit.length, 1);
+      assert.equal((approvalAudit[0].redactedAfterJson as { approvedPreflightId: number }).approvedPreflightId, final.id);
+      await assert.rejects(createMeasurementPlanRecord({ clientId: f.tenant.id, campaignId: created.id, plan }), /measurement-plan-frozen-after-approval/);
+      await db.update(intelligenceRecord).set({ statement: "Later market knowledge does not rewrite the historical assessment." }).where(eq(intelligenceRecord.id, record.id));
+      const historical = (await listCampaignWorkspace(f.tenant.id))[0].latestAssessments.preflight;
+      assert.deepEqual(historical?.assessment, JSON.parse(JSON.stringify(frozen)));
     });
   } finally {
     await probe.end();

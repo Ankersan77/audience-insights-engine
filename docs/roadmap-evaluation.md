@@ -144,6 +144,30 @@ evidence, not a substitute for the open external gates below.
 These are implementation gaps, additional to the external validation register. They may not be
 closed merely by naming an adapter, adding a manifest or passing the existing unit suite.
 
+### Campaign audit correction
+
+The earlier pre-flight implementation checked field presence, evidence IDs and a plan. That was a
+structural checklist, not an assessment of strategic fit. The production pre-flight path now
+requires an explicit analyst-authored interpretation across strategy, audience, proposition,
+distinctiveness, cultural permission, channel role and feasibility. Each finding references
+current permitted evidence and applicable accepted Market Twin records. Alternatives and a
+recommendation are retained; known contradictions require a visible decision rationale and remain
+visible. Unresolved findings yield `needs_context`; material tensions block approval.
+
+The owned campaign surface supports writing and inspecting this review. Snapshots bind campaign
+revision, accepted measurement version, solution/sensing versions, evidence and reviewed knowledge.
+Approval re-evaluates the newest assessment against the current locked basis, never falling back to
+an older ready artifact. Changing an accepted measurement plan requires a new pre-flight; plans
+are frozen after approval. PostgreSQL tests cover stale plans, newer incomplete assessments and
+concurrent strategy edits; HTTP coverage exercises the form surface and researcher/reviewer split.
+
+This is a usable human-led review path, **not automated expert synthesis**. Its references establish
+traceability, not that the analyst's reasoning is substantively correct; qualified review remains
+necessary. Model-assisted campaign interpretation, live/post-campaign Market Twin context,
+source-backed metric reconciliation, multi-market approval coverage and broader browser interaction
+tests remain open. General brand/strategy evidence is reusable across campaigns when applicable;
+evidence explicitly scoped to another campaign cannot support this one.
+
 ## Architectural decisions
 
 - PostgreSQL remains the system of record; canonical records receive a direct `client_id` even

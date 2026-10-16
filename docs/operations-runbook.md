@@ -118,6 +118,35 @@ rewrite history; a newly published sensing version does not replace a deliberate
 It does not assert that a historical recommendation remains current forever. Review-time
 availability, campaign assessment snapshots and pilot-quality review are separate requirements.
 
+### Evidence-linked campaign pre-flight
+
+The pre-flight form now records an analyst's seven explicit judgments (strategy, audience,
+proposition, distinctiveness, cultural permission, channel role and feasibility), their evidence
+and accepted Market Twin references, point of view, alternative and recommended decision. Select
+the intended market/language when the solution supports several. Generic brand/strategy evidence
+does not need a fabricated campaign tag; an existing tag for another campaign excludes that input.
+Configured source scope and current rights still apply. This is a single scoped assessment, not
+proof of approval coverage across every market of a multinational campaign.
+
+First accept the measurement plan, then save a complete pre-flight. Missing/unusable references,
+unresolved findings, disabled ability versions and missing context yield `needs_context`; a
+material tension yields `blocked`. Contradictions require a written scoped-decision rationale,
+without erasing either source claim. `ready` means ready for a separate authorized reviewer, not
+that an AI independently established strategic truth. The server validates traceability and policy;
+the reviewer must evaluate the substance of the reasoning.
+
+Campaign approval uses the **latest** pre-flight (not the latest successful one), then rebuilds the
+context under locks and compares the frozen campaign/measurement/context basis. If it changed,
+reassess against current inputs. The approved revision records its pre-flight artifact ID. Proposals
+can replace a measurement plan via “Revise measurement plan”; the replacement starts pending review
+and invalidates the old assessment basis. Approved plans cannot silently be replaced. A formal
+post-approval amendment workflow remains separate work.
+
+Historical assessments remain unchanged and inspectable. Older structural-only pre-flights are
+readable but no longer authorize a new approval. No database migration or provider activation is
+required for this upgrade. Model-authored analysis, complete live/post contextual assessments,
+metric provenance and actual pilot quality are not certified by this manual workflow.
+
 After building, run `TEST_HTTP=1 TEST_DATABASE_URL=... pnpm test:integration` to exercise the actual
 web server as well. The suite starts a temporary loopback-only production-build process against
 the test database with synthetic identities and real opaque server sessions. It verifies briefing authentication, role checks,
