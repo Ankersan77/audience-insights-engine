@@ -86,6 +86,12 @@ evidence.
 
 Anything in the final column remains `needs_context`; it is not silently converted into completion.
 
+The implementation column is an inventory, not a completion declaration. The follow-up audit in
+`docs/roadmap-evaluation.md` reopens synthesis/context integration, durable briefing production,
+pre-acquisition budget enforcement and broader runtime verification. Those repository tasks remain
+open alongside the external gates. Source-policy persistence and revocation concurrency now have
+dedicated PostgreSQL integration coverage in `integration/source-governance.integration.ts`.
+
 ## Phase 0 — Product reset and legacy isolation
 
 **Status: complete (2026-10-16).** Evidence: `docs/phase-0-legacy-inventory.md`,

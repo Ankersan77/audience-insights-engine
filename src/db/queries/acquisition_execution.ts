@@ -1,15 +1,9 @@
 import { and, asc, eq, inArray, isNotNull, lt } from "drizzle-orm";
-import type { DataClassification, SourceAcquisitionJob as DomainAcquisitionJob, SourceAcquisitionRequest } from "@/src/connectors/contracts";
+import type { SourceAcquisitionJob as DomainAcquisitionJob, SourceAcquisitionRequest } from "@/src/connectors/contracts";
 import type { RightsDeclaration, SourceClass, SourceConnectionPolicy } from "@/src/core/contracts";
-import { readSourceConnectionPolicy, sourcePolicyFailure } from "@/src/connectors/sourcePolicy";
+import { readSourceConnectionPolicy, sourceClassification, sourcePolicyFailure } from "@/src/connectors/sourcePolicy";
 import { db } from "@/src/db/client";
 import { sourceAcquisitionJob, sourceAcquisitionReceipt, sourceConnection } from "@/src/db/schema";
-
-function classification(sourceClass: SourceClass): DataClassification {
-  if (sourceClass === "official_or_public" || sourceClass === "public_conversation") return "public";
-  if (sourceClass === "commissioned_or_licensed") return "licensed";
-  return "client-confidential";
-}
 
 export type ClaimedAcquisition = {
   databaseJobId: number;
@@ -47,11 +41,12 @@ export async function claimAcquisitionJob(id: number, now = new Date()): Promise
     const [pending] = await tx.select().from(sourceAcquisitionJob).where(and(eq(sourceAcquisitionJob.id, id), eq(sourceAcquisitionJob.status, "queued"))).limit(1);
     if (!pending) return { kind: "unavailable" } as const;
     const job = pending;
-    const [source] = await tx.select().from(sourceConnection).where(and(eq(sourceConnection.id, job.sourceConnectionId), eq(sourceConnection.clientId, job.clientId))).limit(1);
+    // Source first, then job: the same lock order as completion and revocation.
+    const [source] = await tx.select().from(sourceConnection).where(and(eq(sourceConnection.id, job.sourceConnectionId), eq(sourceConnection.clientId, job.clientId))).limit(1).for("update");
     if (!source) throw new Error("source-connection-not-found");
     const sourceClass = source.sourceClass as SourceClass;
     const policy = readSourceConnectionPolicy(source.configurationJson);
-    const blocked = sourcePolicyFailure({ health: source.health, rights: source.rightsJson as RightsDeclaration, policy, request: job.requestJson as SourceAcquisitionRequest, dataClassification: classification(sourceClass), now: now.toISOString() });
+    const blocked = sourcePolicyFailure({ health: source.health, rights: source.rightsJson as RightsDeclaration, policy, request: job.requestJson as SourceAcquisitionRequest, dataClassification: sourceClassification(sourceClass), now: now.toISOString() });
     if (blocked) {
       const [failed] = await tx.update(sourceAcquisitionJob).set({ status: "failed", finishedAt: now }).where(and(eq(sourceAcquisitionJob.id, id), eq(sourceAcquisitionJob.status, "queued"))).returning({ id: sourceAcquisitionJob.id });
       if (!failed) return { kind: "unavailable" } as const;
@@ -75,7 +70,7 @@ export async function claimAcquisitionJob(id: number, now = new Date()): Promise
       job: {
         id: String(job.id), clientId: String(job.clientId), sourceId: String(source.id), adapterId: source.connectorId,
         credentialRef: source.credentialRef ? { provider: "secret-store", key: source.credentialRef } : undefined,
-        dataClassification: classification(sourceClass), request: job.requestJson as SourceAcquisitionRequest,
+        dataClassification: sourceClassification(sourceClass), request: job.requestJson as SourceAcquisitionRequest,
         idempotencyKey: job.idempotencyKey, requestedAt: job.requestedAt.toISOString(),
       },
     } } as const;

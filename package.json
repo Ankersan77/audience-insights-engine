@@ -13,6 +13,7 @@
     "db:migrate": "drizzle-kit migrate",
     "worker": "tsx src/workers/index.ts",
     "test": "node scripts/run-tests.mjs",
+    "test:integration": "tsx --test integration/*.integration.ts",
     "check:source-of-truth": "node scripts/check-source-of-truth.mjs"
   },
   "dependencies": {

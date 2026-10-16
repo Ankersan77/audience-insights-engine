@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import type { Applicability, MethodDeclaration, RightsDeclaration } from "@/src/core/contracts";
+import type { Applicability, MethodDeclaration, RightsDeclaration, SourceClass } from "@/src/core/contracts";
+import { readSourceConnectionPolicy, sourceClassification, sourcePolicyFailure, SourcePolicyError } from "@/src/connectors/sourcePolicy";
 import { listCanonicalEvidence, persistAcquisition } from "@/src/db/queries/canonical_evidence";
 import { getSourceConnection } from "@/src/db/queries/sources";
 import { DocumentEvidenceAdapter, PublicWebEvidenceAdapter } from "@/src/evidence/adapters";
@@ -100,11 +101,15 @@ export async function POST(request: NextRequest) {
     clientId: String(session.clientId),
     sourceId: String(sourceConnectionId),
     adapterId: source.connectorId,
-    dataClassification: source.sourceClass === "official_or_public" ? "public" as const : "client-confidential" as const,
-    request: { operation: sourceUrl ? "manual-link" : "manual-document" },
+    dataClassification: sourceClassification(source.sourceClass as SourceClass),
+    request: { operation: sourceUrl ? "manual-link" : "manual-document", filters: { markets: applicability.markets, languages: applicability.languages, purpose: "market-research" } },
     idempotencyKey: `${session.clientId}:${sourceConnectionId}:${contentHash}`,
     requestedAt: new Date().toISOString(),
   };
+  const policyFailure = sourcePolicyFailure({ health: source.health, rights, policy: readSourceConnectionPolicy(source.configurationJson),
+    request: coreJob.request, dataClassification: coreJob.dataClassification, now: coreJob.requestedAt,
+  });
+  if (policyFailure) return NextResponse.json({ error: policyFailure }, { status: 403 });
   const record = { id: contentHash, title, content, sourceUrl: sourceUrl || undefined, rights, method, applicability };
   const adapter = source.sourceClass === "official_or_public"
     ? new PublicWebEvidenceAdapter([{ ...record, url: sourceUrl, permitted: true }])
@@ -124,35 +129,42 @@ export async function POST(request: NextRequest) {
     async resolveCredential() { throw new Error("manual-onboarding-does-not-resolve-credentials"); },
   }, policy);
   const collectionExpiresAt = result.evidence[0]?.expiresAt ?? new Date(Date.now() + source.retentionDays * 86_400_000).toISOString();
-  const persisted = await persistAcquisition({
-    clientId: session.clientId,
-    sourceConnectionId,
-    operation: coreJob.request.operation,
-    request: { title: result.evidence[0]?.synthesis ?? "redacted-source", sourceUrl: result.evidence[0]?.sourceUrl },
-    idempotencyKey: coreJob.idempotencyKey,
-    title,
-    method,
-    rights,
-    applicability,
-    collectionExpiresAt,
-    result,
-  });
-
-  await recordGovernanceAudit({
-    clientId: session.clientId,
-    actorUserId: session.id,
-    action: persisted.replayed ? "ingestion_replayed" : "ingest",
-    entityType: "evidence_collection",
-    entityId: String(persisted.collectionId ?? persisted.jobId),
-    after: {
+  // Manual extraction makes no paid provider call; do not require an adapter cost estimate.
+  result.receipt.estimatedCost = 0;
+  try {
+    const persisted = await persistAcquisition({
+      clientId: session.clientId,
       sourceConnectionId,
+      operation: coreJob.request.operation,
+      request: { ...coreJob.request, title: result.evidence[0]?.synthesis ?? "redacted-source", sourceUrl: result.evidence[0]?.sourceUrl },
+      idempotencyKey: coreJob.idempotencyKey,
       title,
-      evidenceIds: persisted.evidenceIds,
-      lifecycle: result.evidence.map((item) => item.lifecycle),
-      redactions: result.evidence.flatMap((item) => item.redactions),
-    },
-  });
+      method,
+      rights,
+      applicability,
+      collectionExpiresAt,
+      result,
+    });
 
-  return NextResponse.json({ acquisition: persisted, retained: result.evidence.length }, { status: persisted.replayed ? 200 : 201 });
+    await recordGovernanceAudit({
+      clientId: session.clientId,
+      actorUserId: session.id,
+      action: persisted.replayed ? "ingestion_replayed" : "ingest",
+      entityType: "evidence_collection",
+      entityId: String(persisted.collectionId ?? persisted.jobId),
+      after: {
+        sourceConnectionId,
+        title,
+        evidenceIds: persisted.evidenceIds,
+        lifecycle: result.evidence.map((item) => item.lifecycle),
+        redactions: result.evidence.flatMap((item) => item.redactions),
+      },
+    });
+
+    return NextResponse.json({ acquisition: persisted, retained: result.evidence.length }, { status: persisted.replayed ? 200 : 201 });
+  } catch (error) {
+    if (error instanceof SourcePolicyError) return NextResponse.json({ error: error.message }, { status: 403 });
+    throw error;
+  }
 }
 

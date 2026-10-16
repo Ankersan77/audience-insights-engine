@@ -37,12 +37,12 @@ export async function listSourceConnections(clientId: number): Promise<SourceCon
     .where(eq(sourceConnection.clientId, clientId))
     .orderBy(asc(sourceConnection.connectorId));
 
-  return rows.map((row) => ({
+  return rows.map(({ credentialRef, configuration, ...row }) => ({
     ...row,
     sourceClass: row.sourceClass as SourceClass,
-    hasCredentialReference: Boolean(row.credentialRef),
+    hasCredentialReference: Boolean(credentialRef),
     rights: row.rights as RightsDeclaration,
-    policy: readSourceConnectionPolicy(row.configuration),
+    policy: readSourceConnectionPolicy(configuration),
   }));
 }
 

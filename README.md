@@ -145,7 +145,8 @@ those gates.
 pnpm dev          # local development
 pnpm lint         # ESLint
 pnpm typecheck    # generated Next.js types plus TypeScript
-pnpm test         # test suite
+pnpm test         # unit and deterministic fixture tests
+pnpm test:integration # PostgreSQL integration tests; requires dedicated TEST_DATABASE_URL ending in _test
 pnpm check:source-of-truth # canonical documentation check
 pnpm build        # production build
 pnpm worker       # background worker

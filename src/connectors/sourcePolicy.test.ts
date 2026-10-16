@@ -18,6 +18,8 @@ test("source policy fails closed for undeclared, revoked and out-of-scope acquis
   assert.equal(sourcePolicyFailure({ ...base, dataClassification: "licensed" }), "source-classification-outside-policy");
   assert.equal(sourcePolicyFailure({ ...base, request: { ...base.request, since: "2026-01-01T00:00:00.000Z" } }), "source-lookback-exceeded");
   assert.equal(sourcePolicyFailure({ ...base, rights: { ...rights, expiresAt: "2026-10-15T00:00:00.000Z" } }), "source-rights-expired");
+  assert.equal(sourcePolicyFailure({ ...base, rights: { ...rights, expiresAt: "invalid" } }), "source-rights-invalid");
+  assert.equal(sourcePolicyFailure({ ...base, policy: { ...policy, permittedPurposes: ["other-purpose"] } }), "source-purpose-outside-policy");
 });
 
 test("quota and cost limits are enforced against adapter receipts", () => {
@@ -27,4 +29,7 @@ test("quota and cost limits are enforced against adapter receipts", () => {
   assert.equal(acquisitionLimitFailure(policy, { ...receipt, estimatedCost: 26 }), "source-cost-limit-exceeded");
   const withoutCost = { ...receipt, estimatedCost: undefined };
   assert.equal(acquisitionLimitFailure(policy, withoutCost), "source-cost-unreported");
+  assert.equal(acquisitionLimitFailure(policy, { ...receipt, estimatedCost: Number.NaN }), "source-cost-invalid");
+  assert.equal(acquisitionLimitFailure(policy, { ...receipt, acquiredCount: 90, rejectedCount: 11 }), "source-quota-exceeded");
+  assert.equal(acquisitionLimitFailure(policy, { ...receipt, acquiredCount: -1 }), "source-receipt-invalid");
 });

@@ -12,6 +12,8 @@ import {
   sourceConnection,
 } from "@/src/db/schema";
 import type { AdapterRunResult } from "@/src/evidence/sdk";
+import type { SourceAcquisitionRequest } from "@/src/connectors/contracts";
+import { acquisitionLimitFailure, readSourceConnectionPolicy, sourceClassification, sourcePolicyFailure, SourcePolicyError } from "@/src/connectors/sourcePolicy";
 
 export type CanonicalEvidenceListRow = {
   id: number;
@@ -170,6 +172,33 @@ function structuredRows(result: AdapterRunResult, inserted: readonly { id: numbe
   return { quantitative, qualitative };
 }
 
+/** Must run with the source row locked, immediately before retaining a result. */
+function assertCurrentSourcePolicy(source: typeof sourceConnection.$inferSelect, input: PersistAcquisitionInput, request: SourceAcquisitionRequest): void {
+  const rights = source.rightsJson as RightsDeclaration;
+  const policy = readSourceConnectionPolicy(source.configurationJson);
+  const now = new Date().toISOString();
+  const failure = sourcePolicyFailure({ health: source.health, rights, policy, request,
+    dataClassification: sourceClassification(source.sourceClass as SourceClass), now,
+  }) ?? acquisitionLimitFailure(policy, input.result.receipt);
+  if (failure) throw new SourcePolicyError(failure);
+  if (input.result.receipt.status !== "succeeded" || input.result.receipt.acquiredCount !== input.result.evidence.length) throw new SourcePolicyError("source-receipt-invalid");
+  if (input.rights.basis !== rights.basis || (input.rights.quotationAllowed && !rights.quotationAllowed)
+    || (rights.expiresAt && (!input.rights.expiresAt || !Number.isFinite(Date.parse(input.rights.expiresAt)) || Date.parse(input.rights.expiresAt) > Date.parse(rights.expiresAt)))) {
+    throw new SourcePolicyError("source-rights-changed");
+  }
+  for (const applicability of [input.applicability, ...input.result.evidence.map((item) => item.applicability)]) {
+    const scopeFailure = sourcePolicyFailure({ health: source.health, rights, policy, now,
+      dataClassification: sourceClassification(source.sourceClass as SourceClass),
+      request: { ...request, filters: { ...request.filters, markets: applicability.markets, languages: applicability.languages } },
+    });
+    if (scopeFailure) throw new SourcePolicyError(scopeFailure);
+  }
+  for (const item of input.result.evidence) {
+    if (item.sourceClass !== source.sourceClass) throw new SourcePolicyError("source-class-mismatch");
+    assertEvidenceScope(item, { ...input, rights });
+  }
+}
+
 /**
  * Persists one completed adapter run atomically. Raw provider payloads are not
  * accepted by this boundary; only canonical evidence and a redacted receipt
@@ -181,11 +210,12 @@ export async function persistAcquisition(input: PersistAcquisitionInput): Promis
 
   return db.transaction(async (tx) => {
     const [source] = await tx
-      .select({ id: sourceConnection.id })
+      .select()
       .from(sourceConnection)
       .where(and(eq(sourceConnection.id, input.sourceConnectionId), eq(sourceConnection.clientId, input.clientId)))
-      .limit(1);
+      .limit(1).for("update");
     if (!source) throw new Error("source-connection-not-found");
+    assertCurrentSourcePolicy(source, input, { operation: input.operation, ...input.request } as SourceAcquisitionRequest);
 
     const [createdJob] = await tx
       .insert(sourceAcquisitionJob)
@@ -308,11 +338,16 @@ export async function completeExistingAcquisition(input: CompleteExistingAcquisi
   }));
   if (input.result.receipt.status !== "succeeded") throw new Error("successful-adapter-receipt-required");
   return db.transaction(async (tx) => {
+    const [source] = await tx.select().from(sourceConnection).where(and(
+      eq(sourceConnection.id, input.sourceConnectionId), eq(sourceConnection.clientId, input.clientId),
+    )).limit(1).for("update");
+    if (!source) throw new Error("source-connection-not-found");
     const [job] = await tx.select().from(sourceAcquisitionJob).where(and(
       eq(sourceAcquisitionJob.id, input.jobId), eq(sourceAcquisitionJob.clientId, input.clientId),
       eq(sourceAcquisitionJob.sourceConnectionId, input.sourceConnectionId), eq(sourceAcquisitionJob.status, "running"),
-    )).limit(1);
+    )).limit(1).for("update");
     if (!job) throw new Error("running-acquisition-job-not-found");
+    assertCurrentSourcePolicy(source, { ...input, operation: job.operation, request: job.requestJson as Record<string, unknown>, idempotencyKey: job.idempotencyKey }, job.requestJson as SourceAcquisitionRequest);
 
     const [collection] = await tx.insert(evidenceCollection).values({
       clientId: input.clientId, sourceConnectionId: input.sourceConnectionId, acquisitionJobId: input.jobId,
@@ -347,13 +382,18 @@ export async function completeExistingAcquisition(input: CompleteExistingAcquisi
 export async function failExistingAcquisition(input: { clientId: number; jobId: number; sourceConnectionId: number; errorCode: string; now: Date }): Promise<boolean> {
   const safeCode = input.errorCode.replace(/[^a-z0-9:_-]/gi, "-").slice(0, 160) || "adapter-failed";
   return db.transaction(async (tx) => {
+    // Keep lock ordering consistent with completion/revocation to avoid deadlocks.
+    const [source] = await tx.select({ health: sourceConnection.health }).from(sourceConnection).where(and(
+      eq(sourceConnection.id, input.sourceConnectionId), eq(sourceConnection.clientId, input.clientId),
+    )).limit(1).for("update");
+    if (!source) return false;
     const [updated] = await tx.update(sourceAcquisitionJob).set({ status: "failed", finishedAt: input.now }).where(and(
       eq(sourceAcquisitionJob.id, input.jobId), eq(sourceAcquisitionJob.clientId, input.clientId),
       eq(sourceAcquisitionJob.sourceConnectionId, input.sourceConnectionId), eq(sourceAcquisitionJob.status, "running"),
     )).returning({ id: sourceAcquisitionJob.id });
     if (!updated) return false;
     await tx.insert(sourceAcquisitionReceipt).values({ clientId: input.clientId, jobId: input.jobId, status: "failed", acquiredCount: 0, rejectedCount: 0, safeArtifactRefs: [], errorCode: safeCode, completedAt: input.now });
-    await tx.update(sourceConnection).set({ health: "degraded" }).where(and(eq(sourceConnection.id, input.sourceConnectionId), eq(sourceConnection.clientId, input.clientId)));
+    if (source.health !== "unavailable") await tx.update(sourceConnection).set({ health: "degraded" }).where(and(eq(sourceConnection.id, input.sourceConnectionId), eq(sourceConnection.clientId, input.clientId)));
     return true;
   });
 }

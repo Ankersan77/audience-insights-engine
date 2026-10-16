@@ -28,9 +28,20 @@ Source connections are not operational until their policy envelope is complete. 
 enforce health, rights expiry, commercial-use permission, data classification, market/language and
 lookback. Receipt-time checks enforce record quota and, when configured, a reported acquisition
 cost. Missing cost reporting is a failure when a cost limit exists. Revoking a source from
-`/workspace` cancels queued/running jobs, marks evidence and collections due immediately, applies
+`Sources & Setup` cancels queued/running jobs, marks evidence and collections due immediately, applies
 canonical tombstoning, and records a tenant-scoped governance audit. Re-activation requires a new
 reviewed source configuration; revocation is not toggled away casually.
+
+Manual uploads and worker results recheck the current source policy inside the persistence
+transaction. Claims, completion and failures lock the source before the job, matching revocation's
+lock order. Cancellation locks the job; a late completion cannot overwrite its terminal state.
+Receipt quota counts accepted plus rejected records. Receipt cost validation is a post-acquisition
+check, not a guarantee that provider spend was prevented; shared budget reservation remains open.
+
+Run `TEST_DATABASE_URL=... pnpm test:integration` against a dedicated database whose name ends in
+`_test`. The suite applies migrations and creates synthetic tenants without truncating tables.
+It exercises actual PostgreSQL locks and both revocation/completion orderings. CI supplies an
+isolated PostgreSQL 16 service. These tests do not certify production backup or restore.
 
 ## Quality and release evidence
 

@@ -75,8 +75,9 @@ The application must display these as `unverified` or `needs_context`, never inf
 
 ## Repository execution result
 
-The optimized vertical-slice plan is implemented through the repository-verifiable portion of all
-eight phases. The owned application now exposes:
+Implementation spans all eight phases, but repository completion is not yet established. The
+2026-10-16 follow-up audit found missing runtime enforcement and integration coverage despite
+passing unit tests. The owned application currently exposes:
 
 - durable Ask / Projects workrooms that bind decision context, market/language scope and governed
   research artifacts without weakening tenant boundaries;
@@ -92,6 +93,27 @@ eight phases. The owned application now exposes:
 The clean verification gate covers source-of-truth checks, generated route types, TypeScript,
 lint, deterministic tests, migration drift and a production Webpack build. This is implementation
 evidence, not a substitute for the open external gates below.
+
+### Reopened implementation gates
+
+- Source revocation previously allowed manual uploads and raced with worker completion. Source
+  locks and policy checks now protect both persistence paths. Dedicated PostgreSQL integration
+  cases verify both completion/revocation orders, cancellation, current rights, scope, tenant
+  isolation and credential-reference projection. All migrations were applied to an empty
+  PostgreSQL 16 test database; production migration and recovery remain unverified.
+- Production synthesis still returns no provider. The orchestration input also lacks resolved
+  Market Twin strategy, project decision context and active solution configuration. A provider
+  interface alone does not satisfy the expert-research requirement.
+- Weekly/monthly/quarterly briefing descriptions exist, but durable scheduled briefing production
+  and its review workflow still require implementation and end-to-end proof.
+- Quota and cost checks currently validate returned receipts. They do not reserve a shared
+  budget or prevent provider spend before collection. Provider cost units, preflight budgets,
+  pagination and quota accounting still need a defined and exercised execution contract.
+- The deterministic reference pilot does not exercise authenticated HTTP requests or rendered
+  user flows. Broader database, tenant-boundary and browser verification remains open.
+
+These are implementation gaps, additional to the external validation register. They may not be
+closed merely by naming an adapter, adding a manifest or passing the existing unit suite.
 
 ## Architectural decisions
 
