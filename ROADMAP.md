@@ -121,6 +121,15 @@ descriptive reconciliation path, not automated detection of fatigue or a substan
 learning. Contextual interpretation, execution/checkpoint alignment and reviewed learning remain
 open; a numerical join alone no longer generates a generic learning candidate.
 
+Analyst-authored live/post interpretation now separates observation, hypothesis, insight and
+recommendation, and records client relevance, alternatives, falsification conditions, confidence
+and explicit metric/evidence/Market Twin references. A post interpretation can propose a conditional
+learning; creation and named review both revalidate the latest assessment and locked source/context
+basis. Concurrent retries are idempotent, audits are atomic, and accepted learning is scoped and
+time-bounded by evidence/current source rights. Generic acceptance cannot bypass this promotion
+path. The reviewed campaign transition checks that the learning is still supported. This restores
+an end-to-end human-led learning workflow, not automatic expert interpretation or pilot proof.
+
 Queued acquisitions now reserve explicit currency-denominated cost, record and request upper bounds
 against one client-wide UTC-day allowance before adapter execution. Retries require new durable
 authorizations; cancellation, crashes and cheaper-than-planned success do not automatically refund

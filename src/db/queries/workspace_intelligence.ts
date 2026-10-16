@@ -1,10 +1,9 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import type { Applicability, DecisionBrief, IntelligenceKind, IntelligenceRecord, ReviewState, RightsDeclaration, SolutionProfile, SourceClass } from "@/src/core/contracts";
 import { validateDecisionBrief, validateIntelligenceRecord } from "@/src/core/validation";
 import { db } from "@/src/db/client";
-import { canonicalEvidence, campaign, citation, intelligenceRecord, intelligenceRelationship, researchArtifact, researchProject, sensingProfile, solutionProfile, sourceConnection } from "@/src/db/schema";
-import { promoteIntelligence } from "@/src/core/transitions";
-import type { CampaignAssessment } from "@/src/campaigns/analysis";
+import { canonicalEvidence, citation, intelligenceRecord, researchArtifact, researchProject, sensingProfile, solutionProfile, sourceConnection } from "@/src/db/schema";
+import { createInterpretedLearning, promoteInterpretedLearning } from "./campaign_learning";
 import { researchSnapshotDigest } from "@/src/abilities/snapshot";
 import { CONTEXT_EVIDENCE_REQUIREMENTS } from "@/src/abilities/context";
 import { getDecisionBriefAbility } from "@/src/abilities/catalog";
@@ -141,126 +140,14 @@ export async function reviewIntelligenceRecord(input: {
       eq(intelligenceRecord.id, input.id),
       eq(intelligenceRecord.clientId, input.clientId),
       inArray(intelligenceRecord.reviewState, ["pending", "revision_requested"]),
+      input.decision === "accepted" ? ne(intelligenceRecord.kind, "decision") : undefined,
     ))
     .returning();
   return updated ? toIntelligence(updated) : null;
 }
 
-export async function createCampaignLearningCandidate(input: {
-  clientId: number;
-  campaignId: number;
-  assessmentId: number;
-  actorUserId: number;
-  now: Date;
-}): Promise<IntelligenceListRow> {
-  const key = `campaign:${input.campaignId}:learning-candidate:${input.assessmentId}`;
-  const [existingArtifact] = await db.select().from(researchArtifact).where(and(
-    eq(researchArtifact.clientId, input.clientId), eq(researchArtifact.artifactKey, key),
-  )).limit(1);
-  if (existingArtifact) {
-    const existingId = Number((existingArtifact.payloadJson as { intelligenceRecordId?: number }).intelligenceRecordId);
-    const [existing] = await db.select().from(intelligenceRecord).where(and(eq(intelligenceRecord.clientId, input.clientId), eq(intelligenceRecord.id, existingId))).limit(1);
-    if (existing) return toIntelligence(existing);
-  }
-  const [ownedCampaign] = await db.select().from(campaign).where(and(eq(campaign.id, input.campaignId), eq(campaign.clientId, input.clientId))).limit(1);
-  if (!ownedCampaign || ownedCampaign.state !== "completed") throw new Error("completed-campaign-required");
-  const [artifact] = await db.select().from(researchArtifact).where(and(
-    eq(researchArtifact.id, input.assessmentId),
-    eq(researchArtifact.clientId, input.clientId),
-    eq(researchArtifact.artifactType, "campaign_assessment"),
-  )).limit(1);
-  const payload = artifact?.payloadJson as { campaignId?: number; assessment?: CampaignAssessment } | undefined;
-  if (!artifact || payload?.campaignId !== input.campaignId || payload.assessment?.stage !== "post" || payload.assessment.status !== "ready" || !payload.assessment.candidateLearning) {
-    throw new Error("ready-post-assessment-required");
-  }
-  if (artifact.evidenceIds.length === 0) throw new Error("learning-evidence-required");
-  return db.transaction(async (tx) => {
-    const [created] = await tx.insert(intelligenceRecord).values({
-      clientId: input.clientId,
-      kind: "decision",
-      title: `Campaign ${ownedCampaign.name}: candidate learning`,
-      statement: payload.assessment!.candidateLearning!.statement,
-      lifecycle: "candidate",
-      reviewState: "pending",
-      evidenceIds: artifact.evidenceIds,
-      contradictionIds: [],
-      dependencyIds: [],
-      applicabilityJson: { markets: [], languages: [], categories: [], audiences: [], campaigns: [String(input.campaignId)] },
-      confidence: 0.7,
-      uncertainty: [...payload.assessment!.candidateLearning!.conditions],
-      synthesisBy: "hybrid",
-      createdAt: input.now,
-    }).returning();
-    await tx.insert(researchArtifact).values({
-      clientId: input.clientId,
-      artifactKey: key,
-      artifactType: "candidate_learning",
-      abilityKey: "campaign-post",
-      abilityVersion: "1.0.0",
-      status: "pending",
-      version: 1,
-      payloadJson: { campaignId: input.campaignId, assessmentId: input.assessmentId, intelligenceRecordId: created.id },
-      evidenceIds: artifact.evidenceIds,
-      createdBy: input.actorUserId,
-    });
-    return toIntelligence(created);
-  });
-}
-
-export async function promoteCampaignLearning(input: {
-  clientId: number;
-  sourceId: number;
-  reviewerUserId: number;
-  now: Date;
-  decayAt?: Date;
-}): Promise<IntelligenceListRow> {
-  return db.transaction(async (tx) => {
-    const [source] = await tx.select().from(intelligenceRecord).where(and(
-      eq(intelligenceRecord.id, input.sourceId),
-      eq(intelligenceRecord.clientId, input.clientId),
-      eq(intelligenceRecord.kind, "decision"),
-      inArray(intelligenceRecord.reviewState, ["pending", "revision_requested"]),
-    )).limit(1);
-    if (!source) throw new Error("candidate-learning-not-found");
-    const domainSource = toIntelligence(source);
-    const promoted = promoteIntelligence(domainSource, "learning", {
-      id: "pending",
-      evidenceIds: domainSource.evidenceIds,
-      reviewState: "accepted",
-      now: input.now.toISOString(),
-    });
-    const validation = validateIntelligenceRecord(promoted);
-    if (!validation.valid) throw new Error(`invalid-learning:${validation.errors.join(";")}`);
-    await tx.update(intelligenceRecord).set({ reviewState: "accepted", lifecycle: "live", reviewedBy: input.reviewerUserId, reviewedAt: input.now }).where(eq(intelligenceRecord.id, source.id));
-    const [learning] = await tx.insert(intelligenceRecord).values({
-      clientId: input.clientId,
-      kind: "learning",
-      title: source.title.replace("candidate learning", "reviewed learning"),
-      statement: promoted.statement,
-      lifecycle: "live",
-      reviewState: "accepted",
-      evidenceIds: source.evidenceIds,
-      contradictionIds: source.contradictionIds,
-      dependencyIds: [...source.dependencyIds, source.id],
-      applicabilityJson: source.applicabilityJson,
-      confidence: source.confidence,
-      uncertainty: source.uncertainty,
-      synthesisBy: source.synthesisBy,
-      reviewedBy: input.reviewerUserId,
-      reviewedAt: input.now,
-      decayAt: input.decayAt,
-      createdAt: input.now,
-    }).returning();
-    await tx.insert(intelligenceRelationship).values({
-      clientId: input.clientId,
-      fromId: learning.id,
-      toId: source.id,
-      type: "derived_from",
-      rationale: "Human-reviewed campaign outcome promoted from a conditional candidate learning.",
-    });
-    return toIntelligence(learning);
-  });
-}
+export const createCampaignLearningCandidate = createInterpretedLearning;
+export const promoteCampaignLearning = promoteInterpretedLearning;
 
 export type DecisionBriefArtifact = {
   id: number;

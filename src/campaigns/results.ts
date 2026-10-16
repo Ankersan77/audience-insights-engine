@@ -5,6 +5,7 @@ import { researchSnapshotDigest } from "../abilities/snapshot.ts";
 import { resolveEvidence } from "../market-twin/resolver.ts";
 import { validateMeasurementPlan } from "../core/validation.ts";
 import type { CampaignAssessment } from "./analysis.ts";
+import { interpretationGaps, type CampaignInterpretation } from "./interpretation.ts";
 
 export type MetricSelection = { metricKey: string; baselineObservationId: string; resultObservationId: string };
 export type MetricComparison = {
@@ -20,6 +21,7 @@ export type MetricComparison = {
 export type CampaignResultAssessment = CampaignAssessment & {
   method: "source-backed-readback@1"; comparisons: MetricComparison[];
   contextBasis?: ResearchContextBasis;
+  interpretation?: CampaignInterpretation;
   campaignSnapshot: { revision: number; contentDigest: string };
   measurementSnapshot: { id: number; version: number; contentDigest: string };
 };
@@ -44,6 +46,7 @@ export function evaluateCampaignResults(input: {
   plan: { id: number; version: number; reviewState: string; plan: MeasurementPlan };
   sources: ResearchContextSources; observations: readonly QuantitativeObservation[];
   selections: readonly MetricSelection[]; market?: string; language?: string; now: string;
+  interpretation?: CampaignInterpretation;
 }): { assessment: CampaignResultAssessment; evidenceIds: string[] } {
   if (input.campaign.state !== (input.stage === "live" ? "active" : "completed")) throw new Error("campaign-state-incompatible-with-assessment");
   const abilityId = input.stage === "live" ? "live-campaign-intelligence" : "post-campaign-learning";
@@ -101,15 +104,24 @@ export function evaluateCampaignResults(input: {
     });
   }
   const basis = prepared.basis ? { ...prepared.basis, evidence: prepared.basis.evidence?.filter((item) => usedEvidence.has(item.id)), primaryEvidenceIds: [...usedEvidence].filter((id) => results.has(id)) } : undefined;
+  if (input.interpretation) gaps.push(...interpretationGaps(input.interpretation, { evidenceIds: usedEvidence,
+    intelligenceIds: new Set(prepared.context?.marketTwin.map((item) => item.id)), metricKeys: new Set(comparisons.map((item) => item.metricKey)), stage: input.stage }));
   return { evidenceIds: [...usedEvidence], assessment: {
-    stage: input.stage, method: "source-backed-readback@1", status: gaps.length ? "needs_context" : "ready", comparisons, contextBasis: basis,
+    stage: input.stage, method: "source-backed-readback@1", status: gaps.length ? "needs_context" : "ready", comparisons, contextBasis: basis, interpretation: input.interpretation,
     campaignSnapshot: { revision: input.campaign.revision, contentDigest: researchSnapshotDigest(input.campaign) },
     measurementSnapshot: { id: input.plan.id, version: input.plan.version, contentDigest: researchSnapshotDigest(input.plan) },
-    pointOfView: gaps.length ? "The supplied observations do not yet support a complete compatible readback." : "The source-backed comparison is ready for analyst interpretation; observed differences are not causal campaign effects.",
+    pointOfView: gaps.length ? "The supplied observations or interpretation do not yet support a complete compatible readback." : input.interpretation?.insight ?? "The source-backed comparison is ready for analyst interpretation; observed differences are not causal campaign effects.",
     watchouts: ["No automated strategic interpretation or causal claim is made by this metric reconciliation.", ...input.plan.plan.attributionAssumptions,
       ...(prepared.context?.marketTwin.flatMap((item) => [...item.uncertainty, ...item.contradictionIds.map((id) => `Market Twin ${item.id} contradicts ${id}.`)]) ?? [])],
-    requiredDecisions: ["Review the source windows, execution context, alternative explanations and current Market Twin before proposing optimization or learning."],
+    requiredDecisions: [input.interpretation?.recommendation ?? "Review the source windows, execution context, alternative explanations and current Market Twin before proposing optimization or learning."],
     researchGaps: [...new Set(gaps)],
-    // A numerical join is not a substantive learning. The contextual interpretation workflow must supply one.
+    candidateLearning: input.stage === "post" && !gaps.length && input.interpretation?.learningStatement ? {
+      statement: input.interpretation.learningStatement, conditions: [input.interpretation.conditions, input.interpretation.alternativeExplanations, input.interpretation.wouldChangeConclusion, ...input.plan.plan.attributionAssumptions, "Descriptive, not a causal campaign effect."], requiresReview: true,
+    } : undefined,
   } };
+}
+
+export function campaignResultBasisDigest(assessment: CampaignResultAssessment): string {
+  return researchSnapshotDigest({ campaign: assessment.campaignSnapshot, measurement: assessment.measurementSnapshot, comparisons: assessment.comparisons,
+    context: assessment.contextBasis ? { ...assessment.contextBasis, excludedRecordCount: undefined } : undefined, interpretation: assessment.interpretation });
 }

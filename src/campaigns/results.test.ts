@@ -5,6 +5,7 @@ import type { ResearchContextSources } from "../abilities/context.ts";
 import { evaluateCampaignResults, parseMetricSelections } from "./results.ts";
 import { redactExpiredCitationCopies } from "../operations/retention.ts";
 import { parseManualAggregate } from "../evidence/manualAggregate.ts";
+import { parseCampaignInterpretation } from "./interpretation.ts";
 
 const now = "2026-10-16T00:00:00.000Z";
 function fixture() {
@@ -70,4 +71,26 @@ test("manual aggregate transcription is bounded, explicit and distinct from arbi
   assert.throws(() => parseManualAggregate(row, { ...scope, campaigns: [] }));
   assert.throws(() => parseMetricSelections([{ metricKey: "m", baselineObservationId: -1, resultObservationId: "2" }]));
   assert.throws(() => parseMetricSelections(Array(2).fill({ metricKey: "m", baselineObservationId: "1", resultObservationId: "2" })));
+});
+
+test("interpreted post results preserve distinct claims, declared confidence and conditional learning", () => {
+  const input = fixture(); input.stage = "post"; input.campaign.state = "completed";
+  const interpretation = parseCampaignInterpretation({ observation: "Consideration changed in the declared windows.", hypothesis: "Seasonality may explain part of the difference.", insight: "The direction supports further examination of the quality positioning.", recommendation: "Test the hypothesis with a controlled follow-up.", clientRelevance: "The strategy prioritizes consideration.", alternativeExplanations: "Distribution and seasonality were not controlled.", wouldChangeConclusion: "A corrected baseline or conflicting independent evidence.", conditions: "Only this population, period and measurement method.", learningStatement: "The observed direction is consistent with the declared strategy, with unresolved attribution.", confidence: 0.55, evidenceIds: ["10", "11"], intelligenceIds: ["strategy"], metricKeys: ["consideration"] })!;
+  const result = evaluateCampaignResults({ ...input, interpretation }).assessment;
+  assert.equal(result.status, "ready"); assert.equal(result.pointOfView, interpretation.insight);
+  assert.equal(result.candidateLearning?.statement, interpretation.learningStatement);
+  assert.ok(result.candidateLearning?.conditions.includes(interpretation.wouldChangeConclusion));
+  assert.equal(result.interpretation?.hypothesis, interpretation.hypothesis);
+  const redacted = redactExpiredCitationCopies(result, new Set(["11"])) as typeof result;
+  assert.equal(redacted.interpretation, undefined); assert.equal(redacted.candidateLearning, undefined);
+  assert.match(redacted.pointOfView, /unavailable/);
+  for (const changed of [{ ...interpretation, evidenceIds: ["foreign"] }, { ...interpretation, intelligenceIds: ["unreviewed"] }, { ...interpretation, metricKeys: ["unplanned"] }, { ...interpretation, learningStatement: "The campaign caused incremental lift." }]) {
+    const invalid = evaluateCampaignResults({ ...input, interpretation: changed }).assessment;
+    assert.equal(invalid.status, "needs_context"); assert.equal(invalid.candidateLearning, undefined);
+  }
+  input.stage = "live"; input.campaign.state = "active";
+  assert.equal(evaluateCampaignResults({ ...input, interpretation }).assessment.status, "needs_context");
+  assert.throws(() => parseCampaignInterpretation({ ...interpretation, confidence: 2 }));
+  assert.throws(() => parseCampaignInterpretation({ ...interpretation, alternativeExplanations: "" }));
+  assert.throws(() => parseCampaignInterpretation({ ...interpretation, intelligenceIds: [] }));
 });

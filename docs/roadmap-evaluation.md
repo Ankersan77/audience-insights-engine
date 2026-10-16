@@ -189,6 +189,31 @@ metadata yields a gap rather than guessed compatibility. Checkpoint/exposure ali
 cross-source reconciliation, anomaly/fatigue interpretation, real campaign data and substantive
 reviewed learning remain open. The metric join does not create a canned learning candidate.
 
+### Interpreted learning correction
+
+The old promotion path could turn a canned post-assessment sentence into learning, assigned a
+fixed confidence and omitted market/language scope. It also read eligibility before entering the
+transaction and allowed duplicate concurrent promotion. The owned campaign form now accepts an
+explicit analyst interpretation with distinct observation/hypothesis/insight/recommendation,
+relevance, alternative explanations, falsification conditions, declared confidence and traceable
+metric/evidence/Market Twin references. Only a compatible post assessment can propose learning.
+
+Candidate creation and review serialize per campaign, re-evaluate the latest assessment under
+source/evidence/context locks, compare its frozen basis and reject stale or changed candidates.
+Both operations are idempotent with atomic audits. A newer incomplete or uninterpreted assessment
+cannot be bypassed through an earlier ready artifact. Generic intelligence acceptance cannot
+promote a campaign decision. The accepted learning carries scope, conditions, contradictions,
+dependencies and a reviewer, and expires no later than its supporting evidence/current source
+licence. The candidate is superseded so it is not double-counted as accepted client knowledge.
+The campaign's learning-reviewed transition also requires currently usable supporting evidence.
+
+Database/HTTP tests cover the interpreted path through learning-reviewed, role denial, concurrent
+creation/promotion, a strategy-edit race, expired support, shortened source rights and audit
+cardinality. The wording guard catches a limited set of explicit causal phrases; it is not a
+semantic truth detector. Qualified review of reasoning and causal language remains mandatory.
+Automated model interpretation, actual pilot usefulness and full interactive browser proof remain
+open. A human-authored workflow is not evidence of an autonomous expert capability.
+
 ## Architectural decisions
 
 - PostgreSQL remains the system of record; canonical records receive a direct `client_id` even

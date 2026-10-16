@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { promoteCampaignLearning } from "@/src/db/queries/workspace_intelligence";
-import { recordGovernanceAudit } from "@/src/lib/audit";
 import { getSession } from "@/src/lib/auth";
 import { assertReview, PermissionDeniedError } from "@/src/lib/roles";
 
@@ -16,7 +15,6 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/wor
   if (!Number.isInteger(sourceId) || (decayAt && !Number.isFinite(decayAt.getTime()))) return NextResponse.json({ error: "A valid candidate and optional decay date are required." }, { status: 400 });
   try {
     const learning = await promoteCampaignLearning({ clientId: session.clientId, sourceId, reviewerUserId: session.id, now: new Date(), decayAt });
-    await recordGovernanceAudit({ clientId: session.clientId, actorUserId: session.id, action: "promote", entityType: "intelligence_record", entityId: learning.id, before: { sourceId }, after: { kind: "learning", reviewState: "accepted", decayAt: learning.decayAt } });
     return NextResponse.json({ record: learning }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Learning could not be promoted." }, { status: 409 });

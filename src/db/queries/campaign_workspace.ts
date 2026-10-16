@@ -6,7 +6,9 @@ import { validateCampaign, validateMeasurementPlan, validateStudyDesign } from "
 import { db } from "@/src/db/client";
 import { campaign, campaignRevision, canonicalEvidence, governanceAudit, intelligenceRecord, measurementPlan, researchArtifact, study } from "@/src/db/schema";
 import { classifyStudy } from "@/src/measurement/studies";
-import { assertCurrentPreflight, createContextualPreflight } from "./campaign_preflight";
+import { assertCurrentPreflight, createContextualPreflight, lockedContext } from "./campaign_preflight";
+import { prepareResearchContext } from "@/src/abilities/context";
+import type { Applicability } from "@/src/core/contracts";
 import { createCampaignResultAssessment, projectAvailableCampaignResults } from "./campaign_results";
 
 export type CampaignRevisionPayload = {
@@ -14,6 +16,7 @@ export type CampaignRevisionPayload = {
   strategicEvidenceIds: readonly number[];
   brandConstraints: readonly string[];
   approvedPreflightId?: number;
+  reviewedLearningId?: number;
 };
 
 export type CampaignWorkspaceRow = {
@@ -176,16 +179,26 @@ export async function transitionCampaignRecord(input: {
     if (["approved", "active", "completed", "learning_reviewed"].includes(input.nextState) && !plan) throw new Error("measurement-plan-required");
     if (input.nextState === "approved" && plan?.reviewState !== "accepted") throw new Error("accepted-measurement-plan-required");
     const preflight = input.nextState === "approved" ? await assertCurrentPreflight(tx, input) : undefined;
+    let recheckLearning: (() => void) | undefined;
     if (input.nextState === "learning_reviewed") {
       if (!input.learningRecordId) throw new Error("accepted-learning-required");
-      const [learning] = await tx.select({ id: intelligenceRecord.id, applicability: intelligenceRecord.applicabilityJson }).from(intelligenceRecord).where(and(
+      const [learning] = await tx.select().from(intelligenceRecord).where(and(
         eq(intelligenceRecord.id, input.learningRecordId), eq(intelligenceRecord.clientId, input.clientId),
         eq(intelligenceRecord.kind, "learning"), eq(intelligenceRecord.reviewState, "accepted"),
       )).limit(1);
-      const campaigns = (learning?.applicability as { campaigns?: unknown } | undefined)?.campaigns;
+      const scope = learning?.applicabilityJson as Applicability | undefined;
+      const campaigns = scope?.campaigns;
       if (!learning || !Array.isArray(campaigns) || !campaigns.includes(String(row.id))) throw new Error("accepted-campaign-learning-required");
+      if (scope?.markets.length !== 1 || scope.languages.length !== 1) throw new Error("scoped-campaign-learning-required");
+      const sources = await lockedContext(tx, input.clientId, scope.markets[0], scope.languages[0]);
+      recheckLearning = () => {
+        const current = prepareResearchContext({ clientId: String(input.clientId), campaignId: String(row.id), abilityId: "post-campaign-learning", market: scope.markets[0], language: scope.languages[0], sources: sources(), now: new Date().toISOString() });
+        if (current.gaps.length || !current.context?.marketTwin.some((record) => record.id === String(learning.id) && record.kind === "learning")) throw new Error("current-campaign-learning-evidence-required");
+      };
+      recheckLearning();
     }
     const nextRevision = row.currentRevision + 1;
+    const reviewedLearningId = input.nextState === "learning_reviewed" ? input.learningRecordId : undefined;
     const currentPayload = current.briefJson as CampaignRevisionPayload;
     const domain: Campaign = {
       ...currentPayload.campaign,
@@ -196,13 +209,14 @@ export async function transitionCampaignRecord(input: {
     };
     await tx.insert(campaignRevision).values({
       clientId: input.clientId, campaignId: row.id, revision: nextRevision,
-      briefJson: { ...currentPayload, campaign: domain, ...(preflight ? { approvedPreflightId: preflight.id } : {}) }, approvedBy: input.nextState === "approved" ? input.actorUserId : null,
+      briefJson: { ...currentPayload, campaign: domain, ...(preflight ? { approvedPreflightId: preflight.id } : {}), ...(reviewedLearningId ? { reviewedLearningId } : {}) }, approvedBy: input.nextState === "approved" ? input.actorUserId : null,
     });
     const [updated] = await tx.update(campaign).set({ state: input.nextState, currentRevision: nextRevision, archivedAt: input.nextState === "archived" ? new Date() : null }).where(and(eq(campaign.id, row.id), eq(campaign.clientId, input.clientId))).returning();
     await tx.insert(governanceAudit).values({ clientId: input.clientId, actorUserId: input.actorUserId, action: "transition", entityType: "campaign", entityId: String(row.id),
-      redactedBeforeJson: { state: row.state, revision: row.currentRevision }, redactedAfterJson: { state: updated.state, revision: nextRevision, approvedPreflightId: preflight?.id } });
+      redactedBeforeJson: { state: row.state, revision: row.currentRevision }, redactedAfterJson: { state: updated.state, revision: nextRevision, approvedPreflightId: preflight?.id, reviewedLearningId } });
     preflight?.recheck();
-    return { id: updated.id, state: updated.state, currentRevision: nextRevision, payload: { ...currentPayload, campaign: domain, ...(preflight ? { approvedPreflightId: preflight.id } : {}) }, measurementPlan: plan ? plan.planJson as MeasurementPlan : null, measurementPlanDbId: plan?.id ?? null, measurementPlanReviewState: plan?.reviewState ?? null, latestAssessments: await latestCampaignAssessments(input.clientId, row.id), createdAt: updated.createdAt };
+    recheckLearning?.();
+    return { id: updated.id, state: updated.state, currentRevision: nextRevision, payload: { ...currentPayload, campaign: domain, ...(preflight ? { approvedPreflightId: preflight.id } : {}), ...(reviewedLearningId ? { reviewedLearningId } : {}) }, measurementPlan: plan ? plan.planJson as MeasurementPlan : null, measurementPlanDbId: plan?.id ?? null, measurementPlanReviewState: plan?.reviewState ?? null, latestAssessments: await latestCampaignAssessments(input.clientId, row.id), createdAt: updated.createdAt };
   });
 }
 
@@ -297,6 +311,7 @@ export async function createCampaignAssessmentRecord(input: {
   resultEvidenceIds?: readonly number[];
   preflightReview?: unknown;
   metricSelections?: unknown;
+  interpretation?: unknown;
   market?: string;
   language?: string;
 }): Promise<CampaignAssessmentArtifact> {

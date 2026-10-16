@@ -30,6 +30,13 @@ export function redactExpiredCitationCopies(value: unknown, expiredEvidenceIds: 
   if (Array.isArray(value)) return value.map((item) => redactExpiredCitationCopies(item, expiredEvidenceIds));
   if (!value || typeof value !== "object") return value;
   const object = value as JsonObject;
+  if (object.method === "source-backed-readback@1" && object.interpretation) {
+    const basis = object.contextBasis as { evidence?: { id: string }[] } | undefined;
+    if (basis?.evidence?.some((item) => expiredEvidenceIds.has(item.id))) {
+      return redactExpiredCitationCopies({ ...object, interpretation: undefined, candidateLearning: undefined,
+        pointOfView: "Interpretation unavailable: supporting evidence is no longer usable under current source policy." }, expiredEvidenceIds);
+    }
+  }
   if (object.kind === "campaign-metric-comparison@1" && [object.baselineEvidenceId, object.resultEvidenceId].some((id) => typeof id === "string" && expiredEvidenceIds.has(id))) {
     return { kind: object.kind, metricKey: object.metricKey, baselineEvidenceId: object.baselineEvidenceId, resultEvidenceId: object.resultEvidenceId, expired: true };
   }

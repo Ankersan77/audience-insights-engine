@@ -178,6 +178,33 @@ revocation or expiry suppresses copied values/deltas when read; scheduled retent
 them from persisted assessment payloads, retaining minimal lineage. The numeric join deliberately
 does not emit a generic learning. Contextual interpretation and learning review remain required.
 
+### Interpreting results and reviewing learning
+
+Enable “Add analyst-authored interpretation” in the live/post form. Supply separately typed
+observation, hypothesis, insight and recommendation, client relevance, alternative explanations,
+what would change the conclusion, applicability conditions and confidence. Select the reconciled
+metrics and currently supported evidence/accepted Market Twin records. Core validates references
+and basic claim constraints; it does not certify that a human's reasoning is correct.
+
+A completed campaign may additionally include a conditional learning statement. Save the latest
+interpreted assessment, then create its candidate. In Market Twin, an authorized reviewer can
+reject, request revision or promote it, optionally choosing an earlier expiry in local time.
+The default expiry is the earliest supporting evidence or current source-rights expiry. A requested
+expiry in the past or beyond that boundary is rejected. Review actions and applicability conditions
+are visible in the owned surface; failures no longer disappear when the candidate form is closed.
+
+Promotion rechecks the exact latest assessment and all used context. After changes, save a new
+interpretation and create a new candidate; do not force an old verdict through. Legacy canned
+learning candidates cannot be newly promoted through this path. Existing historical records remain
+readable. Generic “accept intelligence” cannot replace the campaign promotion gate. Retries and
+simultaneous approvals return the same record rather than duplicate learning or audits.
+
+`interpretation` on the assessment API contains the fields named above (camelCase), optional
+`learningStatement`, numeric `confidence`, and string arrays `evidenceIds`, `intelligenceIds` and
+`metricKeys`. No model provider is called. Narrative interpretation/candidate text in assessment
+artifacts is withheld when its supporting evidence becomes unavailable; retention removes the copy.
+Reviewed intelligence remains a separately governed, time-bounded record with historical lineage.
+
 After building, run `TEST_HTTP=1 TEST_DATABASE_URL=... pnpm test:integration` to exercise the actual
 web server as well. The suite starts a temporary loopback-only production-build process against
 the test database with synthetic identities and real opaque server sessions. It verifies briefing authentication, role checks,

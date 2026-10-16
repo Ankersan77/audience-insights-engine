@@ -34,7 +34,14 @@ export async function lockedContext(tx: Transaction, clientId: number, market?: 
   return {
     solution: profile,
     sensing: sensing ? canonicalProfile(sensing) : null, intelligence: intelligence.map(toIntelligence),
-    evidence: evidence.filter((item) => sourceMap.has(item.sourceConnectionId)).map((item) => canonicalEvidenceItem({ evidence: item, sourceClass: sourceMap.get(item.sourceConnectionId)!.sourceClass })),
+    evidence: evidence.filter((item) => sourceMap.has(item.sourceConnectionId)).map((item) => {
+      const source = sourceMap.get(item.sourceConnectionId)!;
+      const canonical = canonicalEvidenceItem({ evidence: item, sourceClass: source.sourceClass });
+      const currentRightsExpiry = (source.rightsJson as RightsDeclaration).expiresAt;
+      // A shortened source licence also shortens the usable campaign snapshot and any derived learning.
+      if (currentRightsExpiry && Number.isFinite(Date.parse(currentRightsExpiry)) && Date.parse(currentRightsExpiry) < Date.parse(canonical.expiresAt)) return { ...canonical, expiresAt: currentRightsExpiry };
+      return canonical;
+    }),
     sourceBindings: Object.fromEntries(permitted.map((item) => [item.connectorId, String(item.id)])),
   };
   };

@@ -1,8 +1,9 @@
 import { and, asc, desc, eq, inArray, max, sql } from "drizzle-orm";
 import type { MeasurementPlan, QuantitativeObservation, RightsDeclaration, SourceClass } from "@/src/core/contracts";
-import { evaluateCampaignResults, parseMetricSelections, type CampaignResultAssessment } from "@/src/campaigns/results";
+import { campaignResultBasisDigest, evaluateCampaignResults, parseMetricSelections, type CampaignResultAssessment } from "@/src/campaigns/results";
 import type { CampaignAssessment } from "@/src/campaigns/analysis";
 import { db } from "@/src/db/client";
+import { parseCampaignInterpretation } from "@/src/campaigns/interpretation";
 import { campaign, campaignRevision, canonicalEvidence, governanceAudit, measurementPlan, quantitativeObservation, researchArtifact, sourceConnection } from "@/src/db/schema";
 import { lockedContext } from "./campaign_preflight";
 import type { CampaignAssessmentArtifact, CampaignRevisionPayload } from "./campaign_workspace";
@@ -16,7 +17,7 @@ import { redactExpiredCitationCopies } from "@/src/operations/retention";
 export async function projectAvailableCampaignResults(clientId: number, assessment: CampaignAssessment): Promise<CampaignAssessment> {
   const result = assessment as CampaignResultAssessment;
   if (result.method !== "source-backed-readback@1") return assessment;
-  const ids = [...new Set(result.comparisons.flatMap((item) => [item.baselineEvidenceId, item.resultEvidenceId]))];
+  const ids = [...new Set([...result.comparisons.flatMap((item) => [item.baselineEvidenceId, item.resultEvidenceId]), ...(result.contextBasis?.evidence?.map((item) => item.id) ?? [])])];
   if (!ids.length) return assessment;
   const rows = await db.select({ evidence: canonicalEvidence, source: sourceConnection }).from(canonicalEvidence).innerJoin(sourceConnection,
     and(eq(sourceConnection.id, canonicalEvidence.sourceConnectionId), eq(sourceConnection.clientId, canonicalEvidence.clientId)))
@@ -51,28 +52,56 @@ export async function listCampaignObservationChoices(clientId: number): Promise<
   });
 }
 
-export async function createCampaignResultAssessment(input: {
+export type CampaignResultInput = {
   clientId: number; campaignId: number; actorUserId: number; stage: "live" | "post";
-  metricSelections?: unknown; market?: string; language?: string;
-}): Promise<CampaignAssessmentArtifact> {
+  metricSelections?: unknown; market?: string; language?: string; interpretation?: unknown;
+};
+export type CampaignTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Caller owns campaign → plan advisory locks. No provider calls occur under these locks. */
+export async function evaluateLockedCampaignResults(tx: CampaignTransaction, input: CampaignResultInput) {
   const selections = parseMetricSelections(input.metricSelections);
+  const interpretation = parseCampaignInterpretation(input.interpretation);
+  const [row] = await tx.select().from(campaign).where(and(eq(campaign.clientId, input.clientId), eq(campaign.id, input.campaignId))).for("share");
+  if (!row) throw new Error("campaign-not-found");
+  const [revision] = await tx.select().from(campaignRevision).where(and(eq(campaignRevision.clientId, input.clientId), eq(campaignRevision.campaignId, row.id), eq(campaignRevision.revision, row.currentRevision))).for("share");
+  const [plan] = await tx.select().from(measurementPlan).where(and(eq(measurementPlan.clientId, input.clientId), eq(measurementPlan.campaignId, row.id))).orderBy(desc(measurementPlan.version)).limit(1).for("share");
+  if (!revision || !plan) throw new Error("campaign-measurement-context-required");
+  const payload = revision.briefJson as CampaignRevisionPayload;
+  if (payload.campaign.measurementPlanId !== String(plan.id)) throw new Error("approved-measurement-plan-mismatch");
+  const sources = await lockedContext(tx, input.clientId, input.market, input.language);
+  const ids = [...new Set(selections.flatMap((item) => [Number(item.baselineObservationId), Number(item.resultObservationId)]))];
+  const observations = ids.length ? (await tx.select().from(quantitativeObservation).where(and(eq(quantitativeObservation.clientId, input.clientId), inArray(quantitativeObservation.id, ids)))
+    .orderBy(asc(quantitativeObservation.id)).for("share")).map(observationDomain) : [];
+  const evaluate = () => evaluateCampaignResults({ ...input, interpretation, campaign: { ...payload.campaign, state: row.state, revision: row.currentRevision }, selections, observations,
+    plan: { id: plan.id, version: plan.version, reviewState: plan.reviewState, plan: plan.planJson as MeasurementPlan }, sources: sources(), now: new Date().toISOString() });
+  return { result: evaluate(), evaluate, row, sources };
+}
+
+/** Latest interpreted result only; all source/context/observation locks survive to caller commit. */
+export async function assertCurrentCampaignResult(tx: CampaignTransaction, input: { clientId: number; campaignId: number; actorUserId: number; assessmentId: number }) {
+  const [artifact] = await tx.select().from(researchArtifact).where(and(eq(researchArtifact.clientId, input.clientId),
+    eq(researchArtifact.artifactKey, `campaign:${input.campaignId}:post`), eq(researchArtifact.artifactType, "campaign_assessment"))).orderBy(desc(researchArtifact.version)).limit(1);
+  const saved = (artifact?.payloadJson as { assessment?: CampaignResultAssessment } | undefined)?.assessment;
+  if (!artifact || artifact.id !== input.assessmentId || saved?.method !== "source-backed-readback@1" || saved.status !== "ready" || !saved.candidateLearning || !saved.interpretation || !saved.contextBasis) throw new Error("current-interpreted-post-assessment-required");
+  const metricSelections = saved.comparisons.map((item) => ({ metricKey: item.metricKey, baselineObservationId: item.baselineObservationId, resultObservationId: item.resultObservationId }));
+  const fresh = await evaluateLockedCampaignResults(tx, { ...input, stage: "post", metricSelections, interpretation: saved.interpretation, market: saved.contextBasis.market, language: saved.contextBasis.language });
+  const recheck = () => {
+    const current = fresh.evaluate().assessment;
+    if (current.status !== "ready" || campaignResultBasisDigest(current) !== campaignResultBasisDigest(saved)) throw new Error("campaign-learning-context-changed");
+  };
+  recheck();
+  const evidence = fresh.sources().evidence.filter((item) => artifact.evidenceIds.includes(Number(item.id)));
+  const earliestEvidenceExpiry = Math.min(...evidence.flatMap((item) => [Date.parse(item.expiresAt), ...(item.rights.expiresAt ? [Date.parse(item.rights.expiresAt)] : [])]));
+  if (!evidence.length || !Number.isFinite(earliestEvidenceExpiry)) throw new Error("learning-evidence-validity-required");
+  return { artifact, assessment: saved, campaign: fresh.row, recheck, earliestEvidenceExpiry, contextSources: fresh.sources() };
+}
+
+export async function createCampaignResultAssessment(input: CampaignResultInput): Promise<CampaignAssessmentArtifact> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(73004, ${input.campaignId})`);
     await tx.execute(sql`select pg_advisory_xact_lock(73003, ${input.campaignId})`);
-    const [row] = await tx.select().from(campaign).where(and(eq(campaign.clientId, input.clientId), eq(campaign.id, input.campaignId))).for("share");
-    if (!row) throw new Error("campaign-not-found");
-    const [revision] = await tx.select().from(campaignRevision).where(and(eq(campaignRevision.clientId, input.clientId), eq(campaignRevision.campaignId, row.id), eq(campaignRevision.revision, row.currentRevision))).for("share");
-    const [plan] = await tx.select().from(measurementPlan).where(and(eq(measurementPlan.clientId, input.clientId), eq(measurementPlan.campaignId, row.id))).orderBy(desc(measurementPlan.version)).limit(1).for("share");
-    if (!revision || !plan) throw new Error("campaign-measurement-context-required");
-    const payload = revision.briefJson as CampaignRevisionPayload;
-    if (payload.campaign.measurementPlanId !== String(plan.id)) throw new Error("approved-measurement-plan-mismatch");
-    const sources = await lockedContext(tx, input.clientId, input.market, input.language);
-    const ids = [...new Set(selections.flatMap((item) => [Number(item.baselineObservationId), Number(item.resultObservationId)]))];
-    const observations = ids.length ? (await tx.select().from(quantitativeObservation).where(and(eq(quantitativeObservation.clientId, input.clientId), inArray(quantitativeObservation.id, ids)))
-      .orderBy(asc(quantitativeObservation.id)).for("share")).map(observationDomain) : [];
-    const evaluate = () => evaluateCampaignResults({ ...input, campaign: { ...payload.campaign, state: row.state, revision: row.currentRevision }, selections, observations,
-      plan: { id: plan.id, version: plan.version, reviewState: plan.reviewState, plan: plan.planJson as MeasurementPlan }, sources: sources(), now: new Date().toISOString() });
-    const result = evaluate();
+    const { result, evaluate, row } = await evaluateLockedCampaignResults(tx, input);
     const key = `campaign:${input.campaignId}:${input.stage}`;
     const [previous] = await tx.select({ version: max(researchArtifact.version) }).from(researchArtifact).where(and(eq(researchArtifact.clientId, input.clientId), eq(researchArtifact.artifactKey, key)));
     const version = Number(previous.version ?? 0) + 1;

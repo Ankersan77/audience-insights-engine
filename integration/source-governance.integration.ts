@@ -28,7 +28,7 @@ const { persistAcquisition, completeExistingAcquisition, failExistingAcquisition
 const { claimAcquisitionJob, cancelAcquisitionJob } = await import("../src/db/queries/acquisition_execution");
 const { loadResearchContextSources } = await import("../src/db/queries/research_context");
 const { createActiveSolutionProfile } = await import("../src/db/queries/solution_profiles");
-const { saveDecisionBrief } = await import("../src/db/queries/workspace_intelligence");
+const { saveDecisionBrief, createCampaignLearningCandidate, promoteCampaignLearning, reviewIntelligenceRecord } = await import("../src/db/queries/workspace_intelligence");
 const { runContextualResearch } = await import("../src/abilities/synthesis");
 const { createActiveSensingProfile } = await import("../src/db/queries/monitoring");
 const { generateDueBriefings, listPeriodicBriefings, reviewPeriodicBriefing } = await import("../src/db/queries/briefings");
@@ -659,6 +659,70 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
         await transitionCampaignRecord({ clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id, nextState: "completed" });
         const post = await createCampaignAssessmentRecord({ clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id, stage: "post", metricSelections });
         assert.equal(post.assessment.status, "ready"); assert.equal(post.assessment.candidateLearning, undefined);
+        const createLearning = (assessmentId: number) => createCampaignLearningCandidate({ clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id, assessmentId, now: new Date() });
+        await assert.rejects(createLearning(post.id), /current-interpreted-post-assessment-required/);
+        const interpretation = { observation: "Consideration changed across the declared windows.", hypothesis: "Distribution changes could be an alternative explanation.", insight: "The direction is consistent with the strategy, but needs controlled follow-up.", recommendation: "Commission a bounded follow-up test.", clientRelevance: "Consideration is the approved strategic metric.", alternativeExplanations: "Seasonality and distribution were not controlled.", wouldChangeConclusion: "A corrected baseline or independent contradictory evidence.", conditions: "Only this campaign, population, period and method.", learningStatement: "The observed direction supports further study of accessible-quality positioning, with attribution unresolved.", confidence: 0.55, evidenceIds: observations.map((item) => String(item.evidenceId)), intelligenceIds: [String(record.id)], metricKeys: ["consideration"] };
+        const interpretedRequest = { clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id, stage: "post" as const, metricSelections, interpretation };
+        const interpreted = await createCampaignAssessmentRecord(interpretedRequest);
+        assert.equal(interpreted.assessment.status, "ready");
+        const [firstCandidate, replayedCandidate] = await Promise.all([createLearning(interpreted.id), createLearning(interpreted.id)]);
+        assert.equal(firstCandidate.id, replayedCandidate.id);
+        assert.equal(firstCandidate.confidence.toFixed(2), "0.55");
+        assert.deepEqual(firstCandidate.applicability.markets, ["DK"]);
+        assert.equal(await reviewIntelligenceRecord({ clientId: f.tenant.id, id: Number(firstCandidate.id), reviewerUserId: user.id, decision: "accepted", now: new Date() }), null, "generic acceptance cannot bypass campaign learning checks");
+        const promote = (sourceId: string) => promoteCampaignLearning({ clientId: f.tenant.id, sourceId: Number(sourceId), reviewerUserId: user.id, now: new Date() });
+        const originalStrategy = (await db.select().from(intelligenceRecord).where(eq(intelligenceRecord.id, record.id)))[0].statement;
+        const editor = await probe.connect();
+        try {
+          await editor.query("begin");
+          await editor.query("update intelligence_record set statement = $1 where id = $2", ["Concurrent strategy change must invalidate promotion.", record.id]);
+          const promotion = assert.rejects(promote(firstCandidate.id), /campaign-learning-context-changed/);
+          await waitForBlocked(1); await editor.query("commit"); await promotion;
+        } finally { await editor.query("rollback"); editor.release(); }
+        await db.update(intelligenceRecord).set({ statement: originalStrategy }).where(eq(intelligenceRecord.id, record.id));
+        await createCampaignAssessmentRecord({ ...interpretedRequest, interpretation: undefined });
+        await assert.rejects(promote(firstCandidate.id), /current-interpreted-post-assessment-required/);
+        const licenceExpiry = new Date(Date.now() + 2 * 86400000);
+        await db.update(sourceConnection).set({ rightsJson: { ...metricsRights, expiresAt: licenceExpiry.toISOString() } }).where(eq(sourceConnection.id, metricSource.id));
+        let latestInterpretation: Awaited<ReturnType<typeof createCampaignAssessmentRecord>>;
+        if (http) {
+          const response = await http.request(`/api/campaigns/${created.id}/assessment`, token!, { stage: "post", metricSelections, interpretation });
+          assert.equal(response.status, 201); latestInterpretation = (await response.json()).artifact;
+          const rendered = await http.request("/campaigns", token!);
+          assert.equal(rendered.status, 200); assert.match(await rendered.text(), /Analyst-authored interpretation/);
+        } else latestInterpretation = await createCampaignAssessmentRecord(interpretedRequest);
+        const candidate = await createLearning(latestInterpretation.id);
+        await db.update(intelligenceRecord).set({ statement: "A modified candidate was not assessed." }).where(eq(intelligenceRecord.id, Number(candidate.id)));
+        await assert.rejects(promote(candidate.id), /learning-candidate-changed-or-unavailable/);
+        await db.update(intelligenceRecord).set({ statement: candidate.statement }).where(eq(intelligenceRecord.id, Number(candidate.id)));
+        await assert.rejects(promoteCampaignLearning({ clientId: f.tenant.id, sourceId: Number(candidate.id), reviewerUserId: user.id, now: new Date(), decayAt: new Date(Date.now() - 1000) }), /learning-decay/);
+        if (http) {
+          const replay = await http.request(`/api/campaigns/${created.id}/learning`, token!, { assessmentId: latestInterpretation.id });
+          assert.equal(replay.status, 201); assert.equal((await replay.json()).record.id, candidate.id);
+          assert.equal((await http.request(`/api/workspace/intelligence/${candidate.id}/promote`, token!, {})).status, 403);
+          const [reviewer] = await db.insert(appUser).values({ email: "campaign-reviewer@example.invalid", name: "Synthetic reviewer", role: "reviewer", ssoSubjectId: randomUUID() }).returning();
+          await db.insert(clientMembership).values({ clientId: f.tenant.id, userId: reviewer.id, role: "reviewer" });
+          const reviewerToken = await createAuthSession(reviewer.id, f.tenant.id);
+          const responses = await Promise.all([http.request(`/api/workspace/intelligence/${candidate.id}/promote`, reviewerToken, {}), http.request(`/api/workspace/intelligence/${candidate.id}/promote`, reviewerToken, {})]);
+          for (const response of responses) assert.equal(response.status, 201);
+          const promoted = await Promise.all(responses.map((response) => response.json()));
+          assert.equal(promoted[0].record.id, promoted[1].record.id);
+        } else {
+          const promoted = await Promise.all([promote(candidate.id), promote(candidate.id)]);
+          assert.equal(promoted[0].id, promoted[1].id);
+        }
+        const learnings = await db.select().from(intelligenceRecord).where(and(eq(intelligenceRecord.clientId, f.tenant.id), eq(intelligenceRecord.kind, "learning")));
+        assert.equal(learnings.length, 1); assert.ok(learnings[0].decayAt);
+        assert.ok(learnings[0].decayAt! <= licenceExpiry, "learning cannot outlive current source licensing");
+        const audits = await db.select().from(governanceAudit).where(and(eq(governanceAudit.clientId, f.tenant.id), eq(governanceAudit.action, "promote")));
+        assert.equal(audits.length, 1, "concurrent promotion is idempotent with one atomic audit");
+        const finishLearning = () => transitionCampaignRecord({ clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id, nextState: "learning_reviewed", learningRecordId: learnings[0].id });
+        const [unexpired] = await db.select().from(canonicalEvidence).where(eq(canonicalEvidence.id, observations[1].evidenceId));
+        await db.update(canonicalEvidence).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(canonicalEvidence.id, observations[1].evidenceId));
+        await assert.rejects(finishLearning(), /current-campaign-learning-evidence-required/);
+        await db.update(canonicalEvidence).set({ expiresAt: unexpired.expiresAt }).where(eq(canonicalEvidence.id, observations[1].evidenceId));
+        assert.equal((await finishLearning()).state, "learning_reviewed");
+        assert.equal((await listCampaignWorkspace(f.tenant.id))[0].payload.reviewedLearningId, learnings[0].id);
         await db.update(canonicalEvidence).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(canonicalEvidence.id, observations[1].evidenceId));
         const projected = (await listCampaignWorkspace(f.tenant.id))[0].latestAssessments.post!.assessment as CampaignResultAssessment;
         assert.equal(projected.comparisons[0].expired, true, "read-time projection suppresses expired copies before the worker runs");
@@ -666,7 +730,7 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
         const [redacted] = await db.select().from(researchArtifact).where(eq(researchArtifact.id, post.id));
         const comparison = (redacted.payloadJson as { assessment: CampaignResultAssessment }).assessment.comparisons[0];
         assert.equal(comparison.expired, true); assert.equal(comparison.result, undefined); assert.equal(comparison.delta, undefined);
-        assert.equal((await createCampaignAssessmentRecord({ clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id, stage: "post", metricSelections })).assessment.status, "needs_context");
+        await assert.rejects(createCampaignAssessmentRecord({ clientId: f.tenant.id, campaignId: created.id, actorUserId: user.id, stage: "post", metricSelections }), /campaign-state-incompatible-with-assessment/);
       } finally { await http?.stop(); }
     });
   } finally {

@@ -42,6 +42,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/cam
       stage: stage as "preflight" | "live" | "post",
       preflightReview: body.preflightReview,
       metricSelections: body.metricSelections,
+      interpretation: body.interpretation,
       market: typeof body.market === "string" ? body.market.trim() : undefined,
       language: typeof body.language === "string" ? body.language.trim() : undefined,
       baseline: metrics(body.baseline),
