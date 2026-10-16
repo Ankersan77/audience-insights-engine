@@ -129,9 +129,17 @@ export type PersistAcquisitionResult = {
   replayed: boolean;
 };
 
+export type CompleteExistingAcquisitionInput = Omit<PersistAcquisitionInput, "operation" | "request" | "idempotencyKey"> & {
+  jobId: number;
+};
+
 function assertEvidenceScope(item: EvidenceItem, input: PersistAcquisitionInput): void {
   if (item.clientId !== String(input.clientId)) throw new Error("cross-client-evidence-rejected");
   if (item.sourceConnectionId !== String(input.sourceConnectionId)) throw new Error("source-scope-mismatch");
+  if (item.rights.basis !== input.rights.basis) throw new Error("evidence-rights-basis-mismatch");
+  if (item.rights.commercialUse && !input.rights.commercialUse) throw new Error("evidence-rights-escalation");
+  if (item.rights.quotationAllowed && !input.rights.quotationAllowed) throw new Error("quotation-rights-escalation");
+  if (input.rights.expiresAt && (!item.rights.expiresAt || Date.parse(item.rights.expiresAt) > Date.parse(input.rights.expiresAt))) throw new Error("evidence-rights-expiry-escalation");
   const validation = validateEvidenceItem(item);
   if (!validation.valid) throw new Error(`invalid-evidence:${validation.errors.join(";")}`);
 }
@@ -260,6 +268,60 @@ export async function persistAcquisition(input: PersistAcquisitionInput): Promis
       evidenceIds: inserted.map((item) => item.id),
       replayed: false,
     };
+  });
+}
+
+/** Completes a scheduler-created job without creating a second job row. */
+export async function completeExistingAcquisition(input: CompleteExistingAcquisitionInput): Promise<PersistAcquisitionResult> {
+  input.result.evidence.forEach((item) => assertEvidenceScope(item, {
+    ...input, operation: "existing-job", request: {}, idempotencyKey: String(input.jobId),
+  }));
+  if (input.result.receipt.status !== "succeeded") throw new Error("successful-adapter-receipt-required");
+  return db.transaction(async (tx) => {
+    const [job] = await tx.select().from(sourceAcquisitionJob).where(and(
+      eq(sourceAcquisitionJob.id, input.jobId), eq(sourceAcquisitionJob.clientId, input.clientId),
+      eq(sourceAcquisitionJob.sourceConnectionId, input.sourceConnectionId), eq(sourceAcquisitionJob.status, "running"),
+    )).limit(1);
+    if (!job) throw new Error("running-acquisition-job-not-found");
+
+    const [collection] = await tx.insert(evidenceCollection).values({
+      clientId: input.clientId, sourceConnectionId: input.sourceConnectionId, acquisitionJobId: input.jobId,
+      title: input.title, methodJson: input.method, rightsJson: input.rights, applicabilityJson: input.applicability,
+      lifecycle: input.result.evidence.some((item) => item.lifecycle === "candidate") ? "candidate" : "quarantined",
+      expiresAt: new Date(input.collectionExpiresAt),
+    }).returning();
+    const inserted = input.result.evidence.length === 0 ? [] : await tx.insert(canonicalEvidence).values(input.result.evidence.map((item) => ({
+      clientId: input.clientId, collectionId: collection.id, sourceConnectionId: input.sourceConnectionId,
+      externalReference: item.externalReference, safeSourceUrl: item.sourceUrl, sourceContent: item.sourceContent,
+      synthesis: item.synthesis, contentHash: item.contentHash, citationLevel: item.citationLevel, lifecycle: item.lifecycle,
+      grade: item.grade, confidence: item.confidence, sensitive: item.sensitive, identityRisk: item.identityRisk,
+      redactions: [...item.redactions], methodJson: item.method, rightsJson: item.rights, applicabilityJson: item.applicability,
+      publishedAt: item.publishedAt ? new Date(item.publishedAt) : null, observedAt: item.observedAt ? new Date(item.observedAt) : null,
+      ingestedAt: new Date(item.ingestedAt), expiresAt: new Date(item.expiresAt),
+    }))).onConflictDoNothing({ target: [canonicalEvidence.clientId, canonicalEvidence.sourceConnectionId, canonicalEvidence.contentHash] }).returning({ id: canonicalEvidence.id });
+    const finishedAt = new Date(input.result.receipt.completedAt ?? Date.now());
+    await tx.insert(sourceAcquisitionReceipt).values({
+      clientId: input.clientId, jobId: input.jobId, status: "succeeded", acquiredCount: input.result.receipt.acquiredCount,
+      rejectedCount: input.result.receipt.rejectedCount, nextCursor: input.result.receipt.nextCursor,
+      safeArtifactRefs: inserted.map((item) => `evidence:${item.id}`), completedAt: finishedAt,
+    });
+    await tx.update(sourceAcquisitionJob).set({ status: "succeeded", finishedAt }).where(and(eq(sourceAcquisitionJob.id, input.jobId), eq(sourceAcquisitionJob.status, "running")));
+    await tx.update(sourceConnection).set({ health: inserted.length > 0 ? "producing_evidence" : "verified", lastSuccessfulReceiptAt: finishedAt }).where(and(eq(sourceConnection.id, input.sourceConnectionId), eq(sourceConnection.clientId, input.clientId)));
+    return { jobId: input.jobId, collectionId: collection.id, evidenceIds: inserted.map((item) => item.id), replayed: false };
+  });
+}
+
+export async function failExistingAcquisition(input: { clientId: number; jobId: number; sourceConnectionId: number; errorCode: string; now: Date }): Promise<boolean> {
+  const safeCode = input.errorCode.replace(/[^a-z0-9:_-]/gi, "-").slice(0, 160) || "adapter-failed";
+  return db.transaction(async (tx) => {
+    const [updated] = await tx.update(sourceAcquisitionJob).set({ status: "failed", finishedAt: input.now }).where(and(
+      eq(sourceAcquisitionJob.id, input.jobId), eq(sourceAcquisitionJob.clientId, input.clientId),
+      eq(sourceAcquisitionJob.sourceConnectionId, input.sourceConnectionId), eq(sourceAcquisitionJob.status, "running"),
+    )).returning({ id: sourceAcquisitionJob.id });
+    if (!updated) return false;
+    await tx.insert(sourceAcquisitionReceipt).values({ clientId: input.clientId, jobId: input.jobId, status: "failed", acquiredCount: 0, rejectedCount: 0, safeArtifactRefs: [], errorCode: safeCode, completedAt: input.now });
+    await tx.update(sourceConnection).set({ health: "degraded" }).where(and(eq(sourceConnection.id, input.sourceConnectionId), eq(sourceConnection.clientId, input.clientId)));
+    return true;
   });
 }
 

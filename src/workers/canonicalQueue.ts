@@ -1,6 +1,7 @@
 import { PgBoss } from "pg-boss";
 import { enqueueDueMonitoringRuns, reconcileMonitoringRuns } from "@/src/db/queries/monitoring";
 import { logEvent } from "@/src/lib/metrics";
+import { dispatchQueuedAcquisitions, reconcileStaleAcquisitions } from "@/src/workers/acquisitionQueue";
 
 export const MONITORING_SCHEDULER_QUEUE = "market-research-monitoring-scheduler";
 
@@ -15,7 +16,9 @@ export async function startCanonicalScheduler(boss: PgBoss): Promise<void> {
   await boss.work(MONITORING_SCHEDULER_QUEUE, async () => {
     const schedule = await enqueueDueMonitoringRuns();
     const reconciled = await reconcileMonitoringRuns();
-    logEvent("canonical-monitoring-scheduler", { ...schedule, reconciled });
+    const staleAcquisitions = await reconcileStaleAcquisitions();
+    const dispatched = await dispatchQueuedAcquisitions(boss);
+    logEvent("canonical-monitoring-scheduler", { ...schedule, reconciled, staleAcquisitions, dispatched });
   });
 }
 

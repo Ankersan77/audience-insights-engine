@@ -23,9 +23,12 @@ try {
 async function main() {
   const { startRunWorker } = await import("./runQueue");
   const { startCanonicalScheduler } = await import("./canonicalQueue");
+  const { startAcquisitionWorker } = await import("./acquisitionQueue");
+  const { createProductionAdapterRegistry, createProductionRuntimeContext } = await import("../evidence/productionRegistry");
   const boss = await startRunWorker();
+  await startAcquisitionWorker(boss, { registry: createProductionAdapterRegistry(), runtime: createProductionRuntimeContext() });
   await startCanonicalScheduler(boss);
-  console.log(`[worker] subscribed to legacy and canonical scheduler queues (pid ${process.pid})`);
+  console.log(`[worker] subscribed to legacy, canonical scheduler, and source-acquisition queues (pid ${process.pid})`);
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {

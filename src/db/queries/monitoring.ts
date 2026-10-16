@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, max, sql } from "drizzle-orm";
 import type { SensingProfile } from "@/src/core/contracts";
 import { db } from "@/src/db/client";
-import { monitoringRun, sensingProfile, sourceAcquisitionJob, sourceConnection } from "@/src/db/schema";
+import { monitoringRun, sensingProfile, sourceAcquisitionJob, sourceAcquisitionReceipt, sourceConnection } from "@/src/db/schema";
 import { monitoringScheduleKey, planMonitoringAcquisitions } from "@/src/monitoring/scheduler";
 import { validateSensingProfile } from "@/src/core/validation";
 
@@ -55,9 +55,15 @@ export async function createActiveSensingProfile(input: Omit<SensingProfile, "id
 }
 
 export type MonitoringRunRow = typeof monitoringRun.$inferSelect;
+export type AcquisitionJobRow = typeof sourceAcquisitionJob.$inferSelect & { connectorId: string };
 
 export async function listMonitoringRuns(clientId: number, limit = 50): Promise<MonitoringRunRow[]> {
   return db.select().from(monitoringRun).where(eq(monitoringRun.clientId, clientId)).orderBy(desc(monitoringRun.id)).limit(Math.min(Math.max(limit, 1), 200));
+}
+
+export async function listAcquisitionJobs(clientId: number, limit = 100): Promise<AcquisitionJobRow[]> {
+  const rows = await db.select({ job: sourceAcquisitionJob, connectorId: sourceConnection.connectorId }).from(sourceAcquisitionJob).innerJoin(sourceConnection, and(eq(sourceConnection.id, sourceAcquisitionJob.sourceConnectionId), eq(sourceConnection.clientId, sourceAcquisitionJob.clientId))).where(eq(sourceAcquisitionJob.clientId, clientId)).orderBy(desc(sourceAcquisitionJob.id)).limit(Math.min(Math.max(limit, 1), 200));
+  return rows.map(({ job, connectorId }) => ({ ...job, connectorId }));
 }
 
 /** Emits durable, idempotent acquisition jobs for each due active profile. */
@@ -155,7 +161,7 @@ export async function reconcileMonitoringRuns(now = new Date(), clientId?: numbe
   let changed = 0;
   for (const run of runs) {
     const jobs = await db
-      .select({ status: sourceAcquisitionJob.status })
+      .select({ id: sourceAcquisitionJob.id, status: sourceAcquisitionJob.status })
       .from(sourceAcquisitionJob)
       .where(and(
         eq(sourceAcquisitionJob.clientId, run.clientId),
@@ -165,12 +171,16 @@ export async function reconcileMonitoringRuns(now = new Date(), clientId?: numbe
     const succeeded = jobs.length > 0 && jobs.every((job) => job.status === "succeeded");
     const running = jobs.some((job) => job.status === "running");
     if (!failed && !succeeded && !(running && run.status === "queued")) continue;
+    const receipts = !succeeded ? [] : await db.select({ acquiredCount: sourceAcquisitionReceipt.acquiredCount }).from(sourceAcquisitionReceipt).where(and(
+      eq(sourceAcquisitionReceipt.clientId, run.clientId), inArray(sourceAcquisitionReceipt.jobId, jobs.map((job) => job.id)),
+    ));
+    const noMaterialChange = succeeded && receipts.length === jobs.length && receipts.every((receipt) => receipt.acquiredCount === 0);
     await db
       .update(monitoringRun)
       .set(failed
         ? { status: "failed", outcome: "source_health_failure", finishedAt: now }
         : succeeded
-          ? { status: "succeeded", outcome: "acquisition_complete_pending_qualification", finishedAt: now }
+          ? { status: "succeeded", outcome: noMaterialChange ? "no_material_change" : "acquisition_complete_pending_qualification", finishedAt: now }
           : { status: "running", startedAt: run.startedAt ?? now })
       .where(and(eq(monitoringRun.id, run.id), eq(monitoringRun.clientId, run.clientId)));
     changed += 1;

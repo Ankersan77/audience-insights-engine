@@ -17,6 +17,13 @@ references to Core.
 6. Confirm `/workspace` shows the expected tenant and canonical record counts.
 7. Activate live connectors only if their external-validation entries are verified.
 
+Canonical monitoring creates durable database jobs and dispatches their IDs through pg-boss. The
+worker claims each job once, resolves its adapter through `productionRegistry.ts`, runs bounded
+retry only for classified transient failures, persists canonical evidence and a redacted receipt
+atomically, and reconciles stale leases. Unregistered adapters and unavailable credentials fail
+closed and mark the source degraded. Queued or running jobs may be cancelled from `/monitoring`;
+any later adapter output is discarded rather than retained.
+
 ## Quality and release evidence
 
 Use `/evaluation` to record human scorecards and per-client external validation evidence. A

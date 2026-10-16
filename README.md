@@ -64,6 +64,11 @@ exports.
 expiry-aware external validation gates. Method, monitoring, and operations gates cannot be marked
 verified without a passing scorecard of the matching type.
 
+The worker dispatches canonical acquisition jobs through the runtime-only registry in
+`src/evidence/productionRegistry.ts`. The registry is intentionally empty until a source adapter
+has passed permission, people-blind and provider acceptance review. Missing adapters produce a
+redacted failure receipt and degraded source health; they never yield synthetic evidence.
+
 ## Environment variables
 
 Required and optional variables are documented in `.env.example`. Keep real values in local or hosted secret storage; never commit them.
@@ -81,6 +86,10 @@ blueprint.
 
 `ENABLE_LEGACY_LAST30DAYS` defaults to `false`. Do not enable it for production ingestion; new
 sources must pass through the canonical evidence adapters and minimization policy.
+
+`ENABLE_ENV_CREDENTIAL_RESOLVER` also defaults to `false`. When explicitly enabled, only opaque
+references shaped as `env:VARIABLE_NAME` are resolved inside the worker process; values never enter
+jobs, receipts, logs, exports or the product surface.
 
 ## Implementation status
 
