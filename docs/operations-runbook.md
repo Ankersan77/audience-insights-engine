@@ -17,6 +17,11 @@ references to Core.
 6. Confirm `/workspace` shows the expected tenant and canonical record counts.
 7. Activate live connectors only if their external-validation entries are verified.
 
+Research synthesis is still disabled in the production factory. The optional Responses adapter
+does not automatically use any environment API key or authorize model spend. Follow
+`docs/synthesis-provider-acceptance.md` before integrating a provider; source acquisition budgets
+are not synthesis budgets, and synthetic transport tests are not live provider acceptance.
+
 Canonical monitoring creates durable database jobs and dispatches their IDs through pg-boss. The
 worker claims each job once, resolves its adapter through `productionRegistry.ts`, runs bounded
 retry only for classified transient failures, persists canonical evidence and a redacted receipt

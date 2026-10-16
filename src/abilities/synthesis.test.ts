@@ -34,6 +34,16 @@ test("missing evidence bypasses synthesis and remains needs context", async () =
   assert.equal(called, false);
 });
 
+test("synthesis preserves selected source text including caveats beyond the former clipping limit", async () => {
+  const longEvidence = { ...evidence("one", "source-1"), sourceContent: `${"Source detail. ".repeat(1000)}Critical limitation at the end.` };
+  let received = "";
+  await runAbilityWithSynthesis({ clientId: "client-a", abilityId: "market-category-diagnosis", question: "What changed?", evidence: [longEvidence, evidence("two", "source-2")], market: "DK", language: "da", now: "2026-10-16T00:00:00.000Z",
+    provider: { id: "fixture", version: "1", async synthesize(input) { received = input.evidence.find((item) => item.id === "one")!.sourceContent; return null; } },
+  });
+  assert.equal(received, longEvidence.sourceContent);
+  assert.ok(received.endsWith("Critical limitation at the end."));
+});
+
 const now = "2026-10-16T00:00:00.000Z";
 const request = { clientId: "client-a", abilityId: "market-category-diagnosis", question: "Which category should we prioritize?", projectId: "project-1", now };
 const analysis = { pointOfView: "The category shows a descriptive change.", clientRelevance: "Relevant to the category decision.", recommendation: "Validate with a bounded study.", nextDecision: "Choose the study scope.", claimMode: "descriptive" as const, evidenceIds: ["one", "two"], contradictions: [], uncertainty: ["No causal inference."] };

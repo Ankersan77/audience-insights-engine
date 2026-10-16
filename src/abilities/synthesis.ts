@@ -67,7 +67,9 @@ export async function runAbilityWithSynthesis(input: {
   const selected = new Set(preliminary.evidenceIds);
   const evidence = [...new Map([...input.evidence, ...(input.contextEvidence ?? [])].map((item) => [item.id, item])).values()].filter((item) => selected.has(item.id)).map((item) => ({
     id: item.id, sourceClass: item.sourceClass, externalReference: item.externalReference,
-    sourceContent: item.sourceContent.slice(0, 12_000), synthesis: item.synthesis, method: item.method,
+    // Never hide a report's later caveats by silently clipping the selected text.
+    // A bounded adapter must reject oversized input or request a reviewed extract.
+    sourceContent: item.sourceContent, synthesis: item.synthesis, method: item.method,
     applicability: item.applicability, confidence: item.confidence, grade: item.grade,
     observedAt: item.observedAt, publishedAt: item.publishedAt,
   }));

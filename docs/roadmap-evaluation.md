@@ -112,8 +112,13 @@ evidence, not a substitute for the open external gates below.
   Historical artifacts without this snapshot remain readable, but cannot be newly persisted as
   ready. Context evidence cannot substitute for an
   ability's primary evidence requirements. Invalid provider output and self-approved causal
-  classifications fail closed. Production synthesis still returns no provider: a provider
-  interface and fixture tests alone do not satisfy the expert-research requirement.
+  classifications fail closed. An optional bounded Responses transport and a versioned,
+  ability-specific synthesis prompt now have synthetic HTTP/orchestration coverage. It has no
+  default model, implicit credentials, retry or production activation. Selected text is no longer
+  silently clipped before synthesis. Production synthesis still returns no provider: durable
+  synthesis spend admission, approved bindings/processing, live provider acceptance and qualified
+  human benchmarks remain open. See `docs/synthesis-provider-acceptance.md`; adapter code and
+  synthetic tests alone do not satisfy the expert-research requirement.
 - Weekly/monthly/quarterly review packets now have opt-in solution configuration, closed UTC
   windows, bounded restart catch-up, durable idempotent artifacts, tenant-scoped owned-surface
   delivery and atomic accept/reject audit. Missing coverage is not no-change, and unavailable

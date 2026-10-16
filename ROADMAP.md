@@ -95,12 +95,19 @@ Scheduled review packets now persist and support owned-surface review; narrative
 alert delivery and explicit late-evidence revisions are still open. Briefing HTTP authorization
 and viewer server rendering are covered with synthetic sessions; this is not a full browser pilot.
 
+An optional Responses synthesis transport now implements the provider-neutral seam, with an
+ability-owned versioned prompt, explicit client/model/scope/retention binding, finite resource
+limits, strict response-envelope handling and synthetic HTTP/Core tests. It is not production
+activation or live model acceptance. Durable synthesis spend admission, binding/processing
+acceptance, provider usage/audit integration and human benchmarks remain open; the production
+factory deliberately still returns no provider. See `docs/synthesis-provider-acceptance.md`.
+
 New decision briefs preserve fingerprints of their used evidence/methods and reviewed Market Twin
 records as well as their project, solution and bound sensing versions. Saving revalidates and locks
 that basis, rejects changed rights/context, and rolls back if inputs expire while waiting to write.
 Concurrency tests cover strategy edits and retention races. This guarantees the checked basis at
-save time, not perpetual freshness or automatic re-analysis of historical work; analogous campaign
-assessment snapshot and read-time availability coverage still needs its own audit.
+save time, not perpetual freshness or automatic re-analysis of historical work. Campaign snapshot
+and read-time availability coverage is described below; full interactive pilot proof remains open.
 
 Campaign pre-flight now has an owned-surface, analyst-authored strategic review with seven
 evidence-linked dimensions, alternatives, explicit contradiction rationale and current Market Twin
@@ -108,8 +115,8 @@ context. Approval revalidates the latest review, exact campaign revision and acc
 version under database locks. A newer incomplete review cannot reuse an older ready verdict.
 Measurement replacement is available before approval and requires review/reassessment; after
 approval the plan is frozen. This closes the prior structural-checklist-only pre-flight path, not
-the automated campaign expert requirement. Live/post context, metric lineage, multi-market approval
-coverage and model-assisted interpretation remain implementation work.
+the automated campaign expert requirement. Multi-market approval coverage, execution/checkpoint
+alignment and model-assisted interpretation remain implementation work.
 
 Live/post readbacks now select normalized baseline/result observation IDs instead of trusting
 free-form outcome numbers. Core verifies current source permission, campaign, metric dictionary,
@@ -117,9 +124,9 @@ population, methodology, ordered windows and the frozen approved baseline, then 
 comparisons and context fingerprints atomically. First-party aggregate transcription is available
 in evidence onboarding, with cohort suppression and replay protection. Read-time projection hides
 unavailable copies; retention removes copied values/deltas while keeping lineage. This is a usable
-descriptive reconciliation path, not automated detection of fatigue or a substantive campaign
-learning. Contextual interpretation, execution/checkpoint alignment and reviewed learning remain
-open; a numerical join alone no longer generates a generic learning candidate.
+descriptive reconciliation path, not automated detection of fatigue or, by itself, a substantive
+campaign learning. The human interpretation/review path below supplies that separate work product;
+a numerical join alone no longer generates a generic learning candidate.
 
 Analyst-authored live/post interpretation now separates observation, hypothesis, insight and
 recommendation, and records client relevance, alternatives, falsification conditions, confidence
