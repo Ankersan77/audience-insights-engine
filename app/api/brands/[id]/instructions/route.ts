@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/src/lib/auth";
 import { assertAdmin, PermissionDeniedError } from "@/src/lib/roles";
 import { createInstructionVersion } from "@/src/db/queries/research_instructions";
+import { getBrandById } from "@/src/db/queries/brands";
 import { recordAudit } from "@/src/lib/audit";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const brandId = Number(id);
   if (!Number.isInteger(brandId)) {
     return NextResponse.json({ error: "Invalid brand id." }, { status: 400 });
+  }
+  if (!(await getBrandById(brandId, session.clientId))) {
+    return NextResponse.json({ error: "Brand not found." }, { status: 404 });
   }
 
   const body = (await request.json()) as {

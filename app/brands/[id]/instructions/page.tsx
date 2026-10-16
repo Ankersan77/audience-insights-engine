@@ -26,7 +26,7 @@ export default async function BrandInstructionsPage({
     notFound();
   }
 
-  const brand = await getBrandById(brandId);
+  const brand = await getBrandById(brandId, session.clientId);
   if (!brand) {
     notFound();
   }

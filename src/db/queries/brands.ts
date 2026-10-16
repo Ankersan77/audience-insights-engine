@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/src/db/client";
 import { brand, brandMarket, market, researchInstruction } from "@/src/db/schema";
 
@@ -61,8 +61,8 @@ export async function getMarketById(marketId: number): Promise<MarketOption | nu
     : null;
 }
 
-export async function listBrands(): Promise<BrandListRow[]> {
-  const brands = await db.select().from(brand);
+export async function listBrands(clientId: number): Promise<BrandListRow[]> {
+  const brands = await db.select().from(brand).where(eq(brand.clientId, clientId));
   if (brands.length === 0) return [];
 
   const brandIds = brands.map((b) => b.id);
@@ -107,6 +107,7 @@ export async function listBrands(): Promise<BrandListRow[]> {
 }
 
 export async function createBrand(input: {
+  clientId: number;
   name: string;
   slug: string;
   description: string | null;
@@ -117,6 +118,7 @@ export async function createBrand(input: {
     .insert(brand)
     .values({
       name: input.name,
+      clientId: input.clientId,
       slug: input.slug,
       description: input.description,
       status: "active",
@@ -134,22 +136,27 @@ export async function createBrand(input: {
   return created;
 }
 
-export async function getBrandById(brandId: number) {
-  const [row] = await db.select().from(brand).where(eq(brand.id, brandId));
+export async function getBrandById(brandId: number, clientId: number) {
+  const [row] = await db
+    .select()
+    .from(brand)
+    .where(and(eq(brand.id, brandId), eq(brand.clientId, clientId)));
   return row ?? null;
 }
 
 /** Archive or unarchive — a status change, never a delete, so run/insight history is preserved. */
 export async function setBrandStatus(
   brandId: number,
+  clientId: number,
   status: "active" | "archived",
   updatedBy: number,
 ) {
-  const before = await getBrandById(brandId);
+  const before = await getBrandById(brandId, clientId);
+  if (!before) return { before: null, after: null };
   const [after] = await db
     .update(brand)
     .set({ status, updatedBy, updatedAt: new Date() })
-    .where(eq(brand.id, brandId))
+    .where(and(eq(brand.id, brandId), eq(brand.clientId, clientId)))
     .returning();
   return { before, after };
 }

@@ -1,18 +1,6 @@
 import type { Metadata } from "next";
-import { Bebas_Neue, Roboto } from "next/font/google";
 import { getAppName } from "./app-meta";
 import "./globals.css";
-
-const roboto = Roboto({
-  variable: "--font-roboto",
-  subsets: ["latin"],
-});
-
-const bebasNeue = Bebas_Neue({
-  variable: "--font-bebas-neue",
-  subsets: ["latin"],
-  weight: "400",
-});
 
 // A function rather than a constant: the application name is read per request,
 // so the title tracks the runtime environment instead of the build environment.
@@ -27,10 +15,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${roboto.variable} ${bebasNeue.variable} h-full antialiased`}
-    >
+    <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col font-sans">{children}</body>
     </html>
   );

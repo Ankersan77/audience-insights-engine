@@ -24,12 +24,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ error: "Invalid insight id." }, { status: 400 });
   }
 
-  const insight = await getInsightById(insightId);
+  const insight = await getInsightById(insightId, session.clientId);
   if (!insight) {
     return NextResponse.json({ error: "Insight not found." }, { status: 404 });
   }
 
-  const evidence = await getInsightEvidence(insightId);
+  const evidence = await getInsightEvidence(insightId, session.clientId);
   return NextResponse.json({
     insight,
     evidence,
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   }
 
   const body = (await request.json().catch(() => ({}))) as DecisionBody;
-  const before = await getInsightById(insightId);
+  const before = await getInsightById(insightId, session.clientId);
   if (!before) {
     return NextResponse.json({ error: "Insight not found." }, { status: 404 });
   }
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (before.status !== "pending") {
       return NextResponse.json({ error: "Only a pending insight can be discarded." }, { status: 409 });
     }
-    const updated = await markInsightDecision(insightId, { status: "discarded", reviewedBy: session.id });
+    const updated = await markInsightDecision(insightId, session.clientId, { status: "discarded", reviewedBy: session.id });
     await recordAudit(session.id, "discard", "insight", insightId, before, updated);
     return NextResponse.json({ insight: updated }, { status: 200 });
   }
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: "Only a pending insight can be accepted." }, { status: 409 });
     }
 
-    const evidence = await getInsightEvidence(insightId);
+    const evidence = await getInsightEvidence(insightId, session.clientId);
     if (evidence.some((item) => item.sensitivityFlag === true) && body.acknowledgedSensitive !== true) {
       return NextResponse.json(
         { error: "This insight includes sensitivity-flagged evidence — acknowledge it before accepting." },
@@ -100,11 +100,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         return NextResponse.json({ error: "Title and summary cannot be empty." }, { status: 400 });
       }
       if (title !== before.title || summary !== before.summary) {
-        await updateInsightText(insightId, { title, summary });
+        await updateInsightText(insightId, session.clientId, { title, summary });
       }
     }
 
-    const accepted = await markInsightDecision(insightId, { status: "accepted", reviewedBy: session.id });
+    const accepted = await markInsightDecision(insightId, session.clientId, { status: "accepted", reviewedBy: session.id });
     await recordAudit(session.id, "accept", "insight", insightId, before, accepted);
     return NextResponse.json({ insight: accepted }, { status: 200 });
   }

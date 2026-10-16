@@ -11,12 +11,13 @@ import type { Role } from "@/src/lib/auth";
 // admin-only controls *inside* each page (add brand, edit instructions, ...)
 // that are role-gated, at the page level — see src/lib/roles.ts.
 const NAV_ITEMS = [
+  { label: "Workspace", href: "/workspace" },
   { label: "Brands", href: "/brands" },
   { label: "Insights", href: "/insights" },
-  { label: "Runs", href: "/runs" },
+  { label: "Legacy runs", href: "/runs" },
 ] as const;
 
-export type AppShellUser = { name: string; role: Role };
+export type AppShellUser = { name: string; role: Role; clientSlug?: string };
 
 // Used only where no real session exists yet (e.g. /showroom, which is not
 // behind sign-in). A real page passes its own `user` from `requireSession()`.
@@ -34,6 +35,7 @@ function UserBadge({ user }: { user: AppShellUser }) {
       <span className="flex flex-col leading-tight">
         <span className="font-medium">{user.name}</span>
         <span className="text-xs text-muted capitalize">{user.role}</span>
+        {user.clientSlug ? <span className="text-xs text-muted">{user.clientSlug}</span> : null}
       </span>
       <Link
         href="/api/auth/logout"

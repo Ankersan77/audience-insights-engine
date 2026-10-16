@@ -15,9 +15,9 @@
   --color-brand-mint: var(--brand-mint);
   --color-brand-green: var(--brand-green);
 
-  /* Roboto for body and Bebas Neue for display, matching bettercollective.com. */
-  --font-sans: var(--font-roboto);
-  --font-display: var(--font-bebas-neue);
+  /* Local system stacks keep production builds deterministic and private. */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 body {

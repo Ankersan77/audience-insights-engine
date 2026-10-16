@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   discovery,
   randomPKCECodeVerifier,
@@ -13,7 +13,7 @@ import {
   type Configuration,
 } from "openid-client";
 import { db } from "@/src/db/client";
-import { appUser } from "@/src/db/schema";
+import { appUser, client, clientMembership } from "@/src/db/schema";
 
 /**
  * OneLogin OIDC sign-in (Rule 7: company SSO for an internal tool, no local
@@ -27,14 +27,16 @@ export type Role = "admin" | "viewer";
 
 export type SessionUser = {
   id: number;
+  clientId: number;
+  clientSlug: string;
   email: string;
   name: string;
   role: Role;
   ssoSubjectId: string;
 };
 
-export const SESSION_COOKIE = "aie_session";
-export const OIDC_FLOW_COOKIE = "aie_oidc_flow";
+export const SESSION_COOKIE = "market_research_session";
+export const OIDC_FLOW_COOKIE = "market_research_oidc_flow";
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 8; // 8 hours
 const FLOW_MAX_AGE_SECONDS = 60 * 10; // 10 minutes — just long enough for a sign-in
@@ -152,7 +154,7 @@ async function upsertAppUser(input: {
   email: string;
   name: string;
   role: Role;
-}): Promise<SessionUser> {
+}): Promise<typeof appUser.$inferSelect> {
   const existing = await db.query.appUser.findFirst({
     where: eq(appUser.ssoSubjectId, input.ssoSubjectId),
   });
@@ -163,7 +165,7 @@ async function upsertAppUser(input: {
       .set({ email: input.email, name: input.name, role: input.role, lastLoginAt: new Date() })
       .where(eq(appUser.id, existing.id))
       .returning();
-    return toSessionUser(updated);
+    return updated;
   }
 
   const [created] = await db
@@ -176,12 +178,50 @@ async function upsertAppUser(input: {
       lastLoginAt: new Date(),
     })
     .returning();
-  return toSessionUser(created);
+  return created;
 }
 
-function toSessionUser(row: typeof appUser.$inferSelect): SessionUser {
+async function resolveClientMembership(
+  userId: number,
+  role: Role,
+): Promise<{ clientId: number; clientSlug: string }> {
+  const configuredSlug = process.env.MARKET_RESEARCH_CLIENT_SLUG?.trim() || "default-client";
+  const configuredName = process.env.MARKET_RESEARCH_CLIENT_NAME?.trim() || "Default Client";
+
+  await db
+    .insert(client)
+    .values({ slug: configuredSlug, name: configuredName })
+    .onConflictDoNothing({ target: client.slug });
+
+  const [clientRow] = await db.select().from(client).where(eq(client.slug, configuredSlug)).limit(1);
+  if (!clientRow) throw new Error("Configured client could not be resolved.");
+
+  await db
+    .insert(clientMembership)
+    .values({ clientId: clientRow.id, userId, role })
+    .onConflictDoUpdate({
+      target: [clientMembership.clientId, clientMembership.userId],
+      set: { role },
+    });
+
+  const [membership] = await db
+    .select({ clientId: clientMembership.clientId })
+    .from(clientMembership)
+    .where(and(eq(clientMembership.clientId, clientRow.id), eq(clientMembership.userId, userId)))
+    .limit(1);
+  if (!membership) throw new Error("Client membership could not be resolved.");
+
+  return { clientId: clientRow.id, clientSlug: clientRow.slug };
+}
+
+function toSessionUser(
+  row: typeof appUser.$inferSelect,
+  membership: { clientId: number; clientSlug: string },
+): SessionUser {
   return {
     id: row.id,
+    clientId: membership.clientId,
+    clientSlug: membership.clientSlug,
     email: row.email,
     name: row.name,
     role: row.role === "admin" ? "admin" : "viewer",
@@ -218,12 +258,14 @@ export async function completeSignIn(
   const email = typeof claims.email === "string" ? claims.email : `${claims.sub}@unknown`;
   const name = typeof claims.name === "string" ? claims.name : email;
 
-  const user = await upsertAppUser({
+  const userRow = await upsertAppUser({
     ssoSubjectId: claims.sub,
     email,
     name,
     role: mapRole(claims as Record<string, unknown>),
   });
+  const membership = await resolveClientMembership(userRow.id, mapRole(claims as Record<string, unknown>));
+  const user = toSessionUser(userRow, membership);
 
   return { user, returnTo: flow.returnTo || "/brands" };
 }
@@ -255,7 +297,9 @@ export function encodeSessionCookie(user: SessionUser): string {
 /** Reads and verifies the session cookie for the current request. `null` when signed out or the cookie is invalid/tampered. */
 export async function getSession(): Promise<SessionUser | null> {
   const store = await cookies();
-  return decodeSigned<SessionUser>(store.get(SESSION_COOKIE)?.value);
+  const session = decodeSigned<SessionUser>(store.get(SESSION_COOKIE)?.value);
+  if (!session || !Number.isInteger(session.clientId) || !session.clientSlug) return null;
+  return session;
 }
 
 /**

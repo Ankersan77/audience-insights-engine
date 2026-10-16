@@ -21,6 +21,7 @@ import { draftInsightsForRun } from "./draftInsights";
 import { parseCompactReport, storeEvidenceForRun } from "@/src/db/queries/evidence";
 import { markRunFailed, markRunRunning, markRunSucceeded } from "@/src/db/queries/research_runs";
 import { checkRunSlo, logEvent } from "@/src/lib/metrics";
+import { legacyLast30DaysEnabled } from "@/src/lib/featureFlags";
 
 /** Groups parsed report items by source, for the per-Run Evidence-count log
  * line (T29) — reuses `parseCompactReport` (already exported by
@@ -51,6 +52,7 @@ export type RunJobInstructionFields = {
 
 export type RunJobPayload = {
   runId: number;
+  clientId: number;
   brandId: number;
   marketId: number;
   researchInstructionVersion: number;
@@ -84,6 +86,17 @@ export async function enqueueRunJob(payload: RunJobPayload): Promise<void> {
 }
 
 async function processRunJob(payload: RunJobPayload): Promise<void> {
+  if (!legacyLast30DaysEnabled()) {
+    await markRunFailed(payload.runId, "Legacy Last30Days ingestion is disabled by the people-blind migration gate.");
+    logEvent("run-failed", {
+      runId: payload.runId,
+      brandId: payload.brandId,
+      marketId: payload.marketId,
+      errorMessage: "legacy-ingestion-disabled",
+    });
+    return;
+  }
+
   await markRunRunning(payload.runId);
 
   const instruction: RunLast30DaysInstruction = {

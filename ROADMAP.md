@@ -23,6 +23,19 @@ legacy schema, and internal-tool assumptions are not the target architecture.
 7. Use client configuration and ability packages instead of client-specific conditionals.
 8. Treat human benchmark evidence as a release artifact.
 
+### 2.1 Execution correction
+
+The phase outcomes below remain canonical, but they are implemented as vertical slices rather than
+independent horizontal layers. Tenancy, security, retention, audit, idempotency, observability,
+failure handling, and owned-surface proof are part of every applicable phase and may not be deferred
+to Phase 8. The rationale and baseline gap analysis are recorded in
+`docs/roadmap-evaluation.md`.
+
+Repository-verifiable completion is distinct from external validation. Live source permissions,
+pilot data, qualified method review, human scorecards, and production restore exercises require
+named evidence; until supplied, the product must report `unverified` or `needs_context` rather than
+claiming those gates passed.
+
 ## 3. Baseline at roadmap approval
 
 The repository currently contains:
@@ -52,6 +65,26 @@ product model, privacy boundary, research methods, or client portability exist.
 | 6 | Measurement and Brand Lift | Phase 5 |
 | 7 | Proactive monitoring and learning loop | Phases 3–6 |
 | 8 | Client packaging, hardening, and pilot proof | Phases 0–7 |
+
+### 4.1 Execution status — 2026-10-16
+
+The deterministic reference path is covered end to end by
+`src/workflows/reference-pilot.test.ts`. That proof is intentionally not presented as live pilot
+evidence.
+
+| Phase | Repository implementation | Open release evidence |
+| --- | --- | --- |
+| 0 | Complete and shipped | None |
+| 1 | Canonical contracts, additive migration, direct client scope, membership and transition tests implemented | Apply and verify migration in the selected environment |
+| 2 | Adapter boundary, minimization, quarantine, redaction, citations and four deterministic source classes implemented; legacy ingestion is fail-closed | Approved sources, live adapters and provider acceptance |
+| 3 | Structured onboarding, method preservation, idempotency, contradictions and relevance resolution implemented | Pilot documents and qualified lineage review; upload/link experience |
+| 4 | Four versioned abilities, evidence selection, causal-language guard and decision brief implemented | Human scorecards on representative and adversarial briefs |
+| 5 | Persistent model plus pre-flight, live, post and governed candidate-learning logic implemented | One real campaign through the full lifecycle |
+| 6 | Measurement contract, deterministic design classification and reproducible binary-lift analysis implemented | Qualified method review and an approved live study |
+| 7 | Sensing contract, signal qualification, no-change/source-health outcomes and briefing contracts implemented | Durable canonical scheduler and shadow-mode evaluation |
+| 8 | Source administration, redacted packaging, second-client proof, resilience controls and operations runbook implemented | Clean deployed environment, restore exercise, pilot scorecard and operating owners |
+
+Anything in the final column remains `needs_context`; it is not silently converted into completion.
 
 ## Phase 0 — Product reset and legacy isolation
 
@@ -538,4 +571,8 @@ A roadmap item is done only when:
 - Decide whether the current `last30days` adapter can meet the people-blind evidence contract.
 - Select the first aggregate performance source.
 - Name the qualified reviewers for market research and Brand Lift methodology.
+
+These are external validation gates. Their absence does not block implementation with deterministic,
+non-production fixtures, but it does block live-source activation, a production-ready claim, and
+final completion of the affected phase exit gates.
 

@@ -6,6 +6,7 @@ import { getLatestInstructionsForBrand } from "@/src/db/queries/research_instruc
 import { createQueuedRun, DuplicateActiveRunError } from "@/src/db/queries/research_runs";
 import { enqueueRunJob } from "@/src/workers/runQueue";
 import { recordAudit } from "@/src/lib/audit";
+import { legacyLast30DaysEnabled } from "@/src/lib/featureFlags";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,16 @@ export async function POST(request: NextRequest) {
     throw error;
   }
 
+  if (!legacyLast30DaysEnabled()) {
+    return NextResponse.json(
+      {
+        error: "Legacy Last30Days ingestion is disabled. Configure a governed evidence source in the Research workspace.",
+        code: "legacy-ingestion-disabled",
+      },
+      { status: 503 },
+    );
+  }
+
   const body = (await request.json()) as { brandId?: number; marketId?: number };
   const brandId = Number(body.brandId);
   const marketId = Number(body.marketId);
@@ -34,7 +45,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "A brand and a market are both required." }, { status: 400 });
   }
 
-  const brand = await getBrandById(brandId);
+  const brand = await getBrandById(brandId, session.clientId);
   if (!brand) {
     return NextResponse.json({ error: "Brand not found." }, { status: 400 });
   }
@@ -67,6 +78,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const created = await createQueuedRun({
+      clientId: session.clientId,
       brandId,
       marketId,
       researchInstructionVersion: resolved.version,
@@ -77,6 +89,7 @@ export async function POST(request: NextRequest) {
 
     await enqueueRunJob({
       runId: created.id,
+      clientId: session.clientId,
       brandId,
       marketId,
       researchInstructionVersion: resolved.version,

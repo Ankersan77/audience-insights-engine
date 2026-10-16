@@ -31,8 +31,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ error: "Invalid run id." }, { status: 400 });
   }
 
-  const before = await getRunById(runId);
-  const updated = await cancelRun(runId);
+  const before = await getRunById(runId, session.clientId);
+  const updated = await cancelRun(runId, session.clientId);
   if (!updated) {
     return NextResponse.json(
       { error: "Only a queued or running run can be cancelled." },

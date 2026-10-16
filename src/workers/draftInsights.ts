@@ -24,7 +24,7 @@
 import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db } from "@/src/db/client";
 import { evidence, researchRun } from "@/src/db/schema";
-import { getRunById } from "@/src/db/queries/research_runs";
+import { getRunByIdInternal } from "@/src/db/queries/research_runs";
 import { listEvidenceForRun, type EvidenceRow } from "@/src/db/queries/evidence";
 import { createInsightWithEvidence, type InsightRow, type ShiftOrBlip } from "@/src/db/queries/insights";
 
@@ -294,7 +294,7 @@ const DEFAULT_INSIGHT_TYPE = "market-trend";
  * database error), which the caller logs without failing the Run itself.
  */
 export async function draftInsightsForRun(runId: number): Promise<InsightRow[]> {
-  const run = await getRunById(runId);
+  const run = await getRunByIdInternal(runId);
   if (!run) {
     throw new Error(`draftInsightsForRun: run ${runId} not found.`);
   }
@@ -323,6 +323,7 @@ export async function draftInsightsForRun(runId: number): Promise<InsightRow[]> 
     }
 
     const insightRow = await createInsightWithEvidence({
+      clientId: run.clientId,
       brandId: run.brandId,
       marketId: run.marketId,
       runId,

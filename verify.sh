@@ -59,7 +59,7 @@ if [ -f drizzle.config.ts ]; then
     'npx --no-install drizzle-kit generate 2>&1 | tee /tmp/verify-db-generate.log | grep -q "No schema changes"'
 fi
 
-# pnpm build: the production build is the most expensive step, so it runs last
+# Production build: the production build is the most expensive step, so it runs last
 # and only in the full (non --fast) pass. A stale .next/ cache has produced a
 # spurious Turbopack "binding to a port — Operation not permitted" panic on a
 # long-idle checkout at least three times across this project's epics (each

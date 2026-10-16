@@ -49,13 +49,13 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
     notFound();
   }
 
-  const run = await getRunById(runId);
+  const run = await getRunById(runId, session.clientId);
   if (!run) {
     notFound();
   }
 
   const [brand, market, evidenceRows] = await Promise.all([
-    getBrandById(run.brandId),
+    getBrandById(run.brandId, session.clientId),
     run.marketId !== null ? getMarketById(run.marketId) : Promise.resolve(null),
     listEvidenceForRun(runId),
   ]);

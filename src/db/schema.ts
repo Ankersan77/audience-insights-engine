@@ -38,7 +38,80 @@ export const insightDeliveryStatusEnum = pgEnum("insight_delivery_status", [
   "failed",
 ]);
 
+export const lifecycleStateEnum = pgEnum("lifecycle_state", [
+  "candidate",
+  "live",
+  "quarantined",
+  "expired",
+  "superseded",
+]);
+
+export const sourceHealthEnum = pgEnum("source_health", [
+  "configured",
+  "verified",
+  "degraded",
+  "unavailable",
+  "producing_evidence",
+]);
+
+export const acquisitionStatusEnum = pgEnum("acquisition_status", [
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "cancelled",
+]);
+
+export const reviewStateEnum = pgEnum("review_state", [
+  "pending",
+  "accepted",
+  "rejected",
+  "revision_requested",
+]);
+
+export const citationLevelEnum = pgEnum("citation_level", [
+  "statistical",
+  "paraphrased",
+  "verbatim",
+]);
+
+export const intelligenceKindEnum = pgEnum("intelligence_kind", [
+  "observation",
+  "signal",
+  "fact",
+  "hypothesis",
+  "insight",
+  "recommendation",
+  "decision",
+  "learning",
+  "knowledge_gap",
+]);
+
+export const campaignStateEnum = pgEnum("campaign_state", [
+  "proposed",
+  "approved",
+  "active",
+  "completed",
+  "learning_reviewed",
+  "archived",
+]);
+
+export const studyClassificationEnum = pgEnum("study_classification", [
+  "diagnostic",
+  "directional",
+  "causal",
+  "inconclusive",
+]);
+
 // --- Reference / account tables ---------------------------------------------
+
+export const client = pgTable("client", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull(),
+  name: text("name").notNull(),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [unique("client_slug_unique").on(table.slug)]);
 
 export const appUser = pgTable("app_user", {
   id: serial("id").primaryKey(),
@@ -51,6 +124,29 @@ export const appUser = pgTable("app_user", {
     .defaultNow(),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
 });
+
+export const clientMembership = pgTable("client_membership", {
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => appUser.id, { onDelete: "cascade" }),
+  role: text("role").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [primaryKey({ columns: [table.clientId, table.userId] })]);
+
+export const solutionProfile = pgTable("solution_profile", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  version: integer("version").notNull(),
+  status: text("status").notNull().default("draft"),
+  profileJson: jsonb("profile_json").notNull(),
+  createdBy: integer("created_by").references(() => appUser.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [unique("solution_profile_client_version_unique").on(table.clientId, table.version)]);
 
 export const market = pgTable("market", {
   id: serial("id").primaryKey(),
@@ -66,6 +162,9 @@ export const market = pgTable("market", {
 
 export const brand = pgTable("brand", {
   id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
   slug: text("slug").notNull(),
   description: text("description"),
@@ -166,6 +265,9 @@ export const insightRoute = pgTable("insight_route", {
 
 export const researchRun = pgTable("research_run", {
   id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
   brandId: integer("brand_id")
     .notNull()
     .references(() => brand.id, { onDelete: "restrict" }),
@@ -217,6 +319,9 @@ export const evidence = pgTable("evidence", {
 
 export const insight = pgTable("insight", {
   id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
   brandId: integer("brand_id")
     .notNull()
     .references(() => brand.id, { onDelete: "restrict" }),
@@ -270,4 +375,324 @@ export const auditLog = pgTable("audit_log", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+});
+
+// --- Canonical Market Research foundation -----------------------------------
+
+export const sourceConnection = pgTable("source_connection", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  connectorId: text("connector_id").notNull(),
+  connectorVersion: text("connector_version").notNull(),
+  sourceClass: text("source_class").notNull(),
+  credentialRef: text("credential_ref"),
+  health: sourceHealthEnum("health").notNull().default("configured"),
+  configurationJson: jsonb("configuration_json").notNull(),
+  rightsJson: jsonb("rights_json").notNull(),
+  retentionDays: integer("retention_days").notNull(),
+  rawRetentionHours: integer("raw_retention_hours").notNull(),
+  lastSuccessfulReceiptAt: timestamp("last_successful_receipt_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  unique("source_connection_client_connector_unique").on(table.clientId, table.connectorId),
+]);
+
+export const sourceAcquisitionJob = pgTable("source_acquisition_job", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  sourceConnectionId: integer("source_connection_id")
+    .notNull()
+    .references(() => sourceConnection.id, { onDelete: "restrict" }),
+  status: acquisitionStatusEnum("status").notNull().default("queued"),
+  operation: text("operation").notNull(),
+  requestJson: jsonb("request_json").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+}, (table) => [
+  unique("source_acquisition_job_client_idempotency_unique").on(table.clientId, table.idempotencyKey),
+]);
+
+export const sourceAcquisitionReceipt = pgTable("source_acquisition_receipt", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  jobId: integer("job_id")
+    .notNull()
+    .references(() => sourceAcquisitionJob.id, { onDelete: "restrict" }),
+  status: acquisitionStatusEnum("status").notNull(),
+  acquiredCount: integer("acquired_count").notNull().default(0),
+  rejectedCount: integer("rejected_count").notNull().default(0),
+  nextCursor: text("next_cursor"),
+  safeArtifactRefs: text("safe_artifact_refs").array().notNull().default(sql`'{}'::text[]`),
+  errorCode: text("error_code"),
+  completedAt: timestamp("completed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [unique("source_acquisition_receipt_job_unique").on(table.jobId)]);
+
+export const evidenceCollection = pgTable("evidence_collection", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  sourceConnectionId: integer("source_connection_id")
+    .notNull()
+    .references(() => sourceConnection.id, { onDelete: "restrict" }),
+  acquisitionJobId: integer("acquisition_job_id")
+    .notNull()
+    .references(() => sourceAcquisitionJob.id, { onDelete: "restrict" }),
+  title: text("title").notNull(),
+  methodJson: jsonb("method_json").notNull(),
+  rightsJson: jsonb("rights_json").notNull(),
+  applicabilityJson: jsonb("applicability_json").notNull(),
+  lifecycle: lifecycleStateEnum("lifecycle").notNull().default("candidate"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
+export const canonicalEvidence = pgTable("canonical_evidence", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  collectionId: integer("collection_id")
+    .notNull()
+    .references(() => evidenceCollection.id, { onDelete: "restrict" }),
+  sourceConnectionId: integer("source_connection_id")
+    .notNull()
+    .references(() => sourceConnection.id, { onDelete: "restrict" }),
+  externalReference: text("external_reference").notNull(),
+  safeSourceUrl: text("safe_source_url"),
+  sourceContent: text("source_content").notNull(),
+  synthesis: text("synthesis"),
+  contentHash: text("content_hash").notNull(),
+  citationLevel: citationLevelEnum("citation_level").notNull(),
+  lifecycle: lifecycleStateEnum("lifecycle").notNull().default("candidate"),
+  grade: text("grade").notNull().default("ungraded"),
+  confidence: real("confidence").notNull(),
+  sensitive: boolean("sensitive").notNull().default(false),
+  identityRisk: boolean("identity_risk").notNull().default(false),
+  redactions: text("redactions").array().notNull().default(sql`'{}'::text[]`),
+  methodJson: jsonb("method_json").notNull(),
+  rightsJson: jsonb("rights_json").notNull(),
+  applicabilityJson: jsonb("applicability_json").notNull(),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  observedAt: timestamp("observed_at", { withTimezone: true }),
+  ingestedAt: timestamp("ingested_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  unique("canonical_evidence_client_hash_unique").on(table.clientId, table.contentHash),
+]);
+
+export const quantitativeObservation = pgTable("quantitative_observation", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  evidenceId: integer("evidence_id")
+    .notNull()
+    .references(() => canonicalEvidence.id, { onDelete: "cascade" }),
+  metricKey: text("metric_key").notNull(),
+  value: real("value").notNull(),
+  unit: text("unit").notNull(),
+  observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+  dimensionsJson: jsonb("dimensions_json").notNull(),
+  cohortSize: integer("cohort_size"),
+  suppressed: boolean("suppressed").notNull().default(false),
+});
+
+export const qualitativeTheme = pgTable("qualitative_theme", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  label: text("label").notNull(),
+  paraphrase: text("paraphrase").notNull(),
+  evidenceIds: integer("evidence_ids").array().notNull(),
+  occurrenceCount: integer("occurrence_count").notNull(),
+  sourceDiversity: integer("source_diversity").notNull(),
+  method: text("method").notNull(),
+  suppressed: boolean("suppressed").notNull().default(false),
+});
+
+export const citation = pgTable("citation", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  evidenceId: integer("evidence_id")
+    .notNull()
+    .references(() => canonicalEvidence.id, { onDelete: "cascade" }),
+  level: citationLevelEnum("level").notNull(),
+  safeReference: text("safe_reference").notNull(),
+  excerpt: text("excerpt"),
+  reviewReason: text("review_reason"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+});
+
+export const intelligenceRecord = pgTable("intelligence_record", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  kind: intelligenceKindEnum("kind").notNull(),
+  title: text("title").notNull(),
+  statement: text("statement").notNull(),
+  lifecycle: lifecycleStateEnum("lifecycle").notNull().default("candidate"),
+  reviewState: reviewStateEnum("review_state").notNull().default("pending"),
+  evidenceIds: integer("evidence_ids").array().notNull().default(sql`'{}'::integer[]`),
+  contradictionIds: integer("contradiction_ids").array().notNull().default(sql`'{}'::integer[]`),
+  dependencyIds: integer("dependency_ids").array().notNull().default(sql`'{}'::integer[]`),
+  applicabilityJson: jsonb("applicability_json").notNull(),
+  confidence: real("confidence").notNull(),
+  uncertainty: text("uncertainty").array().notNull().default(sql`'{}'::text[]`),
+  synthesisBy: text("synthesis_by").notNull(),
+  reviewedBy: integer("reviewed_by").references(() => appUser.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  supersedesId: integer("supersedes_id"),
+  decayAt: timestamp("decay_at", { withTimezone: true }),
+});
+
+export const intelligenceRelationship = pgTable("intelligence_relationship", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  fromId: integer("from_id")
+    .notNull()
+    .references(() => intelligenceRecord.id, { onDelete: "cascade" }),
+  toId: integer("to_id")
+    .notNull()
+    .references(() => intelligenceRecord.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  rationale: text("rationale").notNull(),
+}, (table) => [unique("intelligence_relationship_unique").on(table.fromId, table.toId, table.type)]);
+
+export const abilityManifest = pgTable("ability_manifest", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => client.id, { onDelete: "restrict" }),
+  abilityKey: text("ability_key").notNull(),
+  version: text("version").notNull(),
+  manifestJson: jsonb("manifest_json").notNull(),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [unique("ability_manifest_scope_version_unique").on(table.clientId, table.abilityKey, table.version)]);
+
+export const researchArtifact = pgTable("research_artifact", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  artifactType: text("artifact_type").notNull(),
+  abilityKey: text("ability_key"),
+  abilityVersion: text("ability_version"),
+  status: text("status").notNull(),
+  version: integer("version").notNull(),
+  payloadJson: jsonb("payload_json").notNull(),
+  evidenceIds: integer("evidence_ids").array().notNull().default(sql`'{}'::integer[]`),
+  createdBy: integer("created_by").references(() => appUser.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [unique("research_artifact_client_type_version_unique").on(table.clientId, table.artifactType, table.version)]);
+
+export const campaign = pgTable("campaign", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  name: text("name").notNull(),
+  state: campaignStateEnum("state").notNull().default("proposed"),
+  currentRevision: integer("current_revision").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+});
+
+export const campaignRevision = pgTable("campaign_revision", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  campaignId: integer("campaign_id")
+    .notNull()
+    .references(() => campaign.id, { onDelete: "restrict" }),
+  revision: integer("revision").notNull(),
+  briefJson: jsonb("brief_json").notNull(),
+  approvedBy: integer("approved_by").references(() => appUser.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [unique("campaign_revision_unique").on(table.campaignId, table.revision)]);
+
+export const measurementPlan = pgTable("measurement_plan", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  campaignId: integer("campaign_id")
+    .notNull()
+    .references(() => campaign.id, { onDelete: "restrict" }),
+  version: integer("version").notNull(),
+  planJson: jsonb("plan_json").notNull(),
+  reviewState: reviewStateEnum("review_state").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [unique("measurement_plan_campaign_version_unique").on(table.campaignId, table.version)]);
+
+export const study = pgTable("study", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  measurementPlanId: integer("measurement_plan_id")
+    .notNull()
+    .references(() => measurementPlan.id, { onDelete: "restrict" }),
+  classification: studyClassificationEnum("classification").notNull(),
+  designJson: jsonb("design_json").notNull(),
+  resultJson: jsonb("result_json"),
+  integrityState: text("integrity_state").notNull().default("unverified"),
+  reviewState: reviewStateEnum("review_state").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sensingProfile = pgTable("sensing_profile", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  version: integer("version").notNull(),
+  profileJson: jsonb("profile_json").notNull(),
+  status: text("status").notNull().default("draft"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [unique("sensing_profile_client_version_unique").on(table.clientId, table.version)]);
+
+export const monitoringRun = pgTable("monitoring_run", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  sensingProfileId: integer("sensing_profile_id")
+    .notNull()
+    .references(() => sensingProfile.id, { onDelete: "restrict" }),
+  status: acquisitionStatusEnum("status").notNull().default("queued"),
+  outcome: text("outcome"),
+  qualifiedSignalIds: integer("qualified_signal_ids").array().notNull().default(sql`'{}'::integer[]`),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+});
+
+export const governanceAudit = pgTable("governance_audit", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => client.id, { onDelete: "restrict" }),
+  actorUserId: integer("actor_user_id").references(() => appUser.id, { onDelete: "restrict" }),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  redactedBeforeJson: jsonb("redacted_before_json"),
+  redactedAfterJson: jsonb("redacted_after_json"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

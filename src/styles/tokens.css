@@ -1,13 +1,13 @@
-/* Semantic design tokens — Audience Insights Engine
+/* Semantic design tokens — Market Research
    Single source of truth for colour. Components reference these custom
    properties — directly or through the Tailwind utilities `globals.css`
    derives from the core subset — and never a raw colour value. Light values
    are the defaults; dark values override under `prefers-color-scheme: dark`
    (internal tool: system-default, no manual toggle in v1).
 
-   Brand palette sampled from bettercollective.com. The teal clears WCAG AA on
-   white (5.74:1) but only reaches 3.45:1 on a near-black background, so dark
-   mode promotes the mint to accent duty (13.99:1) instead of reusing the teal.
+   The teal clears WCAG AA on white (5.74:1) but only reaches 3.45:1 on a
+   near-black background, so dark mode promotes the mint to accent duty
+   (13.99:1) instead of reusing the teal.
 */
 
 :root {

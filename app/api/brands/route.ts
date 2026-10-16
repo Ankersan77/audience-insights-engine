@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
   }
 
   const created = await createBrand({
+    clientId: session.clientId,
     name: body.name.trim(),
     slug,
     description: body.description?.trim() || null,

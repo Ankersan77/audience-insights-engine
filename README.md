@@ -23,8 +23,8 @@ without building consumer profiles or cross-platform identity graphs.
 - `pg-boss` background jobs
 - OneLogin OIDC authentication
 - Provider-neutral evidence, metric, source-acquisition, and delivery adapters (target architecture)
-- A pinned `last30days` research engine in `vendor/last30days`, retained only while it can satisfy
-  the blueprint's source-rights, provenance, and people-blind ingestion contracts
+- A pinned `last30days` research engine in `vendor/last30days`, retained as disabled migration
+  scaffolding; it is not part of the canonical people-blind ingestion path
 
 Provider-specific integrations belong behind the connector contracts in
 `src/connectors/contracts.ts`; none is required to build or run the core product.
@@ -63,6 +63,21 @@ The minimum application setup requires:
 
 New connectors must use opaque credential references and the provider-neutral contracts in the
 blueprint.
+
+`ENABLE_LEGACY_LAST30DAYS` defaults to `false`. Do not enable it for production ingestion; new
+sources must pass through the canonical evidence adapters and minimization policy.
+
+## Implementation status
+
+The repository implements and tests the canonical contracts, additive data model, tenant scope,
+people-blind evidence boundary, Market Twin transitions and resolution, four core research
+abilities, campaign lifecycle analysis, measurement and Brand Lift guardrails, selective
+monitoring, solution packaging, and operational resilience. `/workspace` is the owned, tenant-
+scoped control surface.
+
+Live-source activation and production readiness still require the named external evidence in
+`docs/external-validation-register.md`; code and deterministic fixtures never silently satisfy
+those gates.
 
 ## Commands
 

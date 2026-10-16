@@ -10,6 +10,7 @@ export type ResearchRunStatus = "queued" | "running" | "succeeded" | "failed" | 
 
 export type ResearchRunRow = {
   id: number;
+  clientId: number;
   brandId: number;
   marketId: number | null;
   researchInstructionVersion: number;
@@ -29,6 +30,7 @@ export type RunListRow = ResearchRunRow & {
 function toRow(row: typeof researchRun.$inferSelect): ResearchRunRow {
   return {
     id: row.id,
+    clientId: row.clientId,
     brandId: row.brandId,
     marketId: row.marketId,
     researchInstructionVersion: row.researchInstructionVersion,
@@ -73,6 +75,7 @@ function isActiveRunConstraintViolation(error: unknown): boolean {
 /** Inserts a new `queued` Run. Relies on T4's partial unique index — never a
  * SELECT-then-INSERT check, which would race under concurrent triggers. */
 export async function createQueuedRun(input: {
+  clientId: number;
   brandId: number;
   marketId: number;
   researchInstructionVersion: number;
@@ -82,6 +85,7 @@ export async function createQueuedRun(input: {
     const [created] = await db
       .insert(researchRun)
       .values({
+        clientId: input.clientId,
         brandId: input.brandId,
         marketId: input.marketId,
         researchInstructionVersion: input.researchInstructionVersion,
@@ -98,13 +102,22 @@ export async function createQueuedRun(input: {
   }
 }
 
-export async function getRunById(id: number): Promise<ResearchRunRow | null> {
+export async function getRunById(id: number, clientId: number): Promise<ResearchRunRow | null> {
+  const [row] = await db
+    .select()
+    .from(researchRun)
+    .where(and(eq(researchRun.id, id), eq(researchRun.clientId, clientId)));
+  return row ? toRow(row) : null;
+}
+
+/** Worker-only lookup. Public request paths must use the tenant-scoped function above. */
+export async function getRunByIdInternal(id: number): Promise<ResearchRunRow | null> {
   const [row] = await db.select().from(researchRun).where(eq(researchRun.id, id));
   return row ? toRow(row) : null;
 }
 
 /** Run history, newest first, joined to brand name and market code (T21). */
-export async function listRuns(): Promise<RunListRow[]> {
+export async function listRuns(clientId: number): Promise<RunListRow[]> {
   const rows = await db
     .select({
       run: researchRun,
@@ -114,6 +127,7 @@ export async function listRuns(): Promise<RunListRow[]> {
     .from(researchRun)
     .innerJoin(brand, eq(brand.id, researchRun.brandId))
     .leftJoin(market, eq(market.id, researchRun.marketId))
+    .where(eq(researchRun.clientId, clientId))
     .orderBy(desc(researchRun.id));
 
   return rows.map((r) => ({ ...toRow(r.run), brandName: r.brandName, marketCode: r.marketCode }));
@@ -153,11 +167,11 @@ export async function markRunFailed(
  * row `cancelled` only from those two states; a terminal Run is left untouched.
  * This does not interrupt a worker process already running the subprocess — see
  * docs/runbook.md and the T21 report for that explicit, out-of-scope limitation. */
-export async function cancelRun(id: number): Promise<ResearchRunRow | null> {
+export async function cancelRun(id: number, clientId: number): Promise<ResearchRunRow | null> {
   const [updated] = await db
     .update(researchRun)
     .set({ status: "cancelled", finishedAt: new Date() })
-    .where(and(eq(researchRun.id, id), inArray(researchRun.status, ["queued", "running"])))
+    .where(and(eq(researchRun.id, id), eq(researchRun.clientId, clientId), inArray(researchRun.status, ["queued", "running"])))
     .returning();
   return updated ? toRow(updated) : null;
 }

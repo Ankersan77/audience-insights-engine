@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function BrandsPage() {
   const session = await requireSession("/brands");
-  const [brands, markets] = await Promise.all([listBrands(), listMarkets()]);
+  const [brands, markets] = await Promise.all([listBrands(session.clientId), listMarkets()]);
 
   return (
     <AppShell user={session}>

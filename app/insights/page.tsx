@@ -24,8 +24,8 @@ export default async function InsightsPage({
   const brandId = params.brandId ? Number(params.brandId) : undefined;
 
   const [insights, brands] = await Promise.all([
-    listInsights({ queueFilter: status, brandId: Number.isInteger(brandId) ? brandId : undefined }),
-    listBrands(),
+    listInsights({ clientId: session.clientId, queueFilter: status, brandId: Number.isInteger(brandId) ? brandId : undefined }),
+    listBrands(session.clientId),
   ]);
 
   return (

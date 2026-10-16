@@ -29,7 +29,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "status must be 'active' or 'archived'." }, { status: 400 });
   }
 
-  const { before, after } = await setBrandStatus(brandId, body.status, session.id);
+  const { before, after } = await setBrandStatus(brandId, session.clientId, body.status, session.id);
   if (!after) {
     return NextResponse.json({ error: "Brand not found." }, { status: 404 });
   }
