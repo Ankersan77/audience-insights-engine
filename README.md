@@ -86,7 +86,8 @@ their canonical evidence. Monitoring uses comparable aggregate observations, one
 baseline per source, explicit corroboration/materiality/freshness/risk gates, and an auditable
 qualification artifact. Passing changes become pending-review Market Twin signals only; missing
 baselines return `needs_context`, and no monitor can automatically promote learning or act outside
-the owned product surface.
+the owned product surface. `/monitoring` presents those candidates as the Market Pulse with their
+confidence, scope, evidence count and uncertainty while keeping review state unmistakable.
 
 ## Environment variables
 
