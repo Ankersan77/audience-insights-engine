@@ -35,8 +35,10 @@ R0 now has machine-readable product governance:
 Repository tests cannot supply these missing facts:
 
 1. the inventory of every deployed database and its legacy row/queue state;
-2. an upgrade exercise from a representative pre-`0018` database with legacy rows through the
-   existing immutable migrations to `0018`;
+2. an owner-accepted upgrade exercise from a representative pre-`0018` installation snapshot with
+   legacy rows through the existing immutable migrations to `0018`; the isolated PostgreSQL 16
+   fixture in `integration/pre0018-upgrade.integration.ts` adds repository test coverage, but only a
+   recorded passing run can be repository evidence and neither is installation evidence;
 3. a timed restore from a PostgreSQL-native test backup;
 4. acceptance of the accountable owner roles in `product-decisions.json`;
 5. approval of the primary host and OAuth reference flow needed before R3.
@@ -44,16 +46,23 @@ Repository tests cannot supply these missing facts:
 R0A passed in remote CI run `39021713019`, including a fresh checkout of the annotated pre-trim tag.
 Read-only R1A1 discovery and the neutral worker-runtime extraction may now run to produce R0B
 evidence. The repository now contains the neutral runtime, isolated canonical maintenance and the
-read-only inventory command documented in `docs/r1a1-legacy-inventory.md`; this does not complete
-R1A1 for real installations. R1A2 waits for the complete installation inventory, recovery proof and
-owner acceptance. Destructive schema
+read-only inventory command documented in [the R1A1 legacy inventory runbook](r1a1-legacy-inventory.md).
+The repository portion of the separate dependency review is recorded in
+[the R1A1 dependency audit](r1a1-dependency-audit.md); its live database,
+queue/schedule, deployment, external-consumer, traffic, secret-retirement and production-image
+checks remain open. These repository artifacts do not complete R1A1 for real installations. R1A2
+waits for those checks, the complete installation inventory, recovery proof and owner acceptance.
+Destructive schema
 work in R1B additionally requires the `legacy-data-disposition` decision and installation-specific
 migration recovery controls. R3 additionally requires item 5. A later R1B test must separately prove
 the new contraction migration from `0018`.
 
-R1A1 also remains open until a separate dependency audit covers repository/dynamic SQL references,
-database triggers and functions, scheduled jobs and external consumers; the read-only inventory's
-foreign-key and view catalog is intentionally not treated as complete dependency evidence.
+The dependency audit found no canonical import of the detachable legacy runtime cluster, but it also
+found two release blockers that require explicit proof: the persisted transitional-monitoring
+schedule must be removed rather than merely left without a worker, and the current Docker standalone
+output does not demonstrate a runnable worker entry point. CI also does not yet build and inspect the
+production image. The read-only inventory's foreign-key and view catalog is intentionally not
+treated as complete dependency evidence.
 
 ## Safe R1 boundary already identified
 

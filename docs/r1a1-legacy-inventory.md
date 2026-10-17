@@ -148,14 +148,18 @@ The inventory portion of R0B is complete only when:
       are resolved or explicitly block progression;
 - [ ] every legacy data class has an owner-approved disposition and no identity-bearing export was
       created by this procedure;
-- [ ] a separate dependency audit covers repository imports and dynamic SQL, database triggers and
-      functions, scheduled jobs and known external consumers; the catalog-only dependency section
-      in this artifact cannot satisfy that gate by itself;
+- [x] the repository portion of the separate dependency audit is recorded in
+      [the R1A1 dependency audit](r1a1-dependency-audit.md), covering imports, dynamic SQL,
+      tracked database objects, declared queues/schedules and packaging;
+- [ ] every installation has completed and owner-accepted the dependency audit's read-only catalog
+      and PgBoss queries plus its deployment, external-consumer, traffic and secret-store evidence;
+      the repository review and this artifact's catalog-only dependency section cannot satisfy that
+      gate by themselves;
 - [ ] encrypted storage, least-privilege access, access audit, retention/expiry, legal hold and
       destruction responsibility are evidenced.
 
 R0B still additionally requires accountable owner-role acceptance with timestamps and durable
 evidence, a representative pre-`0018` upgrade through `0018` with legacy rows, and a timed,
 evidenced PostgreSQL-native backup restore. Completion of this runbook alone therefore neither
-completes R0B nor authorizes R1A2. R1A2 also requires the separate dependency audit above to be
-complete and owner-accepted.
+completes R0B nor authorizes R1A2. R1A2 also requires every open item in
+[the R1A1 dependency audit](r1a1-dependency-audit.md) to be complete and owner-accepted.
