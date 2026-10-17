@@ -2,7 +2,7 @@
 
 Updated: 2026-10-17  
 Blueprint: 2.0.0  
-Status: **open**
+Status: **R0A passed; R0B open**
 
 R0 now has machine-readable product governance:
 
@@ -41,8 +41,9 @@ Repository tests cannot supply these missing facts:
 4. acceptance of the accountable owner roles in `product-decisions.json`;
 5. approval of the primary host and OAuth reference flow needed before R3.
 
-R0A repository work is complete locally but still needs a remote-tag CI proof. After R0A, read-only
-R1A1 discovery and the neutral worker-runtime extraction may run to produce R0B evidence. R1A2 waits
+R0A passed in remote CI run `39021713019`, including a fresh checkout of the annotated pre-trim tag.
+Read-only R1A1 discovery and the neutral worker-runtime extraction may now run to produce R0B
+evidence. R1A2 waits
 for the complete installation inventory, recovery proof and owner acceptance. Destructive schema
 work in R1B additionally requires the `legacy-data-disposition` decision and installation-specific
 migration recovery controls. R3 additionally requires item 5. A later R1B test must separately prove
