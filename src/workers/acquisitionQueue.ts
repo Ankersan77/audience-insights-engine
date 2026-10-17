@@ -111,7 +111,7 @@ export async function processAcquisitionJob(input: {
   return "failed";
 }
 
-export async function dispatchQueuedAcquisitions(boss: PgBoss, limit = 100): Promise<number> {
+export async function dispatchQueuedAcquisitions(boss: Pick<PgBoss, "send">, limit = 100): Promise<number> {
   const ids = await listQueuedAcquisitionJobIds(limit);
   let dispatched = 0;
   for (const databaseJobId of ids) {

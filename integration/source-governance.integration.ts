@@ -18,6 +18,8 @@ import { runSynthesisBudgetCases } from "./synthesis-budget-cases";
 import { runSynthesisProviderCases } from "./synthesis-provider-cases";
 import { runBudgetAdministrationCases } from "./budget-administration-cases";
 import { runCompanyContextCases } from "./company-context-cases";
+import { runLegacyInventoryCases } from "./legacy-inventory-cases";
+import { runCanonicalWorkerRuntimeCases } from "./canonical-worker-runtime-cases";
 
 // Refuse accidental execution against the application's database. No tables are
 // truncated: each test creates uniquely named, synthetic tenant/source fixtures.
@@ -91,6 +93,8 @@ async function waitForBlocked(count: number) {
 test("PostgreSQL source governance, migrations and concurrent transitions", async (t) => {
   try {
     await migrate(db, { migrationsFolder: "drizzle" });
+    await runLegacyInventoryCases(t, probe, url);
+    await runCanonicalWorkerRuntimeCases(t, db, probe, url, fixture);
     await runSynthesisBudgetCases(t, db, probe);
     await runSynthesisProviderCases(t, db, probe, async () => { const first = await fixture(); return { first, second: await fixture(first.tenant) }; });
     await runBudgetAdministrationCases(t, db, probe);

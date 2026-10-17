@@ -15,13 +15,14 @@
  * row itself), so this is belt-and-suspenders against an unexpected bug.
  */
 
-import { PgBoss, type Job } from "pg-boss";
+import { type PgBoss, type Job } from "pg-boss";
 import { runLast30Days, type RunLast30DaysInstruction } from "./runLast30Days";
 import { draftInsightsForRun } from "./draftInsights";
 import { parseCompactReport, storeEvidenceForRun } from "@/src/db/queries/evidence";
 import { markRunFailed, markRunRunning, markRunSucceeded } from "@/src/db/queries/research_runs";
 import { checkRunSlo, logEvent } from "@/src/lib/metrics";
 import { legacyLast30DaysEnabled } from "@/src/lib/featureFlags";
+import { getWorkerRuntime } from "./pgBossRuntime";
 
 /** Groups parsed report items by source, for the per-Run Evidence-count log
  * line (T29) — reuses `parseCompactReport` (already exported by
@@ -59,30 +60,18 @@ export type RunJobPayload = {
   instruction: RunJobInstructionFields;
 };
 
-let bossPromise: Promise<PgBoss> | null = null;
-
-function getBoss(): Promise<PgBoss> {
-  if (!bossPromise) {
-    bossPromise = (async () => {
-      const boss = new PgBoss({ connectionString: process.env.DATABASE_URL });
-      boss.on("error", (err: Error) => console.error("[pg-boss] error", err));
-      await boss.start();
-      // 11 minutes: a safety margin over runLast30Days' own 10-minute hard
-      // timeout, so pg-boss never considers the job "stuck" and reclaims it
-      // while the subprocess is still legitimately running.
-      await boss.createQueue(RUN_QUEUE_NAME, { retryLimit: 0, expireInSeconds: 11 * 60 });
-      return boss;
-    })();
-  }
-  return bossPromise;
-}
-
 /** Called by the trigger API after it has already inserted the `queued`
  * `research_run` row (T20) — the row, not this call, is what the database's
  * partial unique index guards against duplicates. */
 export async function enqueueRunJob(payload: RunJobPayload): Promise<void> {
-  const boss = await getBoss();
+  const boss = await getWorkerRuntime();
+  await ensureRunQueue(boss);
   await boss.send(RUN_QUEUE_NAME, payload);
+}
+
+async function ensureRunQueue(boss: Pick<PgBoss, "createQueue">): Promise<void> {
+  // 11 minutes: a safety margin over the legacy subprocess's 10-minute ceiling.
+  await boss.createQueue(RUN_QUEUE_NAME, { retryLimit: 0, expireInSeconds: 11 * 60 });
 }
 
 async function processRunJob(payload: RunJobPayload): Promise<void> {
@@ -155,8 +144,8 @@ async function processRunJob(payload: RunJobPayload): Promise<void> {
 /** Subscribes the calling process to the queue. Never auto-retries (queue
  * created with `retryLimit: 0`); a thrown error here is caught and recorded
  * as a `failed` Run instead of propagating into pg-boss's own retry path. */
-export async function startRunWorker(): Promise<PgBoss> {
-  const boss = await getBoss();
+export async function startRunWorker(boss: PgBoss): Promise<void> {
+  await ensureRunQueue(boss);
   await boss.work<RunJobPayload>(RUN_QUEUE_NAME, async (jobs: Job<RunJobPayload>[]) => {
     for (const job of jobs) {
       try {
@@ -174,5 +163,4 @@ export async function startRunWorker(): Promise<PgBoss> {
       }
     }
   });
-  return boss;
 }

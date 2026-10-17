@@ -438,6 +438,16 @@ Never point a restore test at production or reuse production connector credentia
 
 ## Failure handling
 
+### Canonical maintenance kill switch
+
+Set `CANONICAL_MAINTENANCE_DISABLED=true` in the worker's deployment-owned environment and restart
+the worker to remove the `market-research-canonical-maintenance` schedule. This does not enable,
+disable or alter the transitional monitoring schedule. A job already in flight is allowed to drain;
+the switch prevents restart from silently recreating the canonical-maintenance cadence. Verify the
+bounded `canonical-maintenance-disabled` event and the absent PgBoss schedule. To re-enable, remove
+the variable (or set it to `false`), restart the worker and verify that the UTC schedule is present.
+Do not use ad-hoc deletion in PgBoss tables.
+
 - Acquisition uses bounded retry only for classified transient failures; permission and policy
   failures are not retried.
 - Idempotency keys prevent duplicate external work and duplicate canonical retention.

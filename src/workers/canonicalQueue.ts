@@ -1,14 +1,31 @@
-import { PgBoss } from "pg-boss";
+import type { PgBoss } from "pg-boss";
 import { enqueueDueMonitoringRuns, qualifyPendingMonitoringRuns, reconcileMonitoringRuns } from "@/src/db/queries/monitoring";
-import { logEvent } from "@/src/lib/metrics";
-import { dispatchQueuedAcquisitions, reconcileStaleAcquisitions } from "@/src/workers/acquisitionQueue";
-import { enforceCanonicalRetention } from "@/src/db/queries/retention";
 import { generateDueBriefings } from "@/src/db/queries/briefings";
-import { purgeAuthSessions } from "@/src/db/queries/auth_sessions";
+import { logEvent } from "@/src/lib/metrics";
 
 export const MONITORING_SCHEDULER_QUEUE = "market-research-monitoring-scheduler";
 
-export async function startCanonicalScheduler(boss: PgBoss): Promise<void> {
+type MonitoringDependencies = {
+  enqueueDueRuns: typeof enqueueDueMonitoringRuns;
+  reconcileRuns: typeof reconcileMonitoringRuns;
+  qualifyRuns: typeof qualifyPendingMonitoringRuns;
+  generateBriefings: typeof generateDueBriefings;
+  log: typeof logEvent;
+};
+
+const defaultDependencies: MonitoringDependencies = {
+  enqueueDueRuns: enqueueDueMonitoringRuns,
+  reconcileRuns: reconcileMonitoringRuns,
+  qualifyRuns: qualifyPendingMonitoringRuns,
+  generateBriefings: generateDueBriefings,
+  log: logEvent,
+};
+
+/** Transitional monitoring-only scheduler. Canonical maintenance must not be registered here. */
+export async function startMonitoringScheduler(
+  boss: Pick<PgBoss, "createQueue" | "schedule" | "work">,
+  dependencies: MonitoringDependencies = defaultDependencies,
+): Promise<void> {
   await boss.createQueue(MONITORING_SCHEDULER_QUEUE, {
     retryLimit: 2,
     retryDelay: 30,
@@ -17,15 +34,17 @@ export async function startCanonicalScheduler(boss: PgBoss): Promise<void> {
   });
   await boss.schedule(MONITORING_SCHEDULER_QUEUE, "*/15 * * * *", null, { tz: "UTC" });
   await boss.work(MONITORING_SCHEDULER_QUEUE, async () => {
-    const expiredSessionsRemoved = await purgeAuthSessions();
-    const retention = await enforceCanonicalRetention();
-    const schedule = await enqueueDueMonitoringRuns();
-    const reconciled = await reconcileMonitoringRuns();
-    const qualified = await qualifyPendingMonitoringRuns();
-    const briefings = await generateDueBriefings();
-    const staleAcquisitions = await reconcileStaleAcquisitions();
-    const dispatched = await dispatchQueuedAcquisitions(boss);
-    logEvent("canonical-monitoring-scheduler", { retention, ...schedule, reconciled, qualified, briefings, staleAcquisitions, dispatched, expiredSessionsRemoved });
+    try {
+      const schedule = await dependencies.enqueueDueRuns();
+      const reconciled = await dependencies.reconcileRuns();
+      const qualified = await dependencies.qualifyRuns();
+      const briefings = await dependencies.generateBriefings();
+      const result = { ...schedule, reconciled, qualified, briefings };
+      dependencies.log("monitoring-scheduler", result);
+      return result;
+    } catch {
+      dependencies.log("monitoring-scheduler-failed", { errorCode: "monitoring-maintenance-unavailable" });
+      throw new Error("monitoring-scheduler-unavailable");
+    }
   });
 }
-

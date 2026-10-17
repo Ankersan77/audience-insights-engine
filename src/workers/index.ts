@@ -7,7 +7,7 @@
  * stable here on Node 24 — no new dependency) for local dev convenience; in
  * the deployed container env vars come from the platform (SSM/k8s secrets)
  * and a missing `.env.local` is a silent no-op. Done via a dynamic `import()`
- * of `./runQueue` below, not a static import: a static import is hoisted
+ * of the worker modules below, not static imports: static imports are hoisted
  * ahead of this file's own top-level code, which would make `src/db/client`
  * read `process.env.DATABASE_URL` before `.env.local` had a chance to set it.
  */
@@ -23,41 +23,24 @@ try {
 async function main() {
   const { assertClientOwnedDeployment } = await import("../lib/clientOwnedDeployment");
   await assertClientOwnedDeployment();
+  const { getWorkerRuntime, installWorkerShutdown, runWorkerStartup } = await import("./pgBossRuntime");
   const { startRunWorker } = await import("./runQueue");
-  const { startCanonicalScheduler } = await import("./canonicalQueue");
-  const { startSynthesisMaintenance } = await import("./synthesisMaintenance");
-  const { startAcquisitionWorker } = await import("./acquisitionQueue");
+  const { startCanonicalWorkers } = await import("./canonicalWorkers");
+  const { startMonitoringScheduler } = await import("./canonicalQueue");
   const { createProductionAdapterRegistry, createProductionRuntimeContext } = await import("../evidence/productionRegistry");
-  const boss = await startRunWorker();
-  await startAcquisitionWorker(boss, { registry: createProductionAdapterRegistry(), runtime: createProductionRuntimeContext() });
-  await startCanonicalScheduler(boss);
-  await startSynthesisMaintenance(boss);
-  console.log(`[worker] subscribed to legacy, canonical scheduler, source-acquisition and synthesis-maintenance queues (pid ${process.pid})`);
-
-  let shuttingDown = false;
-  const shutdown = async (signal: string) => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    console.log(`[worker] ${signal} received — draining in-flight jobs before exit`);
-    try {
-      // Graceful stop: lets a job already in flight finish rather than
-      // killing it mid-subprocess (devops review required finding). The
-      // timeout is a safety margin over runLast30Days' own 10-minute hard
-      // ceiling, not a second timeout racing it.
-      await boss.stop({ graceful: true, timeout: 11 * 60 * 1000 });
-      console.log("[worker] drained, exiting");
-    } catch (error) {
-      console.error("[worker] error while draining", error);
-    } finally {
-      process.exit(0);
-    }
-  };
-
-  process.on("SIGTERM", () => void shutdown("SIGTERM"));
-  process.on("SIGINT", () => void shutdown("SIGINT"));
+  const boss = await getWorkerRuntime();
+  const shutdown = installWorkerShutdown(boss);
+  const started = await runWorkerStartup([
+    () => startRunWorker(boss),
+    () => startCanonicalWorkers(boss, { registry: createProductionAdapterRegistry(), runtime: createProductionRuntimeContext() }),
+    () => startMonitoringScheduler(boss),
+  ], shutdown);
+  if (started) {
+    console.log(`[worker] subscribed to legacy, canonical and transitional-monitoring queues (pid ${process.pid})`);
+  }
 }
 
-main().catch((error) => {
-  console.error("[worker] fatal error starting the worker", error);
+main().catch(() => {
+  console.error("[worker] fatal-startup-error");
   process.exit(1);
 });

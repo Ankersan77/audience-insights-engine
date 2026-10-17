@@ -27,8 +27,8 @@ R0 now has machine-readable product governance:
   `decision-brief@2` implementation is claimed.
 - The current broad abilities and product surfaces are explicitly unsupported/deferred even though
   code and tests exist.
-- The old `last30days` path remains fail-closed but still ships in CI/Docker and still owns worker
-  startup indirectly.
+- The old `last30days` path remains fail-closed and still ships in CI/Docker; the transitional worker
+  still subscribes to its queue until R1A2, but it no longer owns the shared PgBoss lifecycle.
 
 ## Why R0 is still open
 
@@ -43,17 +43,24 @@ Repository tests cannot supply these missing facts:
 
 R0A passed in remote CI run `39021713019`, including a fresh checkout of the annotated pre-trim tag.
 Read-only R1A1 discovery and the neutral worker-runtime extraction may now run to produce R0B
-evidence. R1A2 waits
-for the complete installation inventory, recovery proof and owner acceptance. Destructive schema
+evidence. The repository now contains the neutral runtime, isolated canonical maintenance and the
+read-only inventory command documented in `docs/r1a1-legacy-inventory.md`; this does not complete
+R1A1 for real installations. R1A2 waits for the complete installation inventory, recovery proof and
+owner acceptance. Destructive schema
 work in R1B additionally requires the `legacy-data-disposition` decision and installation-specific
 migration recovery controls. R3 additionally requires item 5. A later R1B test must separately prove
 the new contraction migration from `0018`.
 
+R1A1 also remains open until a separate dependency audit covers repository/dynamic SQL references,
+database triggers and functions, scheduled jobs and external consumers; the read-only inventory's
+foreign-key and view catalog is intentionally not treated as complete dependency evidence.
+
 ## Safe R1 boundary already identified
 
-`src/workers/runQueue.ts` owns the only PgBoss lifecycle and passes that instance to canonical
-workers. R1A1 must first extract a neutral PgBoss runtime and separate canonical maintenance from
-parked monitoring. R1A2 may remove `research-run` and `last30days` code only after canonical
+`src/workers/pgBossRuntime.ts` now owns the shared PgBoss lifecycle. Canonical acquisition,
+maintenance and synthesis compose through `src/workers/canonicalWorkers.ts`, independently of the
+legacy run queue and transitional monitoring scheduler. R1A2 may remove `research-run`, the
+transitional monitoring subscription and `last30days` code only after canonical
 acquisition, synthesis, retention, session cleanup and graceful shutdown are proved on that runtime.
 
 Legacy evidence and insights are not eligible for automatic promotion. Useful records must be

@@ -181,19 +181,19 @@
       "purpose": "Own the neutral PgBoss connection, startup, error handling and graceful shutdown used by canonical workers.",
       "nonPurpose": "Registering the legacy research-run queue or deciding which product schedules are active.",
       "owner": "platform-owner",
-      "releaseState": "designed",
+      "releaseState": "implemented",
       "versions": { "contracts": [], "abilities": [], "tools": [] },
       "dataClasses": ["operational-metadata"],
       "sourcePaths": [],
       "dependencies": [],
       "humanGates": ["operations-review"],
-      "evaluationSuite": ["planned:worker-start-stop-and-canonical-queue-smoke"],
-      "evidenceReferences": [{ "kind": "repository_audit", "status": "verified", "ref": "src/workers/runQueue.ts" }],
+      "evaluationSuite": ["src/workers/pgBossRuntime.test.ts", "src/workers/canonicalWorkers.test.ts", "integration/canonical-worker-runtime-cases.ts"],
+      "evidenceReferences": [{ "kind": "automated_test", "status": "verified", "ref": "integration/canonical-worker-runtime-cases.ts" }],
       "supportedHosts": [],
       "operationalRequirements": ["graceful drain", "bounded shutdown", "redacted errors", "canonical queue availability"],
       "removalCondition": "Never remove while any durable worker exists; replace only behind the same lifecycle tests.",
-      "limitations": ["The only PgBoss owner is currently the removable legacy runQueue module."],
-      "inventory": { "paths": ["src/workers/index.ts", "src/workers/runQueue.ts"], "routes": [], "tables": [], "queues": ["research-run", "market-research-source-acquisition", "market-research-monitoring-scheduler", "market-research-synthesis-maintenance"] }
+      "limitations": ["Legacy and transitional monitoring queue registration remains in the worker entry point until R1A2 removal."],
+      "inventory": { "paths": ["src/workers/pgBossRuntime.ts", "src/workers/canonicalWorkers.ts", "src/workers/index.ts", "src/workers/runQueue.ts"], "routes": [], "tables": [], "queues": ["research-run", "market-research-source-acquisition", "market-research-canonical-maintenance", "market-research-monitoring-scheduler", "market-research-synthesis-maintenance"] }
     },
     {
       "id": "canonical-maintenance-scheduler",
@@ -208,13 +208,13 @@
       "sourcePaths": [],
       "dependencies": ["canonical-worker-runtime", "retention-resilience", "source-acquisition-budget"],
       "humanGates": ["operations-review"],
-      "evaluationSuite": ["planned:canonical-maintenance-schedule-and-restart-catchup"],
-      "evidenceReferences": [{ "kind": "repository_audit", "status": "verified", "ref": "src/workers/canonicalQueue.ts" }],
+      "evaluationSuite": ["src/workers/canonicalMaintenance.test.ts", "src/workers/canonicalQueue.test.ts", "integration/canonical-worker-runtime-cases.ts"],
+      "evidenceReferences": [{ "kind": "automated_test", "status": "verified", "ref": "integration/canonical-worker-runtime-cases.ts" }],
       "supportedHosts": [],
       "operationalRequirements": ["UTC schedule", "idempotency", "bounded catch-up", "monitoring-independent kill switch"],
       "removalCondition": "Never remove while canonical retention or dispatch needs scheduling.",
-      "limitations": ["Canonical maintenance is currently coupled to the parked monitoring scheduler."],
-      "inventory": { "paths": ["src/workers/canonicalQueue.ts", "src/db/queries/retention.ts", "src/db/queries/auth_sessions.ts", "src/workers/acquisitionQueue.ts"], "routes": [], "tables": ["auth_session", "canonical_evidence", "source_acquisition_job"], "queues": ["market-research-monitoring-scheduler", "market-research-source-acquisition"] }
+      "limitations": ["Production operation still needs installation-specific runtime and restart evidence.", "Session cleanup and high-fanout artifact retention still need a schema-backed bounded continuation marker before this scheduler can be considered production-ready."],
+      "inventory": { "paths": ["src/workers/canonicalMaintenance.ts", "src/db/queries/retention.ts", "src/db/queries/auth_sessions.ts", "src/workers/acquisitionQueue.ts"], "routes": [], "tables": ["auth_session", "canonical_evidence", "source_acquisition_job"], "queues": ["market-research-canonical-maintenance", "market-research-source-acquisition"] }
     },
     {
       "id": "v1-installation-configuration",
@@ -670,13 +670,13 @@
       "sourcePaths": [],
       "dependencies": ["legacy-last30days-runtime"],
       "humanGates": ["data-disposition-approval", "restore-evidence"],
-      "evaluationSuite": ["planned:legacy-row-inventory-and-upgrade-fixture"],
-      "evidenceReferences": [{ "kind": "repository_audit", "status": "verified", "ref": "r0-baseline.json" }],
+      "evaluationSuite": ["scripts/legacy-inventory.test.ts", "integration/legacy-inventory-cases.ts", "planned:representative-pre-0018-upgrade-fixture"],
+      "evidenceReferences": [{ "kind": "automated_test", "status": "verified", "ref": "scripts/legacy-inventory.test.ts" }, { "kind": "repository_audit", "status": "verified", "ref": "r0-baseline.json" }],
       "supportedHosts": [],
       "operationalRequirements": ["read-only during R1A", "encrypted export decision", "forward-only migration"],
       "removalCondition": "Remove code in R1A and drop approved tables in R1B without editing historical migrations.",
-      "limitations": ["Legacy evidence includes author_handle and provider-shaped social selectors."],
-      "inventory": { "paths": ["app/brands", "app/insights", "app/runs", "src/db/queries/brands.ts", "src/db/queries/research_instructions.ts", "src/db/queries/research_runs.ts", "src/db/queries/evidence.ts", "src/db/queries/insights.ts", "src/workers/purgeEvidence.ts", "src/workers/draftInsights.ts"], "routes": ["app/api/brands/route.ts", "app/api/brands/[id]/route.ts", "app/api/brands/[id]/instructions/route.ts", "app/api/insights/[id]/decision/route.ts", "app/api/runs/trigger/route.ts", "app/api/runs/[id]/cancel/route.ts"], "tables": ["market", "brand", "brand_market", "research_instruction", "research_run", "evidence", "insight", "insight_evidence", "audit_log"], "queues": ["research-run"] }
+      "limitations": ["Legacy evidence includes author_handle and provider-shaped social selectors.", "Repository tooling cannot prove that every installation was discovered or that an approved disposition exists.", "The inventory artifact covers database foreign keys and views only; source, dynamic SQL, trigger/function, scheduled-job and external-consumer audits remain separate R1A1 evidence."],
+      "inventory": { "paths": ["scripts/legacy-inventory.ts", "docs/r1a1-legacy-inventory.md", "app/brands", "app/insights", "app/runs", "src/db/queries/brands.ts", "src/db/queries/research_instructions.ts", "src/db/queries/research_runs.ts", "src/db/queries/evidence.ts", "src/db/queries/insights.ts", "src/workers/purgeEvidence.ts", "src/workers/draftInsights.ts"], "routes": ["app/api/brands/route.ts", "app/api/brands/[id]/route.ts", "app/api/brands/[id]/instructions/route.ts", "app/api/insights/[id]/decision/route.ts", "app/api/runs/trigger/route.ts", "app/api/runs/[id]/cancel/route.ts"], "tables": ["market", "brand", "brand_market", "research_instruction", "research_run", "evidence", "insight", "insight_evidence", "audit_log"], "queues": ["research-run"] }
     },
     {
       "id": "legacy-external-delivery",
