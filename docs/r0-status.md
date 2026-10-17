@@ -37,8 +37,8 @@ Repository tests cannot supply these missing facts:
 1. the inventory of every deployed database and its legacy row/queue state;
 2. an owner-accepted upgrade exercise from a representative pre-`0018` installation snapshot with
    legacy rows through the existing immutable migrations to `0018`; the isolated PostgreSQL 16
-   fixture in `integration/pre0018-upgrade.integration.ts` adds repository test coverage, but only a
-   recorded passing run can be repository evidence and neither is installation evidence;
+   fixture in `integration/pre0018-upgrade.integration.ts` passed remote CI run `39026361215` and
+   supplies repository evidence, but neither the fixture nor that run is installation evidence;
 3. a timed restore from a PostgreSQL-native test backup;
 4. acceptance of the accountable owner roles in `product-decisions.json`;
 5. approval of the primary host and OAuth reference flow needed before R3.
