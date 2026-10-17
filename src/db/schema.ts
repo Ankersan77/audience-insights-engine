@@ -140,6 +140,18 @@ export const clientMembership = pgTable("client_membership", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [primaryKey({ columns: [table.clientId, table.userId] })]);
 
+// Append-only company declarations, separate from externally evidenced Market Twin findings.
+export const companyContextRevision = pgTable("company_context_revision", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => client.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  contentJson: jsonb("content_json").notNull(),
+  declaredBy: integer("declared_by").notNull().references(() => appUser.id),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  reviewAfter: timestamp("review_after", { withTimezone: true }).notNull(),
+  changeReason: text("change_reason").notNull(),
+}, (table) => [unique("company_context_client_version_unique").on(table.clientId, table.version)]);
+
 export const authSession = pgTable("auth_session", {
   tokenHash: text("token_hash").primaryKey(),
   clientId: integer("client_id").notNull(),

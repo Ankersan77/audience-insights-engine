@@ -228,6 +228,8 @@ export type ResearchContextBasis = {
   projectDigest?: string;
   solutionDigest?: string;
   sensingDigest?: string;
+  companyContextVersion?: number;
+  companyContextDigest?: string;
   evidence?: readonly { id: string; contentDigest: string }[];
   primaryEvidenceIds?: readonly string[];
   projectId?: string;

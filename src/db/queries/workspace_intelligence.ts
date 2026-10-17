@@ -1,4 +1,6 @@
 import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
+import { lockCompanyContext } from "./company_context";
+import { companyContextProblem } from "@/src/core/companyContext";
 import type { Applicability, DecisionBrief, IntelligenceKind, IntelligenceRecord, ReviewState, RightsDeclaration, SolutionProfile, SourceClass } from "@/src/core/contracts";
 import { validateDecisionBrief, validateIntelligenceRecord } from "@/src/core/validation";
 import { db } from "@/src/db/client";
@@ -206,6 +208,9 @@ export async function saveDecisionBrief(input: {
       if (basis?.snapshotVersion === 1 && researchSnapshotDigest(researchProjectDomain(ownedProject)) !== basis.projectDigest) throw new Error("research-context-changed");
     }
     if (basis) {
+      const company = await lockCompanyContext(tx, input.clientId);
+      if (company?.version !== basis.companyContextVersion || (company ? researchSnapshotDigest(company) : undefined) !== basis.companyContextDigest
+        || (company && companyContextProblem(company, String(input.clientId), new Date().toISOString(), basis.market, basis.language))) throw new Error("research-context-changed");
       // Bundle imports lock sensing before solution; preserve that ordering here.
       if (basis.sensingProfileId) {
         const [sensing] = await tx.select().from(sensingProfile).where(and(eq(sensingProfile.clientId, input.clientId), eq(sensingProfile.id, Number(basis.sensingProfileId)), eq(sensingProfile.version, basis.sensingVersion!))).for("share");
@@ -255,6 +260,7 @@ export async function saveDecisionBrief(input: {
       if (basis.snapshotVersion === 1 && (!basis.primaryEvidenceIds || basis.primaryEvidenceIds.some((id) => !currentPrimary.has(id)))) throw new Error("research-context-changed");
       assertNotExpired = () => {
         const checkAt = new Date().toISOString();
+        if (company && companyContextProblem(company, String(input.clientId), checkAt, basis.market, basis.language)) throw new Error("research-context-changed");
         const permitted = resolveEvidence({ clientId: String(input.clientId), evidence: currentEvidence, now: checkAt, market: basis.market, language: basis.language, requirements: CONTEXT_EVIDENCE_REQUIREMENTS });
         const primary = ability ? resolveEvidence({ clientId: String(input.clientId), evidence: currentEvidence, now: checkAt, market: basis.market, language: basis.language, requirements: ability.evidenceRequirements }) : undefined;
         if (permitted.selected.length !== currentEvidence.length || records.some((row) => row.decayAt && row.decayAt <= new Date(checkAt))

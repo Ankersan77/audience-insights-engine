@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { CompanyContext } from "../core/companyContext.ts";
 import type { EvidenceItem, IntelligenceRecord } from "../core/contracts.ts";
 import { prepareResearchContext, type ResearchContextSources } from "./context.ts";
 import { runAbilityWithSynthesis, runContextualResearch, type ResearchSynthesisProvider } from "./synthesis.ts";
@@ -65,6 +66,30 @@ function contextSources(): ResearchContextSources {
     sourceBindings: { "official-one": "source-1", "official-two": "source-2", brand: "source-brand" },
   };
 }
+
+test("company context is reused across questions, versioned in the basis and never replaces evidence", async () => {
+  const sources = contextSources();
+  const company: CompanyContext = { schemaVersion: 1, clientId: "client-a", version: 1, declaredBy: 1, recordedAt: now, reviewAfter: "2027-01-01T00:00:00.000Z", changeReason: "Owner declaration",
+    content: { name: "Synthetic company", offer: "Consulting", audiences: "Marketing leaders", valueProposition: "Human-led change", positioning: "Creative AI", priorities: "Positioning", constraints: "Denmark first", markets: ["DK"], languages: ["da"], sourceBindings: [] } };
+  sources.company = company;
+  let calls = 0;
+  const provider: ResearchSynthesisProvider = { id: "fixture", version: "1", async synthesize(input) { calls++; assert.deepEqual(input.context?.company, sources.company); return analysis; } };
+  const first = await runContextualResearch({ ...request, sources, provider });
+  const second = await runContextualResearch({ ...request, question: "What should we validate next?", sources, provider });
+  assert.equal(first.status, "ready"); assert.equal(second.status, "ready"); assert.equal(calls, 2);
+  assert.equal(first.contextBasis?.companyContextVersion, 1);
+  assert.equal(first.contextBasis?.companyContextDigest, second.contextBasis?.companyContextDigest);
+  sources.company = { ...company, version: 2, content: { ...company.content, priorities: "Competition" } };
+  const revised = prepareResearchContext({ ...request, sources });
+  assert.notEqual(revised.basis?.companyContextDigest, first.contextBasis?.companyContextDigest);
+  for (const patch of [{ clientId: "foreign" }, { reviewAfter: now }, { content: { ...company.content, markets: ["SE"] } }]) {
+    sources.company = { ...company, ...patch };
+    assert.equal((await runContextualResearch({ ...request, sources, provider })).status, "needs_context");
+  }
+  sources.company = company; sources.intelligence = [];
+  assert.equal((await runContextualResearch({ ...request, sources, provider })).status, "needs_context");
+  assert.equal(calls, 2);
+});
 
 test("contextual synthesis binds project, solution version and reviewed strategy without losing contradictions", async () => {
   const sources = contextSources();

@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { label: "Ask / Projects", href: "/projects" },
   { label: "Market Pulse", href: "/monitoring" },
   { label: "Market Twin", href: "/workspace" },
+  { label: "Company context", href: "/company" },
   { label: "Campaign Studies", href: "/campaigns" },
   { label: "Sources & Setup", href: "/configuration" },
   { label: "Quality", href: "/evaluation" },

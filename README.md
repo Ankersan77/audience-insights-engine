@@ -65,6 +65,12 @@ the deterministic causal-design gate. `/monitoring` manages versioned sensing pr
 tenant-scoped runs; `/configuration` manages portable solution-profile versions and redacted
 exports.
 
+`/company` maintains the tenant's owner-declared offer, audience, value proposition and positioning
+with review deadlines and append-only versions. Research reuses the current declaration and freezes
+its revision in the result basis. CRM/sales source bindings reference governed aggregates; they do
+not copy contact records or activate sync. See [company context](docs/company-context.md) for the
+D4WN import and the session-scoped API seam; future agent service access is not yet connected.
+
 Market Pulse also provides opt-in weekly/monthly/quarterly review packets with closed UTC windows,
 restart-safe scheduling and human accept/reject gates. These are traceable indexes of available
 research, not autonomous expert synthesis. Missing source coverage stays explicit. Enable rhythms

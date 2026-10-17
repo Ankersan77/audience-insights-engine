@@ -1,4 +1,5 @@
 import type { SourceClass } from "../core/contracts.ts";
+import { companyContextProblem } from "../core/companyContext.ts";
 import type { ResearchSynthesisInput, ResearchSynthesisProvider } from "../abilities/synthesis.ts";
 import { getDecisionBriefAbility } from "../abilities/catalog.ts";
 import { RESEARCH_SYNTHESIS_SCHEMA, researchSynthesisPrompt, SYNTHESIS_PROMPT_VERSION } from "../abilities/synthesisPrompt.ts";
@@ -147,6 +148,8 @@ export class OpenAIResearchSynthesisProvider implements ResearchSynthesisProvide
         || !input.language || !binding.languages.includes(input.language)
         || input.context.market !== input.market || input.context.language !== input.language
         || input.evidence.some((item) => !binding.allowedSourceClasses.includes(item.sourceClass))) fail("scope-denied");
+      if (input.context.company && (!binding.allowedSourceClasses.includes("client_owned")
+        || companyContextProblem(input.context.company, binding.clientId, new Date(now).toISOString(), input.market, input.language))) fail("scope-denied");
       if (!input.context.solution.enabledAbilities.some((item) => item.id === input.abilityId && item.version === getDecisionBriefAbility(input.abilityId)?.version)
         || !input.context.solution.markets.includes(input.market) || !input.context.solution.languages.includes(input.language)
         || !input.question.trim() || input.question.length > 12_000 || !input.evidence.length || input.evidence.length > 200

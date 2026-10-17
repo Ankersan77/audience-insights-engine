@@ -11,7 +11,7 @@ import type { SynthesisAuthorityGuard } from "./synthesis_budget";
 
 export function synthesisApprovalScope(binding: SynthesisDeploymentBinding) { return `research-synthesis:${synthesisBindingDigest(binding)}`; }
 
-/** Budget lock → acceptance gates → project → sensing/solution → sources/evidence/intelligence.
+/** Budget lock → acceptance gates → project → company → sensing/solution → sources/evidence/intelligence.
  * No network operations are performed while these locks are held.
  */
 export function synthesisAuthorityGuard(input: ResearchSynthesisInput, binding: SynthesisDeploymentBinding, assertConfiguration: () => void): SynthesisAuthorityGuard {
@@ -20,6 +20,7 @@ export function synthesisAuthorityGuard(input: ResearchSynthesisInput, binding: 
     if (input.clientId !== binding.clientId || !input.context || input.context.clientId !== binding.clientId
       || !input.market || !binding.markets.includes(input.market) || !input.language || !binding.languages.includes(input.language)
       || !binding.abilityIds.includes(input.abilityId) || !input.evidence.length
+      || (input.context.company && !binding.allowedSourceClasses.includes("client_owned"))
       || input.evidence.some((item) => !binding.allowedSourceClasses.includes(item.sourceClass))) throw new Error("synthesis-authority-scope-denied");
     const clientId = Number(binding.clientId);
     const gates = await tx.select().from(externalValidationGate).where(eq(externalValidationGate.clientId, clientId)).orderBy(asc(externalValidationGate.gateKey)).for("share");

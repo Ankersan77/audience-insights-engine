@@ -10,11 +10,13 @@ import { canonicalProfile } from "./monitoring";
 import { toIntelligence } from "./workspace_intelligence";
 import type { CampaignAssessmentArtifact, CampaignRevisionPayload } from "./campaign_workspace";
 import { campaignScopeKey, parseCampaignScopes, resolveCampaignScope } from "@/src/campaigns/scope";
+import { lockCompanyContext } from "./company_context";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-/** Caller holds campaign → measurement advisory locks. Configuration follows sensing → solution. */
+/** Caller holds campaign → measurement advisory locks. Configuration follows company → sensing → solution. */
 export async function lockedContext(tx: Transaction, clientId: number, market?: string, language?: string): Promise<(now?: string) => ResearchContextSources> {
+  const company = await lockCompanyContext(tx, clientId);
   const [candidate] = await tx.select().from(solutionProfile).where(and(eq(solutionProfile.clientId, clientId), eq(solutionProfile.status, "active"))).orderBy(desc(solutionProfile.version)).limit(1);
   const sensingId = (candidate?.profileJson as SolutionProfile | undefined)?.sensingProfileId;
   const [sensing] = sensingId ? await tx.select().from(sensingProfile).where(and(eq(sensingProfile.clientId, clientId), eq(sensingProfile.id, Number(sensingId)))).for("share") : [];
@@ -34,7 +36,7 @@ export async function lockedContext(tx: Transaction, clientId: number, market?: 
       ...(scopedMarket ? { markets: [scopedMarket] } : {}), ...(scopedLanguage ? { languages: [scopedLanguage] } : {}),
     } }, now })).map((source) => source.id));
   return {
-    solution: profile,
+    solution: profile, company,
     sensing: sensing ? canonicalProfile(sensing) : null, intelligence: intelligence.map(toIntelligence),
     evidence: evidence.filter((item) => permitted.has(item.sourceConnectionId)).map((item) => {
       const source = sourceMap.get(item.sourceConnectionId)!;

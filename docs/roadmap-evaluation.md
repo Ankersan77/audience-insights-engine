@@ -286,6 +286,23 @@ semantic truth detector. Qualified review of reasoning and causal language remai
 Automated model interpretation, actual pilot usefulness and full interactive browser proof remain
 open. A human-authored workflow is not evidence of an autonomous expert capability.
 
+### Company-context continuation — 2026-10-17
+
+The owner requested stable, maintainable business context for future agent use. Reconstructing this
+from each prompt or conflating it with evidenced Market Twin facts would violate portability and
+traceability. The adopted slice adds a tenant-local append-only company declaration, owner/admin
+review dates, optimistic concurrency and aggregate-source references. Research loads the current
+declaration automatically; snapshot fingerprints and shared/exclusive locks protect both first
+declaration and subsequent revision races. Campaign and production synthesis reuse the same locked
+context. The transport requires explicit `client_owned` processing scope, projects only strategy
+fields as untrusted data and records prompt version `research-synthesis@2`.
+
+The D4WN content file is an owner-intent import, not a validated Market Twin or fictional pilot.
+Tests cover strict parsing, research reuse, stale/foreign scope, transport projection, database
+version races/authority expiry, HTTP authorization and opt-in browser import/reload/conflict behavior.
+This is the company-context foundation, not proof of a connected agent, live CRM synchronization,
+quality of real model output or pilot usefulness. Those release gates remain open.
+
 ## Architectural decisions
 
 - PostgreSQL remains the system of record; canonical records receive a direct `client_id` even

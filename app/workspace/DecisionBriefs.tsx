@@ -69,6 +69,7 @@ export function DecisionBriefs({ abilities, evidence, initialBriefs, canResearch
               {brief.contextBasis ? <div className="mt-3 rounded border border-border p-2 text-muted">
                 <p className="font-medium text-foreground">Research context</p>
                 <p>Solution {brief.contextBasis.solutionProfileId} · v{brief.contextBasis.solutionVersion} · {brief.contextBasis.market} / {brief.contextBasis.language}</p>
+                <p>Company profile: {brief.contextBasis.companyContextVersion ? `v${brief.contextBasis.companyContextVersion} (owner-declared, historical basis)` : "not declared in this snapshot"}</p>
                 {brief.contextBasis.projectId ? <p>Project {brief.contextBasis.projectId} · snapshot {brief.contextBasis.projectUpdatedAt}</p> : null}
                 {brief.contextBasis.sensingProfileId ? <p>Sensing {brief.contextBasis.sensingProfileId} · v{brief.contextBasis.sensingVersion}</p> : null}
                 <p>Reviewed Market Twin records: {brief.contextBasis.intelligence.map((record) => record.id).join(", ") || "none"} · excluded: {brief.contextBasis.excludedRecordCount}</p>

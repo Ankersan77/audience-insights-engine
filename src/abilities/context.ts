@@ -3,6 +3,7 @@ import type { EvidenceItem, IntelligenceRecord, ResearchContextBasis, ResearchPr
 import { hasPromptInjection, redactIdentifiers } from "../evidence/policy.ts";
 import { resolveEvidence } from "../market-twin/resolver.ts";
 import { getAbility } from "./catalog.ts";
+import { companyContextProblem, type CompanyContext } from "../core/companyContext.ts";
 
 export const CONTEXT_EVIDENCE_REQUIREMENTS = [{
   sourceClasses: ["client_owned", "first_party_aggregate", "commissioned_or_licensed", "official_or_public", "public_conversation", "primary_research"] as const,
@@ -10,6 +11,7 @@ export const CONTEXT_EVIDENCE_REQUIREMENTS = [{
 }];
 
 export type ResearchContext = {
+  company?: CompanyContext;
   clientId: string;
   market: string;
   language: string;
@@ -20,6 +22,7 @@ export type ResearchContext = {
 };
 
 export type ResearchContextSources = {
+  company?: CompanyContext | null;
   project?: ResearchProject | null;
   solution?: SolutionProfile | null;
   sensing?: SensingProfile | null;
@@ -51,6 +54,11 @@ export function prepareResearchContext(input: {
   }
   const market = scope("markets", input.market);
   const language = scope("languages", input.language);
+  const company = input.sources.company;
+  if (company) {
+    const problem = companyContextProblem(company, input.clientId, input.now, market, language);
+    if (problem) gaps.push(problem);
+  }
   if (solution.sensingProfileId && (!sensing || sensing.id !== solution.sensingProfileId || sensing.clientId !== input.clientId)) gaps.push("The bound sensing profile is unavailable for this client.");
   if (gaps.length) return empty();
   const aliases = Object.values(solution.providerBindings);
@@ -75,6 +83,7 @@ export function prepareResearchContext(input: {
   if (!records.length) gaps.push("No applicable, reviewed Market Twin record has current supporting evidence from the configured sources.");
   const supportIds = new Set(records.flatMap((record) => [...record.evidenceIds]));
   const context: ResearchContext = {
+    ...(company ? { company } : {}),
     clientId: input.clientId, market, language,
     ...(scopedProject ? { project: { id: scopedProject.id, name: redactIdentifiers(scopedProject.name).content, decision: redactIdentifiers(scopedProject.decision).content, updatedAt: scopedProject.updatedAt } } : {}),
     solution: { id: solution.id, version: solution.version, markets: solution.markets, languages: solution.languages, enabledAbilities: solution.enabledAbilities, reviewRoles: solution.reviewRoles, retention: solution.retention },
@@ -82,6 +91,7 @@ export function prepareResearchContext(input: {
     marketTwin: records.map((record) => ({ id: record.id, kind: record.kind, title: record.title, statement: record.statement, evidenceIds: record.evidenceIds, contradictionIds: record.contradictionIds, confidence: record.confidence, uncertainty: record.uncertainty, reviewedAt: record.reviewedAt })),
   };
   const basis: ResearchContextBasis = {
+    companyContextVersion: company?.version, companyContextDigest: company ? researchSnapshotDigest(company) : undefined,
     snapshotVersion: 1, projectDigest: scopedProject ? researchSnapshotDigest(scopedProject) : undefined,
     solutionDigest: researchSnapshotDigest(solution), sensingDigest: solution.sensingProfileId && sensing ? researchSnapshotDigest(sensing) : undefined,
     evidence: evidence.map((item) => ({ id: item.id, contentDigest: researchSnapshotDigest(item) })),

@@ -43,6 +43,19 @@ AI-transformation position is owner-provided intent to test, not a verified find
 provider selection/acceptance, human calibration and production evidence remain open. Build and test
 against labelled synthetic fixtures without inventing client truth or activating paid/live services.
 
+### 2.2 Company-context continuation
+
+Current D4WN next-slice order (2026-10-17): persistent company context and its research/agent
+read boundary first; approved source inventory and first evidence-backed positioning/competitor
+brief next; live synthesis and monitoring only after explicit provider/source/budget acceptance.
+The company foundation is implemented in migration `0018`, `/company` and `/api/company-context`:
+owner-confirmed versioned strategy, optional aggregate-source references, immutable history,
+review deadlines, tenant/session authorization, optimistic edits and frozen research basis.
+The importable D4WN owner brief is `fixtures/d4wn/company-context.json`; it is not auto-installed
+into a tenant and contains no invented evidence or CRM numbers. See `docs/company-context.md`.
+Agent service authentication/tool transport, live aggregate refresh and company-context transfer
+between installations are still open. Solution-pack export does not export client strategy.
+
 ## 3. Baseline at roadmap approval
 
 The repository currently contains:

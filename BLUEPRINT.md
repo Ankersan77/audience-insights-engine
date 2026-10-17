@@ -194,6 +194,31 @@ Reports such as a Dentsu audience study must preserve their segment definitions,
 fieldwork date, method, weights, score definitions, thresholds, and limitations. Splitting a report
 into text chunks is not sufficient ingestion.
 
+### 7.5 Persistent company context
+
+Every client has one maintained, versioned company profile: offer/operating model, target audience
+and decision-makers, value proposition, intended positioning, priorities, constraints and scope.
+This is owner-declared strategy, not independent market evidence. Research findings may suggest
+a change, but may not silently overwrite it or promote strategic intent into an established fact.
+
+Keep three layers distinct: company intent; dated, governed business evidence (including CRM/sales
+aggregates); and reviewed market intelligence. The profile references approved sources instead of
+copying sales figures or contact-level CRM records. Source binding alone grants no collection or
+processing permission and is not proof of fresh data.
+
+A future agent reads current company context for each task through a tenant-authorized Core
+contract. It must not rebuild the profile from conversation memory, treat an old revision as current,
+or execute commands embedded in profile text. Owner/admin changes create append-only revisions with
+reason, author, timestamp and review deadline; competing edits must conflict rather than overwrite.
+Research freezes the version/digest it used. A changed or overdue declared profile requires refresh
+before an in-flight result can be persisted or a governed campaign decision revalidated. Historical
+artifacts retain their original basis, not a claim of current validity.
+
+The owned `/company` surface and session-scoped `company-context@1` API implement this foundation.
+Agent service authentication, agent tools and live CRM/sales synchronization remain separate release
+work requiring an explicit integration and data boundary. Existing clients without this new profile
+retain the reviewed-Market-Twin path; the company-context endpoint honestly reports `needs_context`.
+
 ## 8. Trend-first, people-blind data boundary
 
 ### 8.1 Product rule
@@ -394,6 +419,7 @@ Each client solution consists of versioned, reviewable configuration rather than
 
 - enabled ability packages and versions;
 - Market Twin taxonomy and canonical client strategy;
+- maintained company profile with review ownership and aggregate business-source bindings;
 - source connections and sensing profile;
 - brand, audience, product, competitor, journey, and campaign definitions;
 - metric dictionary, benchmark sources, and measurement rules;

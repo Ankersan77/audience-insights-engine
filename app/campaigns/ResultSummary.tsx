@@ -9,6 +9,7 @@ export function ResultSummary({ assessment }: { assessment: CampaignAssessment }
     <summary>Source-backed metrics and frozen assessment basis</summary>
     <p className="mt-2 text-sm">Result scope: {scope ? `${scope.market}/${scope.language}` : "Not recorded in this historical result"}. No pooled result.</p>
     <p className="mt-2 text-xs text-muted">Campaign revision {result.campaignSnapshot.revision}; plan version {result.measurementSnapshot.version}; Market Twin solution version {result.contextBasis?.solutionVersion ?? "missing"}. Historical snapshot, not a current availability guarantee.</p>
+    <p className="mt-1 text-xs text-muted">Company profile version: {result.contextBasis?.companyContextVersion ?? "not declared in this snapshot"}.</p>
     {result.interpretation ? <div className="mt-3 rounded-md border border-border p-3">
       <h4 className="font-medium">Analyst-authored interpretation — requires substantive human review</h4>
       {(["observation", "hypothesis", "insight", "recommendation", "clientRelevance", "alternativeExplanations", "wouldChangeConclusion", "conditions", "learningStatement"] as const).map((key) => result.interpretation![key] ? <p key={key} className="mt-2 text-sm"><strong>{key.replace(/([A-Z])/g, " $1")}:</strong> {result.interpretation![key]}</p> : null)}

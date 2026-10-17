@@ -48,6 +48,12 @@ No runtime gate is marked verified by this document update.
 
 ### Bounded research sequence
 
+The maintained declaration can now be imported from `fixtures/d4wn/company-context.json` into the
+tenant's `/company` surface. An owner/admin must inspect it and choose a review deadline/reason.
+This is a reusable draft of the above owner brief, not a runtime gate approval. Profile versions
+and optional aggregate CRM/sales source references remain separate from current research evidence.
+Agent connection/service authorization and live business-data refresh are not activated by import.
+
 1. Establish an approved source inventory and an explicit comparison rubric: audience, promise,
    organizational/operating-model work, human adoption/training, creative capability, implementation,
    proof and delivery model. Unknown details remain unknown, not negative competitor scores.
