@@ -1,12 +1,19 @@
 import type { AdapterRuntimeContext, CredentialReference } from "../connectors/contracts.ts";
 import { AcquisitionAdapterRegistry } from "./registry.ts";
 
+/** Canonical activation inventory; every production registration must be listed and tested here. */
+export const PRODUCTION_ADAPTER_IDS: readonly string[] = [];
+
 /**
  * Deliberately empty until an adapter passes source-specific permission, minimization and
  * acceptance review. Registering a connector here is the only production activation seam.
  */
 export function createProductionAdapterRegistry(): AcquisitionAdapterRegistry {
-  return new AcquisitionAdapterRegistry();
+  const registry = new AcquisitionAdapterRegistry();
+  if (JSON.stringify(registry.list()) !== JSON.stringify(PRODUCTION_ADAPTER_IDS)) {
+    throw new Error("production-adapter-inventory-mismatch");
+  }
+  return registry;
 }
 
 async function resolveDeploymentCredential(reference: CredentialReference): Promise<string> {

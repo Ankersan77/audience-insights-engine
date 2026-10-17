@@ -8,6 +8,8 @@ const implementationPlan = readFileSync(new URL("../implementation-plan.md", imp
 const exampleEnvironment = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
 const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
 const agentRules = readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8");
+const compatibilityManifest = readFileSync(new URL("../compatibility-manifest.json", import.meta.url), "utf8");
+const capabilityRegister = readFileSync(new URL("../product-capabilities.json", import.meta.url), "utf8");
 
 const failures = [];
 const versionMatch = blueprint.match(/^\| Blueprint version \|\s*([^|\n]+)\s*\|$/m);
@@ -18,7 +20,7 @@ if (versionMatch && !roadmap.includes(`BLUEPRINT.md\` version ${versionMatch[1].
 
 for (const [label, contents, phrases] of [
   ["BLUEPRINT.md", blueprint, ["AI-native", "remote Model Context Protocol (MCP)", "competitor-positioning-research", "Managed single-tenant"]],
-  ["ROADMAP.md", roadmap, ["Safe `last30days` and identity-bearing legacy removal", "MCP foundation", "Second-host portability proof"]],
+  ["ROADMAP.md", roadmap, ["R1A1 — Inventory and neutral worker extraction", "R1B — Forward schema cleanup", "MCP foundation", "Second-host portability proof"]],
   ["README.md", readme, ["AI-native", "remote MCP", "Transition status"]],
 ]) {
   for (const phrase of phrases) {
@@ -28,6 +30,16 @@ for (const [label, contents, phrases] of [
 
 if (agentRules.includes("Preserve the pinned `vendor/last30days` submodule")) {
   failures.push("AGENTS.md must not require preservation of the retired last30days dependency.");
+}
+
+for (const [label, contents] of [
+  ["compatibility-manifest.json", compatibilityManifest],
+  ["product-capabilities.json", capabilityRegister],
+]) {
+  if (!contents.includes(`\"blueprintVersion\": \"${versionMatch?.[1].trim()}\"`)
+    && !contents.includes(`\"version\": \"${versionMatch?.[1].trim()}\"`)) {
+    failures.push(`${label} must reference the canonical Blueprint version.`);
+  }
 }
 
 for (const [name, contents, target] of [

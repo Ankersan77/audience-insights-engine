@@ -33,6 +33,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -46,6 +47,9 @@ jobs:
 
       - name: Check canonical product documents
         run: pnpm check:source-of-truth
+
+      - name: Validate product governance manifests
+        run: pnpm check:governance
 
       - name: Lint
         run: pnpm lint

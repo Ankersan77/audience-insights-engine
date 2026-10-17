@@ -20,6 +20,7 @@
     "deployment:bootstrap": "tsx scripts/bootstrap-client-owned.ts",
     "test": "node scripts/run-tests.mjs",
     "test:integration": "tsx --test integration/*.integration.ts",
+    "check:governance": "node scripts/validate-product-governance.mjs",
     "check:source-of-truth": "node scripts/check-source-of-truth.mjs"
   },
   "dependencies": {

@@ -15,6 +15,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   adding a connector, ability, Market Twin record type, campaign study, or product surface.
 - Use `ROADMAP.md` as the canonical delivery sequence. `product-spec.md` and
   `implementation-plan.md` are compatibility pointers only.
+- Keep `product-capabilities.json`, `compatibility-manifest.json`, `product-decisions.json` and
+  `r0-baseline.json` aligned with product/runtime changes. Run `pnpm check:governance` before
+  shipping; do not claim `production_supported` from code tests alone.
 - Preserve the trend-first, people-blind boundary: do not create consumer profiles, cross-platform
   identities, or retained person-level public-source intelligence.
 - Keep observations, signals, facts, hypotheses, insights, recommendations, and learnings as

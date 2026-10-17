@@ -1,0 +1,320 @@
+{
+  "manifestSchemaVersion": 1,
+  "product": {
+    "id": "market-research",
+    "generation": "v1",
+    "releaseVersion": "0.1.0",
+    "releaseVersionSource": "package.json#/version",
+    "buildRevisionSource": "env:APPLICATION_VERSION"
+  },
+  "blueprint": {
+    "path": "BLUEPRINT.md",
+    "version": "2.0.0"
+  },
+  "roadmap": {
+    "path": "ROADMAP.md",
+    "blueprintVersion": "2.0.0"
+  },
+  "capabilityRegister": {
+    "path": "product-capabilities.json",
+    "schemaVersion": 1
+  },
+  "decisionRegister": {
+    "path": "product-decisions.json",
+    "schemaVersion": 1
+  },
+  "baseline": {
+    "path": "r0-baseline.json",
+    "schemaVersion": 1
+  },
+  "core": {
+    "id": "market-research-core",
+    "version": null,
+    "state": "implemented",
+    "source": "src/core/contracts.ts",
+    "limitation": "The current TypeScript contract collection has no released wire-contract version."
+  },
+  "database": {
+    "engine": "postgresql",
+    "schemaVersion": "0018_large_nick_fury",
+    "migrationHead": "0018_large_nick_fury",
+    "migrationCount": 18,
+    "journalFormatVersion": "7",
+    "journalPath": "drizzle/meta/_journal.json",
+    "historyDigest": "sha256:d91b4784281a37de28c1319fa3ff9454666718cc19638c7d326c314f35bfd5fa",
+    "upgradePolicy": "forward-only",
+    "state": "pre-trim"
+  },
+  "contracts": [
+    {
+      "id": "company-context",
+      "wireId": "company-context@1",
+      "state": "implemented",
+      "scope": "v1",
+      "schemaPath": null,
+      "sourcePaths": ["src/core/companyContext.ts", "src/db/queries/company_context.ts"],
+      "compatiblePredecessors": [],
+      "supersedes": null
+    },
+    {
+      "id": "decision-brief",
+      "wireId": "decision-brief@1",
+      "state": "implemented",
+      "scope": "transition",
+      "schemaPath": null,
+      "sourcePaths": ["src/core/contracts.ts", "src/abilities/catalog.ts"],
+      "compatiblePredecessors": [],
+      "supersedes": null
+    },
+    {
+      "id": "decision-brief",
+      "wireId": "decision-brief@2",
+      "state": "designed",
+      "scope": "v1",
+      "schemaPath": null,
+      "sourcePaths": [],
+      "compatiblePredecessors": [],
+      "supersedes": "decision-brief@1"
+    },
+    {
+      "id": "research-synthesis",
+      "wireId": "research-synthesis@2",
+      "state": "implemented",
+      "scope": "transition",
+      "schemaPath": null,
+      "sourcePaths": ["src/abilities/synthesisPrompt.ts", "src/connectors/openaiSynthesis.ts"],
+      "compatiblePredecessors": [],
+      "supersedes": null
+    },
+    {
+      "id": "campaign-assessment",
+      "wireId": "campaign-assessment@1",
+      "state": "implemented",
+      "scope": "transition",
+      "schemaPath": null,
+      "sourcePaths": ["src/core/contracts.ts", "src/abilities/catalog.ts"],
+      "compatiblePredecessors": [],
+      "supersedes": null
+    },
+    {
+      "id": "study-report",
+      "wireId": "study-report@1",
+      "state": "implemented",
+      "scope": "transition",
+      "schemaPath": null,
+      "sourcePaths": ["src/core/contracts.ts", "src/abilities/catalog.ts"],
+      "compatiblePredecessors": [],
+      "supersedes": null
+    },
+    {
+      "id": "market-research-solution",
+      "wireId": "market-research-solution@2",
+      "state": "deprecated",
+      "scope": "transition",
+      "schemaPath": null,
+      "sourcePaths": ["src/packaging/solution.ts"],
+      "compatiblePredecessors": [],
+      "supersedes": null
+    },
+    {
+      "id": "market-research-solution",
+      "wireId": "market-research-solution@3",
+      "state": "implemented",
+      "scope": "transition",
+      "schemaPath": null,
+      "sourcePaths": ["src/packaging/solution.ts"],
+      "compatiblePredecessors": ["market-research-solution@2"],
+      "supersedes": "market-research-solution@2"
+    },
+    {
+      "id": "source-adapter",
+      "wireId": "source-adapter@1",
+      "state": "implemented",
+      "scope": "v1",
+      "schemaPath": null,
+      "sourcePaths": ["src/connectors/contracts.ts", "src/evidence/adapters.ts"],
+      "compatiblePredecessors": [],
+      "supersedes": null
+    },
+    {
+      "id": "quality-rubric",
+      "wireId": "quality-rubric@1",
+      "state": "implemented",
+      "scope": "v1",
+      "schemaPath": null,
+      "sourcePaths": ["src/evaluation/scorecard.ts"],
+      "compatiblePredecessors": [],
+      "supersedes": null
+    }
+  ],
+  "mcp": {
+    "state": "designed",
+    "transport": "streamable-http",
+    "protocolVersions": [],
+    "toolset": {
+      "id": "market-research-v1",
+      "version": null,
+      "maximumTools": 6
+    },
+    "tools": [
+      {
+        "name": "research_competitor_positioning",
+        "state": "designed",
+        "inputContract": null,
+        "outputContract": "decision-brief@2",
+        "actionClass": "compute",
+        "requiredScopes": ["mr:research:run"],
+        "requiredRoles": ["owner", "admin", "researcher"],
+        "idempotency": "required",
+        "capabilityId": "competitor-positioning-research"
+      },
+      {
+        "name": "get_research_brief",
+        "state": "designed",
+        "inputContract": null,
+        "outputContract": "decision-brief@2",
+        "actionClass": "read",
+        "requiredScopes": ["mr:research:read"],
+        "requiredRoles": ["owner", "admin", "researcher", "reviewer", "viewer"],
+        "idempotency": "not_applicable",
+        "capabilityId": "research-artifacts"
+      },
+      {
+        "name": "get_market_context",
+        "state": "designed",
+        "inputContract": null,
+        "outputContract": "company-context@1",
+        "actionClass": "read",
+        "requiredScopes": ["mr:context:read"],
+        "requiredRoles": ["owner", "admin", "researcher", "reviewer", "viewer"],
+        "idempotency": "not_applicable",
+        "capabilityId": "company-context"
+      },
+      {
+        "name": "review_research_brief",
+        "state": "designed",
+        "inputContract": null,
+        "outputContract": "decision-brief@2",
+        "actionClass": "review_write",
+        "requiredScopes": ["mr:research:review"],
+        "requiredRoles": ["owner", "admin", "reviewer"],
+        "idempotency": "required",
+        "capabilityId": "research-review"
+      }
+    ]
+  },
+  "abilities": [
+    {
+      "id": "competitor-positioning-research",
+      "version": null,
+      "state": "designed",
+      "scope": "v1",
+      "outputContract": "decision-brief@2",
+      "manifestSource": null,
+      "evaluationEvidence": []
+    },
+    {
+      "id": "market-category-diagnosis",
+      "version": "1.0.0",
+      "state": "implemented",
+      "scope": "deferred",
+      "outputContract": "decision-brief@1",
+      "manifestSource": "src/abilities/catalog.ts",
+      "evaluationEvidence": []
+    },
+    {
+      "id": "audience-purchase-behavior",
+      "version": "1.0.0",
+      "state": "implemented",
+      "scope": "deferred",
+      "outputContract": "decision-brief@1",
+      "manifestSource": "src/abilities/catalog.ts",
+      "evaluationEvidence": []
+    },
+    {
+      "id": "competitor-intelligence",
+      "version": "1.0.0",
+      "state": "implemented",
+      "scope": "deferred",
+      "outputContract": "decision-brief@1",
+      "manifestSource": "src/abilities/catalog.ts",
+      "evaluationEvidence": []
+    },
+    {
+      "id": "brand-positioning-diagnosis",
+      "version": "1.0.0",
+      "state": "implemented",
+      "scope": "deferred",
+      "outputContract": "decision-brief@1",
+      "manifestSource": "src/abilities/catalog.ts",
+      "evaluationEvidence": []
+    },
+    {
+      "id": "cultural-trend-intelligence",
+      "version": "1.0.0",
+      "state": "implemented",
+      "scope": "deferred",
+      "outputContract": "decision-brief@1",
+      "manifestSource": "src/abilities/catalog.ts",
+      "evaluationEvidence": []
+    },
+    {
+      "id": "research-planning",
+      "version": "1.0.0",
+      "state": "implemented",
+      "scope": "deferred",
+      "outputContract": "decision-brief@1",
+      "manifestSource": "src/abilities/catalog.ts",
+      "evaluationEvidence": []
+    },
+    {
+      "id": "campaign-preflight",
+      "version": "1.0.0",
+      "state": "implemented",
+      "scope": "deferred",
+      "outputContract": "campaign-assessment@1",
+      "manifestSource": "src/abilities/catalog.ts",
+      "evaluationEvidence": []
+    },
+    {
+      "id": "live-campaign-intelligence",
+      "version": "1.0.0",
+      "state": "implemented",
+      "scope": "deferred",
+      "outputContract": "campaign-assessment@1",
+      "manifestSource": "src/abilities/catalog.ts",
+      "evaluationEvidence": []
+    },
+    {
+      "id": "post-campaign-learning",
+      "version": "1.0.0",
+      "state": "implemented",
+      "scope": "deferred",
+      "outputContract": "campaign-assessment@1",
+      "manifestSource": "src/abilities/catalog.ts",
+      "evaluationEvidence": []
+    },
+    {
+      "id": "brand-lift-study",
+      "version": "1.0.0",
+      "state": "implemented",
+      "scope": "deferred",
+      "outputContract": "study-report@1",
+      "manifestSource": "src/abilities/catalog.ts",
+      "evaluationEvidence": []
+    }
+  ],
+  "hosts": [],
+  "sourcePaths": [
+    { "id": "client-documents", "state": "designed", "productionAdapters": [] },
+    { "id": "trusted-web", "state": "designed", "productionAdapters": [] },
+    { "id": "licensed-listening", "state": "designed", "productionAdapters": [] }
+  ],
+  "transition": {
+    "legacyLast30days": "pending_removal",
+    "nonV1Capabilities": "implemented_unsupported",
+    "mcp": "not_implemented",
+    "productionSourceRegistry": "empty",
+    "decisionBriefV2": "not_implemented"
+  }
+}

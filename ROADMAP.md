@@ -20,7 +20,9 @@ implementation journal.
 
 ## 2. Delivery rules
 
-1. Follow the phases in order. Later product work cannot bypass an open earlier gate.
+1. Follow the explicit dependency table. Later product work cannot bypass an unmet dependency; the
+   only permitted overlap is R1A1 discovery/extraction after the repository baseline while the
+   external installation preflight remains open.
 2. Keep legacy removal, schema destruction and new MCP functionality in separate commits and
    releases.
 3. Prefer reversible disable/park steps before destructive deletion.
@@ -38,17 +40,20 @@ implementation journal.
 
 | Phase | Outcome | Depends on |
 |---|---|---|
-| R0 | Scope lock, capability register and verified baseline | Blueprint v2 approved |
-| R1 | Safe `last30days` and identity-bearing legacy removal | R0 |
-| R2 | One active v1 capability; non-v1 product parked | R1 |
+| R0A | Scope lock, capability register and repository baseline | Blueprint v2 approved |
+| R0B | Installation inventory, recovery proof and owner acceptance | R0A; may use R1A1 inventory tooling |
+| R1A1 | Read-only discovery and neutral worker extraction | R0A |
+| R1A2 | `last30days` code and packaging removal | R0B + R1A1 |
+| R1B | Forward legacy schema cleanup | R1A2 + disposition approval + migration recovery gate |
+| R2 | One active v1 capability; non-v1 product parked | R1B |
 | R3 | Remote MCP foundation and read-only context tool | R2 |
 | R4 | Three live source paths and competitor/positioning research | R3 |
 | R5 | Complete the four-tool research and review experience | R4 |
 | R6 | Second-host portability proof | R5 |
 | R7 | Deployment, recovery, service and paying-pilot proof | R6 |
 
-No new product capability begins before R7. After R7, pilot evidence selects exactly one next
-ability.
+No additional product capability beyond the approved v1 competitor/positioning ability begins
+before R7. After R7, pilot evidence selects exactly one next ability.
 
 ## 4. Cross-cutting definition of done
 
@@ -69,6 +74,10 @@ Every applicable work item includes:
 
 ## 5. R0 — Scope lock and safe baseline
 
+R0 has two gates. R0A is repository-verifiable. R0B needs installation/operator evidence. R1A1 may
+run after R0A because its read-only inventory tooling helps produce R0B evidence; R1A2 and R1B may
+not start while R0B is open.
+
 ### Outcome
 
 The repository has one machine-readable capability inventory, the version 1 product decisions are
@@ -78,7 +87,8 @@ owned, and cleanup starts from a reproducible green state.
 
 #### R0.1 Capability register
 
-Create `product-capabilities.yaml` and a CI validator. Each capability records:
+Create `product-capabilities.json` and a dependency-free CI validator. JSON is used deliberately to
+avoid adding a YAML parser solely for one governance file. Each capability records:
 
 - stable ID, purpose and non-purpose;
 - owner and release state;
@@ -107,7 +117,7 @@ Create a machine-readable manifest covering:
 
 #### R0.3 Decision owners
 
-Record owners and deadlines for:
+Record accountable owner roles and `requiredBefore` gates for:
 
 - primary host and second portability host;
 - D4WN competitor set and source inventory;
@@ -121,7 +131,8 @@ Record owners and deadlines for:
 - service objectives, RPO/RTO and support terms.
 
 Unresolved items remain visible blockers for the phase that needs them. They do not invite speculative
-implementation.
+implementation. Role assignment is separate from acceptance: `ownerAssignments` records the named
+person's acceptance and durable evidence before R0 can close.
 
 #### R0.4 Baseline evidence
 
@@ -129,18 +140,26 @@ implementation.
 - run the complete repository verification;
 - apply all migrations to an empty PostgreSQL test database;
 - run integration and authenticated HTTP cases;
-- test an upgrade from a representative existing database;
+- test an upgrade from a representative pre-`0018` database with legacy rows through the existing
+  immutable history to `0018`;
 - take and restore a test backup;
 - inventory all active routes, queues, tables and provider dependencies.
 
-### Exit gate
+### R0A exit gate
 
 - Blueprint and roadmap versions agree.
 - Capability and compatibility manifests validate in CI.
-- Decision register has named owners and blockers.
-- Empty and representative-upgrade database tests pass.
-- Backup restore is evidenced.
-- The pre-trim revision is tagged and recoverable.
+- Decision register has accountable roles, required-before gates and explicit blockers.
+- Empty-database and authenticated integration tests pass.
+- The pre-trim revision is annotated, pushed and recoverable; a fresh CI checkout fetches and
+  validates it against the frozen baseline commit.
+
+### R0B exit gate
+
+- Accountable people accept the owner roles with timestamps and durable evidence.
+- Every in-scope installation is inventoried; no unknown or `not supplied` installation remains.
+- Representative pre-`0018` upgrade to `0018` passes with legacy rows.
+- PostgreSQL-native backup restore is timed and evidenced.
 
 ### Rollback
 
@@ -149,14 +168,14 @@ backup remain the recovery point for later phases.
 
 ## 6. R1 — Safe legacy removal
 
-R1 is deliberately separate from MCP work. It is delivered as two reviewable releases.
+R1 is deliberately separate from MCP work. It is delivered as three reviewable releases.
 
-### R1A — Data decision and code detachment
+### R1A1 — Inventory and neutral worker extraction
 
 #### Outcome
 
-`last30days` and the legacy brand/instruction/run/insight workflow no longer execute, ship or appear
-as an active product, while legacy database state remains readable for a safe migration decision.
+The team can inventory legacy state without changing it, and canonical workers no longer depend on
+the legacy `runQueue` module for their PgBoss lifecycle.
 
 #### Data preflight
 
@@ -166,19 +185,61 @@ Inventory rows and dependencies for at least:
 - `research_instruction` and `research_run`;
 - legacy `evidence`, including `author_handle`;
 - legacy `insight` and `insight_evidence`;
-- related audit records, brands and markets.
+- related audit records, brands and markets;
+- `ability_manifest`, including every stored manifest's relationship to the active and parked
+  ability catalogs.
 
 For every known installation, decide whether each class is exported, tombstoned, retained for a
-bounded audit period or deleted. Do not drop brands or markets until canonical dependencies prove
-they are unused.
+bounded audit period or deleted. A missing installation is a failing discovery state, not a passing
+exception or implicit waiver. Do not drop brands or markets until canonical dependencies prove they
+are unused. Any identity-bearing export must be encrypted, least-privilege, access-audited,
+checksum-bearing, stored in an approved location, given an expiry/destruction date and covered by
+the same legal-hold and incident rules as the source database.
 
-#### Code and packaging removal
+#### Worker extraction
+
+- extract PgBoss connection, startup, error handling and graceful shutdown from `runQueue.ts` into a
+  neutral worker-runtime module before deleting the legacy queue; today `runQueue.ts` returns the
+  only PgBoss instance used by canonical acquisition, monitoring and synthesis workers;
+- extract canonical retention, session cleanup and acquisition dispatch from the parked monitoring
+  scheduler into a canonical maintenance scheduler;
+- prove canonical acquisition, synthesis, retention, session cleanup, registration, execution and
+  graceful shutdown against that neutral runtime;
+- keep `research-run` fail-closed and make no legacy row changes.
+
+#### Exit gate
+
+- the inventory command/export is read-only, tenant-aware and checksum-bearing;
+- every in-scope installation has a recorded migration head, table counts and `research-run` queue
+  state; zero installations remain unknown or `not supplied` before R1A2;
+- canonical queues start, execute and drain without importing the legacy run queue;
+- canonical maintenance starts without enabling monitoring or briefings;
+- all verification remains green.
+
+#### Rollback
+
+Revert the worker extraction. No schema or legacy row has changed.
+
+### R1A2 — Legacy code and packaging removal
+
+#### Outcome
+
+`last30days` and the legacy brand/instruction/run/insight workflow no longer execute, ship or appear
+as an active product, while legacy database state remains operator-readable through controlled SQL
+or an export artifact for the R1B decision.
+
+#### Work
 
 - remove `/runs`, legacy run trigger/cancel APIs and run UI;
 - remove brand research-instruction surfaces that only configure `last30days`;
 - remove legacy insights queue/review surfaces that do not use canonical artifacts;
 - remove `runQueue`, `runLast30Days`, legacy `draftInsights`, compact-report parsing and smoke script;
-- remove the legacy feature flag and metrics;
+- remove the direct Anthropic Messages integration embedded in `draftInsights`; it is legacy code,
+  not an approved synthesis adapter;
+- remove the legacy evidence purger or redirect retention exclusively through the canonical
+  evidence-retention path;
+- remove the legacy feature flag and legacy-only SLO/check definitions, but retain the shared
+  redacted `logEvent` telemetry primitive used by canonical paths;
 - stop the worker subscribing to the legacy queue;
 - remove Python and the vendored engine from the runtime image;
 - remove the Git submodule and `.gitmodules` requirement;
@@ -193,9 +254,14 @@ they are unused.
   documentation;
 - legacy routes return 404;
 - worker starts only canonical queues;
+- the full canonical lifecycle from R1A1 still passes: acquisition, synthesis, retention, session
+  cleanup, registration/execution, graceful drain and restart catch-up;
+- monitoring and briefings remain disabled in the final image;
 - production image contains neither Python nor the vendored engine;
+- CI builds the production image and records an image inspection or SBOM assertion proving the
+  absence of Python and the vendored engine;
 - build and all non-destructive integration tests pass;
-- legacy data remains unchanged and readable pending R1B.
+- legacy data remains unchanged and operator-readable through controlled SQL/export pending R1B.
 
 #### Rollback
 
@@ -209,13 +275,28 @@ Identity-bearing and unused legacy storage is removed after explicit data sign-o
 
 #### Work
 
+- enumerate every installation, its migration head, the `research-run` PgBoss queue state and row
+  counts/client distribution for every legacy table before approving deletion;
+- require zero active/retry legacy queue jobs; close or archive the queue through supported PgBoss
+  administration rather than ad-hoc table deletion;
+- do not auto-promote legacy evidence or insights into canonical evidence or Market Twin; material
+  records must be re-onboarded through current rights, method, minimization and review contracts;
 - create a forward migration from the current schema;
 - remove approved legacy tables, enums, columns, indexes and foreign keys;
 - remove `author_handle` and any retained provider-shaped personal fields;
-- preserve required redacted audit/tombstone history;
+- preserve only required redacted audit/tombstone history; do not bulk-copy legacy `audit_log`
+  payloads into `governance_audit`;
 - update Drizzle schema and queries;
+- drop without `CASCADE` in dependency order so an unknown dependency fails the migration instead of
+  being silently destroyed;
 - test both fresh install and upgrade from the current migration head with representative rows;
-- execute a timed backup/restore and forward-fix exercise.
+- before each target installation, record the backup identifier, timestamp and checksum; prove
+  restore or point-in-time recovery; set migration-specific RPO/RTO; and choose either a
+  write-quiesce/read-only window or a reviewed WAL/PITR reconciliation plan;
+- record that old code is compatible only with the pre-migration database, preserve a remotely
+  recoverable release tag/artifact, and require an explicit owner go/no-go;
+- execute a timed backup/restore and forward-fix exercise using those installation-specific
+  controls.
 
 Historical migration files remain unchanged.
 
@@ -229,8 +310,9 @@ Historical migration files remain unchanged.
 
 #### Rollback
 
-There is no production down-migration. Recover from the verified backup or issue a reviewed forward
-fix. Tag the release before applying the production migration.
+There is no production down-migration. Recover through the installation-specific restore/PITR plan
+or issue a reviewed forward fix. Never attach old code to the contracted database. Tag and publish
+the recoverable release artifact before applying the production migration.
 
 ## 7. R2 — Activate only the v1 product
 
@@ -263,8 +345,9 @@ Retain only what the vertical slice needs:
 ### Parked capabilities
 
 Park market/category diagnosis, broad audience research, cultural trends, general research planning,
-campaign pre-flight/live/post, Brand Lift, monitoring/sensing/briefings, external delivery and broad
-industry packs.
+campaign pre-flight/live/post, Brand Lift and monitoring/sensing/briefings. Remove the residual
+external-delivery schema in R1B; broad industry packs remain deferred/not implemented and therefore
+have no runtime capability to park.
 
 Parking first means reversible deny-by-default controls:
 
@@ -281,6 +364,9 @@ cost. Git history is the archive; dormant runtime code is not.
 
 Reduce active navigation to company context, sources/rights, briefs/review and quality/operations.
 `/projects` may remain an internal artifact view, but it is not the primary user experience.
+Before monitoring routes are parked, move acquisition-job cancellation out of
+`/api/monitoring/jobs/[id]/cancel` into a neutral application service and v1 administration route;
+prove tenant, authorization, idempotency and unknown-outcome behavior there.
 
 ### Contract corrections before MCP
 
@@ -290,12 +376,17 @@ Reduce active navigation to company context, sources/rights, briefs/review and q
 - resolve the verbatim-citation validation mismatch and exclude unreviewed exact excerpts from v1;
 - define every wire-status semantic and remove states no active path can produce;
 - revalidate current rights, freshness and context during review, not only during drafting;
-- prepare identity mapping by issuer and subject rather than subject alone.
+- prepare identity mapping by issuer and subject rather than subject alone;
+- define a versioned successor to `quality-rubric@1` that encodes Blueprint v2 percentage thresholds,
+  AI-host gates, evidence expiry and remediation; include its persistence migration, validator and
+  evaluation upgrade before R4 can use it as a release gate.
 
 ### Exit gate
 
 - only `competitor-positioning-research@1` can enter an active solution;
 - parked endpoints, schedulers and imports fail closed;
+- canonical acquisition cancellation remains available through the neutral route while every
+  monitoring route stays fail-closed;
 - active UI and documentation make no campaign, Brand Lift or monitoring product claim;
 - capability register matches runtime behavior;
 - existing canonical artifacts remain readable.
@@ -391,10 +482,15 @@ authority before persistence. Provider output cannot grant citations, rights or 
 
 ### R4.3 Research tool
 
-Implement `research_competitor_positioning` for the server-pinned
+Implement `research_competitor_positioning` and the read-only `get_research_brief` for the server-pinned
 `competitor-positioning-research@1` ability. The host cannot supply an ability ID, source/evidence IDs
 or a completed analysis. The tool is asynchronous and returns a bounded state such as `queued`,
 `success`, `needs_context`, `blocked` or `failed`, plus a durable research reference.
+
+`get_research_brief` is the only host polling/resume path for queued work. It returns bounded
+queued/running/final state and, when final, the exact versioned brief with evidence, limitations and
+research gaps. R4 briefs remain `needs_human`; they are not decision-ready until the R5 review tool
+accepts the displayed version.
 
 Persist invocations independently of the MCP session with a unique tenant/subject/tool/idempotency
 key, input digest, state, artifact reference and timestamps. Host timeouts and retries must not create
@@ -408,6 +504,8 @@ versions. Insufficient coverage returns `needs_context`.
 - all three source paths produce current live receipts;
 - every material brief claim has traceable, permitted evidence;
 - release evaluation meets the Blueprint's initial thresholds;
+- the versioned Blueprint-v2 rubric and AI-host gates, not the transitional rubric alone, produce
+  the release decision;
 - named reviewers record remediation and retest;
 - p50/p95 latency, maximum brief cost and acceptable abstention range are recorded;
 - source/model kill switches and budget revocation stop new work immediately.
@@ -426,14 +524,12 @@ while administrators use only the narrow supporting surface.
 
 ### Toolset completion
 
-Add two tools:
+Add the final write tool:
 
-- `get_research_brief`, which returns queued/running/final state and includes evidence, limitations
-  and research gaps when complete;
 - `review_research_brief`, which accepts, rejects or requests revision of the exact displayed brief
   version.
 
-Together with `get_market_context` and `research_competitor_positioning`, this completes the initial
+Together with the R3 `get_market_context` and R4 research/read tools, this completes the initial
 four-tool set. Source health remains in the administration surface. A fifth or sixth tool requires a
 named pilot case, failing evaluation and Blueprint-compliant change record.
 
@@ -611,6 +707,7 @@ schema-cleanup release and every production release.
 
 1. Approve Blueprint v2 and this roadmap.
 2. Commit the canonical documentation reset.
-3. Execute R0 before deleting or building runtime code.
+3. Complete R0A; then run R1A1 discovery/extraction while closing R0B. Do not start R1A2 until both
+   R0B and R1A1 pass.
 4. Name primary/secondary hosts and decision owners.
 5. Produce the legacy data inventory and pre-trim recovery evidence.

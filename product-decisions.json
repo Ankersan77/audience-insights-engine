@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 1,
+  "product": "market-research",
+  "updated": "2026-10-17",
+  "statusRule": "A proposal is not an approval. Open decisions remain blockers at their requiredBefore gate.",
+  "ownerAssignments": [
+    { "role": "commercial-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
+    { "role": "d4wn-product-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
+    { "role": "data-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
+    { "role": "operations-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
+    { "role": "privacy-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
+    { "role": "research-product-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
+    { "role": "security-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
+    { "role": "source-integration-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
+    { "role": "source-rights-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null }
+  ],
+  "decisions": [
+    {
+      "id": "primary-host",
+      "question": "Which AI host is the first administered pilot installation?",
+      "status": "proposed",
+      "proposal": "chatgpt",
+      "owner": "d4wn-product-owner",
+      "requiredBefore": "R3",
+      "blocker": "Administrator installation, OAuth profile and MCP conformance cannot be finalized without the host choice.",
+      "decisionEvidence": null
+    },
+    {
+      "id": "portability-host",
+      "question": "Which second AI host proves portability without a Core fork?",
+      "status": "proposed",
+      "proposal": "claude",
+      "owner": "d4wn-product-owner",
+      "requiredBefore": "R6",
+      "blocker": "Second-host package and conformance criteria depend on the selected host.",
+      "decisionEvidence": null
+    },
+    {
+      "id": "d4wn-competitor-set",
+      "question": "Which competitors and substitute categories define the first bounded D4WN comparison?",
+      "status": "needs_context",
+      "proposal": null,
+      "owner": "research-product-owner",
+      "requiredBefore": "R4",
+      "blocker": "The comparison universe and exclusion rationale have not been approved.",
+      "decisionEvidence": null
+    },
+    {
+      "id": "d4wn-source-inventory",
+      "question": "Which exact client documents and trusted-web sources are approved for the first pilot?",
+      "status": "needs_context",
+      "proposal": null,
+      "owner": "source-rights-owner",
+      "requiredBefore": "R4",
+      "blocker": "No source-by-source purpose, rights, quotation, retention and revocation decision exists.",
+      "decisionEvidence": null
+    },
+    {
+      "id": "licensed-listening-provider",
+      "question": "Which single licensed listening or public-conversation provider is permitted for v1?",
+      "status": "needs_context",
+      "proposal": null,
+      "owner": "source-integration-owner",
+      "requiredBefore": "R4",
+      "blocker": "Provider coverage, rights, cost, retention, aggregation and failure behavior are unapproved.",
+      "decisionEvidence": null
+    },
+    {
+      "id": "qualified-reviewers",
+      "question": "Who signs research quality, source rights, security/privacy and operations evidence?",
+      "status": "needs_context",
+      "proposal": null,
+      "owner": "d4wn-product-owner",
+      "requiredBefore": "R4",
+      "blocker": "Named qualified people have not accepted the review responsibilities.",
+      "decisionEvidence": null
+    },
+    {
+      "id": "data-policy-values",
+      "question": "What minimum cohort, suppression, evidence retention and raw-retention values apply?",
+      "status": "needs_context",
+      "proposal": null,
+      "owner": "privacy-owner",
+      "requiredBefore": "R4",
+      "blocker": "Fixture values are not production policy approval.",
+      "decisionEvidence": null
+    },
+    {
+      "id": "managed-deployment-region",
+      "question": "Which region and responsibility split define the managed single-tenant reference?",
+      "status": "needs_context",
+      "proposal": "eu-region; exact provider and responsibility matrix unselected",
+      "owner": "operations-owner",
+      "requiredBefore": "R7",
+      "blocker": "Hosting provider, region, backup, secret and incident owners are not approved.",
+      "decisionEvidence": null
+    },
+    {
+      "id": "oauth-reference-flow",
+      "question": "Which IdP and delegated/workload OAuth profile is the reference MCP flow?",
+      "status": "needs_context",
+      "proposal": null,
+      "owner": "security-owner",
+      "requiredBefore": "R3",
+      "blocker": "Current OneLogin browser flow is not an agent authorization profile.",
+      "decisionEvidence": null
+    },
+    {
+      "id": "cost-ceilings",
+      "question": "What per-brief, per-source and per-installation cost ceilings apply to the pilot?",
+      "status": "needs_context",
+      "proposal": null,
+      "owner": "commercial-owner",
+      "requiredBefore": "R4",
+      "blocker": "No accepted unit-economics or provider-cost budget exists.",
+      "decisionEvidence": null
+    },
+    {
+      "id": "pilot-commercial-terms",
+      "question": "What implementation, subscription/support and provider-usage terms define the paying pilot?",
+      "status": "needs_context",
+      "proposal": null,
+      "owner": "commercial-owner",
+      "requiredBefore": "R7",
+      "blocker": "Price, inclusions, modification rights and willingness-to-pay evidence are missing.",
+      "decisionEvidence": null
+    },
+    {
+      "id": "privacy-legal-package",
+      "question": "What DPA, subprocessors, residency, DSR and DPIA decisions govern the reference service?",
+      "status": "needs_context",
+      "proposal": null,
+      "owner": "privacy-owner",
+      "requiredBefore": "R7",
+      "blocker": "Legal roles and documents have not been approved.",
+      "decisionEvidence": null
+    },
+    {
+      "id": "service-objectives",
+      "question": "What availability, freshness, support, RPO and RTO objectives are sold?",
+      "status": "needs_context",
+      "proposal": null,
+      "owner": "operations-owner",
+      "requiredBefore": "R7",
+      "blocker": "No service objectives or timed restore evidence exist.",
+      "decisionEvidence": null
+    },
+    {
+      "id": "legacy-data-disposition",
+      "question": "For every installation, which legacy rows are exported, retained, tombstoned or deleted?",
+      "status": "needs_context",
+      "proposal": "Do not auto-promote legacy evidence or insights; reconcile useful brand intent manually.",
+      "owner": "data-owner",
+      "requiredBefore": "R1B",
+      "blocker": "Installation inventory, row counts, legal holds, export checksums and restore proof are missing.",
+      "decisionEvidence": null
+    }
+  ]
+}

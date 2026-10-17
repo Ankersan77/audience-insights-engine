@@ -17,6 +17,10 @@ without building consumer profiles or cross-platform identity graphs.
 - [`product-spec.md`](product-spec.md) and [`implementation-plan.md`](implementation-plan.md) —
   compatibility pointers for legacy links only.
 
+Machine-readable governance is kept in `compatibility-manifest.json`,
+`product-capabilities.json`, `product-decisions.json` and `r0-baseline.json`. Run
+`pnpm check:governance` to detect scope, dependency, version, route, queue, table and migration drift.
+
 ## Version 1 product boundary
 
 Version 1 has:

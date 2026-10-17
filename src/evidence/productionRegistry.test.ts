@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createProductionRuntimeContext } from "./productionRegistry.ts";
+import { createProductionAdapterRegistry, createProductionRuntimeContext, PRODUCTION_ADAPTER_IDS } from "./productionRegistry.ts";
+
+test("production adapter inventory exactly matches runtime registration", () => {
+  assert.deepEqual(createProductionAdapterRegistry().list(), PRODUCTION_ADAPTER_IDS);
+});
 
 test("production credential resolver accepts only this installation's source key namespace", async () => {
   const names = ["ENABLE_ENV_CREDENTIAL_RESOLVER", "MARKET_RESEARCH_CLIENT_ID", "MARKET_RESEARCH_SOURCE_KEY_CLIENT_7_FORUM"] as const;
