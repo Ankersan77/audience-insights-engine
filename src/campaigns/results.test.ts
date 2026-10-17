@@ -6,6 +6,7 @@ import { evaluateCampaignResults, parseMetricSelections } from "./results.ts";
 import { redactExpiredCitationCopies } from "../operations/retention.ts";
 import { parseManualAggregate } from "../evidence/manualAggregate.ts";
 import { parseCampaignInterpretation } from "./interpretation.ts";
+import { measurementConfiguration } from "./measurementScope.ts";
 
 const now = "2026-10-16T00:00:00.000Z";
 function fixture() {
@@ -64,6 +65,34 @@ test("readbacks cannot silently borrow solution scope or approve a mismatched me
   input.campaign.targetScopes = [...input.campaign.targetScopes!, { market: "SE", language: "sv" }];
   assert.throws(() => evaluateCampaignResults(input), /declared campaign/);
   assert.equal(evaluateCampaignResults({ ...input, market: "DK", language: "da" }).assessment.status, "needs_context");
+});
+
+test("different markets reconcile their own populations, multiple metrics, baselines and thresholds", () => {
+  const input = fixture(), dk = { market: "DK", language: "da" }, se = { market: "SE", language: "sv" };
+  input.campaign.targetScopes = [dk, se]; input.plan.plan.targetScopes = [dk, se];
+  const local = measurementConfiguration(input.plan.plan);
+  const swedish = { ...local, population: "Swedish adults", metrics: [{ ...local.metrics[0], population: "Swedish adults" }, { ...local.metrics[0], key: "awareness", label: "Awareness", population: "Swedish adults" }], baseline: { consideration: 0.5, awareness: 0.4 }, targets: { consideration: 0.65, awareness: 0.5 }, materialityThresholds: { consideration: 0.2, awareness: 0.02 }, attributionAssumptions: ["Swedish method limits"] };
+  input.plan.plan.scopeMeasurements = [{ scope: dk, measurement: local }, { scope: se, measurement: swedish }];
+  input.sources.solution = { ...input.sources.solution!, markets: ["DK", "SE"], languages: ["da", "sv"], providerBindings: { metrics: "metrics", swedish: "swedish" } };
+  input.sources.sourceBindings = { metrics: "source", swedish: "source-se" };
+  const seEvidence = input.sources.evidence.map((item, index) => ({ ...item, id: String(20 + index), sourceConnectionId: "source-se", applicability: { ...item.applicability, markets: ["SE"], languages: ["sv"] }, method: { ...item.method, universe: "Swedish adults" } }));
+  input.sources.evidence = [...input.sources.evidence, ...seEvidence];
+  input.sources.intelligence = [...input.sources.intelligence, { ...input.sources.intelligence[0], id: "strategy-se", evidenceIds: ["21"], applicability: seEvidence[1].applicability }];
+  const seObservations = input.observations.map((item, index) => ({ ...item, id: String(3 + index), evidenceId: String(20 + index), value: index ? 0.6 : 0.5, dimensions: { ...item.dimensions, population: "Swedish adults" } }));
+  input.observations = [...input.observations, ...seObservations, ...seObservations.map((item, index) => ({ ...item, id: String(5 + index), metricKey: "awareness", value: index ? 0.45 : 0.4 }))];
+  const selected = [{ metricKey: "consideration", baselineObservationId: "3", resultObservationId: "4" }, { metricKey: "awareness", baselineObservationId: "5", resultObservationId: "6" }];
+  const danish = evaluateCampaignResults({ ...input, ...dk }).assessment;
+  assert.equal(danish.status, "ready"); assert.equal(danish.comparisons[0].targetMet, true);
+  const sw = evaluateCampaignResults({ ...input, ...se, selections: selected }).assessment;
+  assert.equal(sw.status, "ready", sw.researchGaps.join(";"));
+  assert.equal(sw.comparisons.length, 2); assert.equal(sw.comparisons[0].baseline, 0.5);
+  assert.equal(sw.comparisons[0].targetMet, false); assert.equal(sw.comparisons[0].materialChange, false);
+  assert.equal(sw.comparisons[1].materialChange, true); assert.deepEqual(sw.targetScope, se);
+  assert.ok(sw.watchouts.includes("Swedish method limits"));
+  assert.equal(evaluateCampaignResults({ ...input, ...se }).assessment.status, "needs_context", "Danish observations cannot stand in for Swedish results");
+  assert.equal(evaluateCampaignResults({ ...input, ...se, selections: selected.slice(0, 1) }).assessment.status, "needs_context", "all scoped metrics are required");
+  input.sources.evidence = input.sources.evidence.map((item) => item.id === "21" ? { ...item, applicability: { ...item.applicability, markets: ["DK", "SE"] } } : item);
+  assert.equal(evaluateCampaignResults({ ...input, ...se, selections: selected }).assessment.status, "needs_context", "pooled evidence is not a Swedish result");
 });
 
 test("retention removes copied metric values and differences without erasing lineage", () => {

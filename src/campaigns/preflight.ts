@@ -8,6 +8,7 @@ import { assessPreflight, type CampaignAssessment } from "./analysis.ts";
 import { validateMeasurementPlan } from "../core/validation.ts";
 import { PREFLIGHT_DIMENSIONS, type PreflightDimension } from "./preflightFields.ts";
 import { resolveCampaignScope, sameCampaignScopes } from "./scope.ts";
+import { measurementForScope } from "./measurementScope.ts";
 
 export type PreflightReview = {
   pointOfView: string;
@@ -71,6 +72,10 @@ export function evaluateContextualPreflight(input: {
   const structural = assessPreflight({ campaign: input.campaign, measurementPlan: input.plan?.plan, strategicEvidence: primary.selected, brandConstraints: input.brandConstraints });
   const gaps = [...prepared.gaps, ...primary.gaps, ...structural.researchGaps];
   if (scopeGap) gaps.push(scopeGap);
+  if (input.plan && targetScope) {
+    try { measurementForScope(input.plan.plan, targetScope); }
+    catch { gaps.push("An explicit measurement configuration is required for every campaign market/language pair."); }
+  }
   if (!sameCampaignScopes(input.campaign.targetScopes, input.plan?.plan.targetScopes)) gaps.push("The measurement plan must explicitly cover the current campaign scope; replace and review it after scope changes.");
   if (!input.plan || input.plan.reviewState !== "accepted") gaps.push("The measurement plan requires explicit acceptance before strategic approval.");
   if (input.plan && (!validateMeasurementPlan(input.plan.plan).valid || input.plan.plan.clientId !== input.campaign.clientId || input.plan.plan.campaignId !== input.campaign.id)) gaps.push("A valid, campaign-scoped measurement plan is required.");

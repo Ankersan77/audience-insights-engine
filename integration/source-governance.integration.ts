@@ -546,8 +546,13 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       const scopes = [dk, se];
       const created = await createCampaignRecord({ clientId: f.tenant.id, name: "Synthetic two-market campaign", objective: "Consideration", audience: "Declared adults in each market", proposition: "Accessible quality", creativeRoutes: ["Demonstration"], channels: ["owned"], budgetAssumptions: ["Bounded pilot"], strategicEvidenceIds: evidence.flatMap((item) => item.evidenceIds), brandConstraints: ["No causal claims"], targetScopes: scopes });
       const plan = { objective: "Consideration", hypothesis: "Consideration may change", population: "Declared adults in each market", metrics: [{ key: "consideration", label: "Consideration", unit: "rate", direction: "increase" as const, aggregation: "rate" as const, population: "Declared adults in each market" }], baseline: { consideration: 0.2 }, targets: { consideration: 0.25 }, checkpoints: [new Date().toISOString()], attributionAssumptions: ["Descriptive per-market only"], materialityThresholds: { consideration: 0.02 }, decisionRules: ["Review each market separately"] };
+      const scopedMeasurement = (scope: typeof dk) => {
+        const population = scope.market === "SE" ? "Swedish adults" : "Danish adults";
+        return { population, metrics: [{ ...plan.metrics[0], population }], baseline: { consideration: scope.market === "SE" ? 0.5 : 0.2 }, targets: { consideration: scope.market === "SE" ? 0.65 : 0.25 }, checkpoints: plan.checkpoints, attributionAssumptions: plan.attributionAssumptions, materialityThresholds: plan.materialityThresholds, decisionRules: plan.decisionRules };
+      };
       const replacePlan = async () => {
-        const result = await createMeasurementPlanRecord({ clientId: f.tenant.id, campaignId: created.id, plan: { ...plan, targetScopes: [{ market: "US", language: "en" }] } });
+        const currentScopes = (await listCampaignWorkspace(f.tenant.id))[0].payload.campaign.targetScopes!;
+        const result = await createMeasurementPlanRecord({ clientId: f.tenant.id, campaignId: created.id, plan: { ...plan, targetScopes: [{ market: "US", language: "en" }], scopeMeasurements: currentScopes.map((scope) => ({ scope, measurement: scopedMeasurement(scope) })) } });
         assert.deepEqual(result.plan.targetScopes, (await listCampaignWorkspace(f.tenant.id))[0].payload.campaign.targetScopes, "server scope overrides body claims");
         await reviewMeasurementPlan({ clientId: f.tenant.id, campaignId: created.id, reviewerUserId: user.id, decision: "accepted" });
       };
@@ -603,7 +608,44 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
           assert.equal((await server.request(`/api/campaigns/${created.id}/transition`, token, { nextState: "approved" })).status, 403);
           const { runCampaignScopeBrowser } = await import("./campaign-scope-browser");
           await runCampaignScopeBrowser(server.base, token);
+          const draftResponse = await server.request("/api/campaigns", token, { name: "Scoped measurement HTTP draft", objective: plan.objective, audience: "Declared adults", proposition: "Accessible quality", targetScopes: scopes });
+          assert.equal(draftResponse.status, 201);
+          const draft = (await draftResponse.json()).campaign;
+          const { measurementConfiguration } = await import("../src/campaigns/measurementScope");
+          const body = { objective: plan.objective, hypothesis: plan.hypothesis, expectedRevision: 1, expectedPlanVersion: null as number | null,
+            scopeMeasurements: scopes.map((scope, index) => ({ scope, measurement: { ...measurementConfiguration(plan), population: index ? "Swedish adults" : "Danish adults", metrics: [{ ...plan.metrics[0], population: index ? "Swedish adults" : "Danish adults" }], baseline: { consideration: index ? 0.5 : 0.2 }, targets: { consideration: index ? 0.65 : 0.25 } } })) };
+          const measurementPath = `/api/campaigns/${draft.id}/measurement`;
+          for (const invalid of [{ ...body, scopeMeasurements: body.scopeMeasurements.slice(0, 1) }, { ...body, clientId: other.tenant.id },
+            { ...body, scopeMeasurements: body.scopeMeasurements.map((item) => ({ ...item, measurement: { ...item.measurement, baseline: { consideration: null } } })) }]) assert.equal((await server.request(measurementPath, token, invalid)).status, 400);
+          const planned = await server.request(measurementPath, token, body);
+          assert.equal(planned.status, 201, await planned.clone().text());
+          const persistedPlan = (await planned.json()).measurementPlan;
+          assert.equal(persistedPlan.plan.scopeMeasurements[1].measurement.baseline.consideration, 0.5);
+          assert.equal(persistedPlan.plan.scopeMeasurements[1].measurement.metrics[0].population, "Swedish adults");
+          assert.equal((await server.request(measurementPath, token, body)).status, 409);
+          assert.equal((await server.request(`/api/campaigns/${draft.id}/measurement/review`, token, { decision: "accepted" })).status, 403);
+          const edits = await Promise.all([server.request(measurementPath, token, { ...body, expectedPlanVersion: 1 }), server.request(measurementPath, token, { ...body, expectedPlanVersion: 1 })]);
+          assert.deepEqual(edits.map((item) => item.status).sort(), [201, 409]);
+          const savedAudit = await db.select().from(governanceAudit).where(and(eq(governanceAudit.clientId, f.tenant.id), eq(governanceAudit.entityType, "measurement_plan")));
+          assert.equal(savedAudit.filter((item) => (item.redactedAfterJson as { campaignId?: number }).campaignId === draft.id).length, 2);
+          assert.equal((await server.request(`/api/campaigns/${draft.id}/scope`, token, { targetScopes: [dk], expectedRevision: 1 })).status, 200);
+          assert.equal((await server.request(measurementPath, token, { ...body, expectedPlanVersion: 2 })).status, 409);
+          assert.equal((await server.request(measurementPath, token, { ...body, expectedRevision: 2, expectedPlanVersion: 2 })).status, 400);
+          assert.equal((await server.request(measurementPath, token, { ...body, expectedRevision: 2, expectedPlanVersion: 2, scopeMeasurements: body.scopeMeasurements.slice(0, 1) })).status, 201);
+          const foreignDraft = await createCampaignRecord({ ...created.payload.campaign, clientId: other.tenant.id, targetScopes: scopes, strategicEvidenceIds: [], brandConstraints: [] });
+          assert.equal((await server.request(`/api/campaigns/${foreignDraft.id}/measurement`, token, body)).status, 404);
+          await db.update(clientMembership).set({ role: "reviewer" }).where(and(eq(clientMembership.clientId, f.tenant.id), eq(clientMembership.userId, user.id)));
+          const reviewPath = `/api/campaigns/${draft.id}/measurement/review`;
+          assert.equal((await server.request(reviewPath, token, { decision: "accepted" })).status, 400);
+          assert.equal((await server.request(reviewPath, token, { decision: "accepted", expectedPlanVersion: 2 })).status, 409);
+          assert.equal((await server.request(reviewPath, token, { decision: "accepted", expectedPlanVersion: 3, clientId: other.tenant.id })).status, 400);
+          assert.equal((await server.request(reviewPath, token, { decision: "accepted", expectedPlanVersion: 3 }, "https://other.invalid")).status, 403);
+          const reviews = await Promise.all([server.request(reviewPath, token, { decision: "accepted", expectedPlanVersion: 3 }), server.request(reviewPath, token, { decision: "rejected", expectedPlanVersion: 3 })]);
+          assert.deepEqual(reviews.map((item) => item.status).sort(), [200, 409]);
+          const reviewedAudit = await db.select().from(governanceAudit).where(and(eq(governanceAudit.clientId, f.tenant.id), eq(governanceAudit.entityType, "measurement_plan"), eq(governanceAudit.action, "review")));
+          assert.equal(reviewedAudit.filter((item) => (item.redactedAfterJson as { campaignId?: number }).campaignId === draft.id).length, 1);
           await db.update(clientMembership).set({ role: "viewer" }).where(and(eq(clientMembership.clientId, f.tenant.id), eq(clientMembership.userId, user.id)));
+          assert.equal((await server.request(measurementPath, token, { ...body, expectedRevision: 2, expectedPlanVersion: 3 })).status, 403);
           assert.equal((await server.request(`/api/campaigns/${created.id}/scope`, token, { targetScopes: scopes, expectedRevision: 3 })).status, 403);
           const view = await (await server.request("/campaigns", token)).text();
           assert.ok(!view.includes("Save declared scope"));
@@ -617,9 +659,48 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       assert.deepEqual((audit.redactedAfterJson as { approvedPreflights: unknown }).approvedPreflights, approved.payload.approvedPreflights);
       await assert.rejects(reviseCampaignScopes({ ...base, expectedRevision: approved.currentRevision, targetScopes: [dk] }), /frozen-after-approval/);
       await transitionCampaignRecord({ ...base, nextState: "active" });
+      const metricsRights = { ...rights, basis: "client_owned" as const };
+      const metricSource = await createSourceConnection({ clientId: f.tenant.id, connectorId: `scoped-metrics-${randomUUID()}`, connectorVersion: "1.0.0", sourceClass: "first_party_aggregate", rights: metricsRights, policy: { ...policy, markets: ["DK", "SE"], languages: ["da", "sv"], dataClassifications: ["client-confidential"] }, retentionDays: 30, rawRetentionHours: 0 });
+      await createActiveSolutionProfile({ clientId: f.tenant.id, createdBy: user.id, profile: { enabledAbilities: [{ id: "live-campaign-intelligence", version: "1.0.0" }, { id: "post-campaign-learning", version: "1.0.0" }], providerBindings: { dk: f.source.connectorId, se: sw.source.connectorId, metrics: metricSource.connectorId }, markets: ["DK", "SE"], languages: ["da", "sv"], reviewRoles: { research: ["reviewer"] }, retention: { evidenceDays: 30, rawHours: 0, auditDays: 365 } } });
+      const selections = [];
+      for (const scope of scopes) {
+        const measurement = scopedMeasurement(scope), population = measurement.population;
+        for (let index = 0; index < 2; index++) {
+          const now = new Date().toISOString(), key = randomUUID();
+          const ago = (days: number) => new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+          const periodStart = ago(index ? 2 : 5), periodEnd = ago(index ? 1 : 4);
+          const applicability = { ...f.input.applicability, markets: [scope.market], languages: [scope.language], campaigns: [String(created.id)] };
+          const method = { method: "Synthetic scoped aggregate export", universe: population, limitations: ["Synthetic descriptive data only"] };
+          const request = { operation: "manual-document", filters: { markets: [scope.market], languages: [scope.language] } };
+          const result = await new AggregateMetricEvidenceAdapter([{ id: key, content: `Synthetic ${scope.market} export window ${index}`, rights: metricsRights, method, applicability,
+            metric: "consideration", value: measurement.baseline.consideration + (index ? 0.1 : 0), unit: "rate", cohortSize: 100, observedAt: periodEnd, dimensions: { population, aggregation: "rate", periodStart, periodEnd, campaignId: String(created.id) } }]).run({ id: key, clientId: String(f.tenant.id), sourceId: String(metricSource.id), adapterId: metricSource.connectorId, dataClassification: "client-confidential", request, idempotencyKey: key, requestedAt: now }, { now, async resolveCredential() { throw new Error("unused"); } }, { minimumCohortSize: 10, retainedEvidenceDays: 30, allowVerbatim: false, sensitiveTerms: [] });
+          result.receipt.estimatedCost = 0;
+          await persistAcquisition({ clientId: f.tenant.id, sourceConnectionId: metricSource.id, operation: request.operation, request, idempotencyKey: key, title: "Synthetic scoped export", rights: metricsRights, method, applicability, collectionExpiresAt: result.evidence[0].expiresAt, result });
+        }
+        const observations = (await db.select().from(quantitativeObservation).where(eq(quantitativeObservation.clientId, f.tenant.id)).orderBy(quantitativeObservation.observedAt)).filter((item) => (item.dimensionsJson as { population?: string }).population === population);
+        const metricSelections = [{ metricKey: "consideration", baselineObservationId: String(observations[0].id), resultObservationId: String(observations[1].id) }];
+        selections.push(metricSelections);
+        const result = await createCampaignAssessmentRecord({ ...base, stage: "live", ...scope, metricSelections });
+        assert.equal(result.assessment.status, "ready", JSON.stringify(result.assessment.researchGaps));
+        const assessment = result.assessment as CampaignResultAssessment;
+        assert.deepEqual(assessment.targetScope, scope);
+        assert.equal(assessment.comparisons[0].population, population);
+        assert.equal(assessment.comparisons[0].target, measurement.targets.consideration);
+        assert.equal(assessment.comparisons[0].targetMet, scope.market === "DK");
+      }
+      assert.equal((await createCampaignAssessmentRecord({ ...base, stage: "live", ...se, metricSelections: selections[0] })).assessment.status, "needs_context", "Danish observations cannot stand in for Swedish results");
+      if (process.env.TEST_HTTP === "1" && process.env.TEST_BROWSER_MODULE) {
+        await db.update(clientMembership).set({ role: "researcher" }).where(and(eq(clientMembership.clientId, f.tenant.id), eq(clientMembership.userId, user.id)));
+        const token = await createAuthSession(user.id, f.tenant.id), server = await startTestHttpServer(url!);
+        try { const { runScopedResultBrowser } = await import("./campaign-scope-browser"); await runScopedResultBrowser(server.base, token); }
+        finally { await server.stop(); }
+      }
       await transitionCampaignRecord({ ...base, nextState: "completed" });
+      const post = await createCampaignAssessmentRecord({ ...base, stage: "post", ...se, metricSelections: selections[1] });
+      assert.equal(post.assessment.status, "ready");
+      assert.deepEqual((post.assessment as CampaignResultAssessment).targetScope, se);
       await assert.rejects(transitionCampaignRecord({ ...base, nextState: "learning_reviewed", learningRecordId: records[0].id }), /multi-scope-learning-review-not-yet-supported/);
-      assert.equal((await listCampaignWorkspace(other.tenant.id)).length, 0);
+      assert.ok((await listCampaignWorkspace(other.tenant.id)).every((item) => item.id !== created.id));
     });
 
     await t.test("campaign preflight binds analyst reasoning, current Market Twin and the exact approved plan", async () => {

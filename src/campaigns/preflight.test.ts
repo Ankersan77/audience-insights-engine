@@ -81,7 +81,7 @@ test("campaign scope is declared, paired and frozen into the measurement basis",
   const multi = { ...campaign, targetScopes: [{ market: "DK", language: "da" }, { market: "SE", language: "sv" }] };
   assert.equal(evaluateContextualPreflight({ ...input, campaign: multi }).assessment.status, "needs_context");
   assert.equal(evaluateContextualPreflight({ ...input, campaign: multi, market: "DK", language: "da" }).assessment.status, "needs_context", "old single-scope measurement is insufficient");
-  const paired = { ...input, campaign: multi, plan: { ...input.plan, plan: { ...plan, targetScopes: multi.targetScopes } } };
+  const paired = { ...input, campaign: multi, plan: { ...input.plan, plan: { ...plan, targetScopes: multi.targetScopes, scopeMeasurements: multi.targetScopes.map((scope) => ({ scope, measurement: plan })) } } };
   assert.equal(evaluateContextualPreflight({ ...paired, market: "DK", language: "da" }).assessment.status, "ready");
   const missingContext = evaluateContextualPreflight({ ...paired, market: "SE", language: "sv" }).assessment;
   assert.equal(missingContext.status, "needs_context");

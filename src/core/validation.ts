@@ -133,6 +133,21 @@ export function validateMeasurementPlan(value: MeasurementPlan): ValidationResul
   if (value.targetScopes !== undefined) {
     try { parseCampaignScopes(value.targetScopes); } catch { errors.push("targetScopes must contain unique market/language pairs"); }
   }
+  if (value.scopeMeasurements !== undefined) {
+    if (!Array.isArray(value.scopeMeasurements) || !value.scopeMeasurements.length || value.scopeMeasurements.length > 20) errors.push("scopeMeasurements must cover the declared pairs");
+    else {
+      try {
+        const declared = parseCampaignScopes(value.targetScopes);
+        const actual = parseCampaignScopes(value.scopeMeasurements.map((item) => item.scope));
+        if (JSON.stringify(declared) !== JSON.stringify(actual)) errors.push("scopeMeasurements must exactly cover targetScopes");
+        for (const item of value.scopeMeasurements) {
+          if (!item.measurement || typeof item.measurement !== "object") { errors.push("invalid scope measurement"); continue; }
+          const checked = validateMeasurementPlan({ ...value, ...item.measurement, scopeMeasurements: undefined, targetScopes: [item.scope] });
+          if (!checked.valid) errors.push(...checked.errors.map((error) => `${item.scope.market}/${item.scope.language}: ${error}`));
+        }
+      } catch { errors.push("invalid scopeMeasurements"); }
+    }
+  }
   required(value.clientId, "clientId", errors);
   required(value.objective, "objective", errors);
   required(value.hypothesis, "hypothesis", errors);

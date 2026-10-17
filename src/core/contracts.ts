@@ -279,12 +279,7 @@ export type MetricDefinition = {
   population: string;
 };
 
-export type MeasurementPlan = {
-  id: string;
-  clientId: ClientId;
-  campaignId: string;
-  objective: string;
-  hypothesis: string;
+export type MeasurementConfiguration = {
   population: string;
   metrics: readonly MetricDefinition[];
   baseline: Readonly<Record<string, number>>;
@@ -295,8 +290,18 @@ export type MeasurementPlan = {
   incrementalityDesign?: string;
   materialityThresholds: Readonly<Record<string, number>>;
   decisionRules: readonly string[];
+};
+
+export type MeasurementPlan = MeasurementConfiguration & {
+  id: string;
+  clientId: ClientId;
+  campaignId: string;
+  objective: string;
+  hypothesis: string;
   /** Frozen from the campaign revision when this plan is created. */
   targetScopes?: readonly CampaignScope[];
+  /** Exact configurations, not overrides or pooled results. Top-level fields retain the legacy first-scope projection. */
+  scopeMeasurements?: readonly { scope: CampaignScope; measurement: MeasurementConfiguration }[];
 };
 
 export type StudyDesign = {

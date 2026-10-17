@@ -1,4 +1,4 @@
-import type { Campaign, EvidenceItem, MeasurementPlan, QuantitativeObservation, ResearchContextBasis } from "../core/contracts.ts";
+import type { Campaign, CampaignScope, EvidenceItem, MeasurementPlan, QuantitativeObservation, ResearchContextBasis } from "../core/contracts.ts";
 import { prepareResearchContext, CONTEXT_EVIDENCE_REQUIREMENTS, type ResearchContextSources } from "../abilities/context.ts";
 import { getAbility } from "../abilities/catalog.ts";
 import { researchSnapshotDigest } from "../abilities/snapshot.ts";
@@ -7,6 +7,7 @@ import { validateMeasurementPlan } from "../core/validation.ts";
 import type { CampaignAssessment } from "./analysis.ts";
 import { interpretationGaps, type CampaignInterpretation } from "./interpretation.ts";
 import { resolveCampaignScope, sameCampaignScopes } from "./scope.ts";
+import { measurementForScope } from "./measurementScope.ts";
 
 export type MetricSelection = { metricKey: string; baselineObservationId: string; resultObservationId: string };
 export type MetricComparison = {
@@ -22,6 +23,7 @@ export type MetricComparison = {
 export type CampaignResultAssessment = CampaignAssessment & {
   method: "source-backed-readback@1"; comparisons: MetricComparison[];
   contextBasis?: ResearchContextBasis;
+  targetScope?: CampaignScope;
   interpretation?: CampaignInterpretation;
   campaignSnapshot: { revision: number; contentDigest: string };
   measurementSnapshot: { id: number; version: number; contentDigest: string };
@@ -52,6 +54,7 @@ export function evaluateCampaignResults(input: {
   if (input.campaign.state !== (input.stage === "live" ? "active" : "completed")) throw new Error("campaign-state-incompatible-with-assessment");
   const abilityId = input.stage === "live" ? "live-campaign-intelligence" : "post-campaign-learning";
   const scope = resolveCampaignScope(input.campaign.targetScopes, input.market, input.language);
+  const scopedPlan = measurementForScope(input.plan.plan, scope);
   const prepared = prepareResearchContext({ ...input, ...scope, clientId: input.campaign.clientId, campaignId: input.campaign.id, abilityId });
   const resultEvidence = resolveEvidence({ clientId: input.campaign.clientId, now: input.now, market: prepared.context?.market, language: prepared.context?.language,
     requirements: getAbility(abilityId)!.evidenceRequirements, evidence: prepared.evidence.filter((item) => item.applicability.campaigns.includes(input.campaign.id)) });
@@ -65,7 +68,7 @@ export function evaluateCampaignResults(input: {
   if (!sameCampaignScopes(input.campaign.targetScopes, input.plan.plan.targetScopes)) gaps.push("The frozen measurement plan does not cover the declared campaign scope.");
   if (input.plan.reviewState !== "accepted" || !validateMeasurementPlan(input.plan.plan).valid
     || input.plan.plan.clientId !== input.campaign.clientId || input.plan.plan.campaignId !== input.campaign.id) gaps.push("A valid accepted campaign measurement plan is required.");
-  if (input.selections.some((item) => !input.plan.plan.metrics.some((metric) => metric.key === item.metricKey))) gaps.push("An observation selection uses an unplanned metric.");
+  if (input.selections.some((item) => !scopedPlan.metrics.some((metric) => metric.key === item.metricKey))) gaps.push("An observation selection uses an unplanned metric.");
   const comparisons: MetricComparison[] = [];
   const usedEvidence = new Set(prepared.contextEvidence.map((item) => item.id));
   const time = Date.parse(input.now);
@@ -77,7 +80,7 @@ export function evaluateCampaignResults(input: {
   function methodology(evidence: EvidenceItem) {
     return researchSnapshotDigest({ method: evidence.method.method, universe: evidence.method.universe, weighting: evidence.method.weighting });
   }
-  for (const metric of input.plan.plan.metrics) {
+  for (const metric of scopedPlan.metrics) {
     const selection = input.selections.find((item) => item.metricKey === metric.key);
     const baseline = selection && observations.get(selection.baselineObservationId);
     const result = selection && observations.get(selection.resultObservationId);
@@ -85,6 +88,9 @@ export function evaluateCampaignResults(input: {
     const resultSource = result && results.get(result.evidenceId);
     const fail = (reason: string) => gaps.push(`${metric.key}: ${reason}`);
     if (!baseline || !result || !baselineSource || !resultSource) { fail("Select permitted, campaign-scoped baseline and result observations."); continue; }
+    if ([baselineSource, resultSource].some((item) => item.applicability.markets.length !== 1 || item.applicability.markets[0] !== scope.market || item.applicability.languages.length !== 1 || item.applicability.languages[0] !== scope.language)) {
+      fail("Aggregate evidence must identify exactly this market/language pair; broad or pooled applicability cannot authorize a scoped result."); continue;
+    }
     if ([baseline, result].some((item) => item.suppressed || !Number.isFinite(item.value) || item.metricKey !== metric.key
       || item.unit !== metric.unit || item.dimensions.population !== metric.population || item.dimensions.aggregation !== metric.aggregation
       || item.dimensions.campaignId !== input.campaign.id)) { fail("Suppressed or incompatible metric, unit, population, aggregation or campaign scope."); continue; }
@@ -93,7 +99,7 @@ export function evaluateCampaignResults(input: {
     if (input.stage === "live" && time - Date.parse(after[1]) > 14 * 86400000) { fail("Live result window is stale."); continue; }
     if (baselineSource.sourceConnectionId !== resultSource.sourceConnectionId || methodology(baselineSource) !== methodology(resultSource)) { fail("Source or methodology changed; reconcile comparability before assessment."); continue; }
     if (["count", "sum"].includes(metric.aggregation) && Date.parse(before[1]) - Date.parse(before[0]) !== Date.parse(after[1]) - Date.parse(after[0])) { fail("Count/sum windows require equal duration; no silent rate conversion is allowed."); continue; }
-    const plannedBaseline = input.plan.plan.baseline[metric.key], target = input.plan.plan.targets[metric.key], threshold = input.plan.plan.materialityThresholds[metric.key];
+    const plannedBaseline = scopedPlan.baseline[metric.key], target = scopedPlan.targets[metric.key], threshold = scopedPlan.materialityThresholds[metric.key];
     // PostgreSQL's existing REAL storage rounds to float32. Do not mistake that rounding for a plan change.
     if (!Number.isFinite(plannedBaseline) || Math.abs(baseline.value - plannedBaseline) > 1e-6 * Math.max(1, Math.abs(plannedBaseline))) { fail("Source baseline differs from the frozen approved plan."); continue; }
     const delta = result.value - baseline.value;
@@ -110,21 +116,21 @@ export function evaluateCampaignResults(input: {
   if (input.interpretation) gaps.push(...interpretationGaps(input.interpretation, { evidenceIds: usedEvidence,
     intelligenceIds: new Set(prepared.context?.marketTwin.map((item) => item.id)), metricKeys: new Set(comparisons.map((item) => item.metricKey)), stage: input.stage }));
   return { evidenceIds: [...usedEvidence], assessment: {
-    stage: input.stage, method: "source-backed-readback@1", status: gaps.length ? "needs_context" : "ready", comparisons, contextBasis: basis, interpretation: input.interpretation,
+    stage: input.stage, method: "source-backed-readback@1", targetScope: scope, status: gaps.length ? "needs_context" : "ready", comparisons, contextBasis: basis, interpretation: input.interpretation,
     campaignSnapshot: { revision: input.campaign.revision, contentDigest: researchSnapshotDigest(input.campaign) },
     measurementSnapshot: { id: input.plan.id, version: input.plan.version, contentDigest: researchSnapshotDigest(input.plan) },
     pointOfView: gaps.length ? "The supplied observations or interpretation do not yet support a complete compatible readback." : input.interpretation?.insight ?? "The source-backed comparison is ready for analyst interpretation; observed differences are not causal campaign effects.",
-    watchouts: ["No automated strategic interpretation or causal claim is made by this metric reconciliation.", ...input.plan.plan.attributionAssumptions,
+    watchouts: ["No automated strategic interpretation or causal claim is made by this metric reconciliation.", ...scopedPlan.attributionAssumptions,
       ...(prepared.context?.marketTwin.flatMap((item) => [...item.uncertainty, ...item.contradictionIds.map((id) => `Market Twin ${item.id} contradicts ${id}.`)]) ?? [])],
     requiredDecisions: [input.interpretation?.recommendation ?? "Review the source windows, execution context, alternative explanations and current Market Twin before proposing optimization or learning."],
     researchGaps: [...new Set(gaps)],
     candidateLearning: input.stage === "post" && !gaps.length && input.interpretation?.learningStatement ? {
-      statement: input.interpretation.learningStatement, conditions: [input.interpretation.conditions, input.interpretation.alternativeExplanations, input.interpretation.wouldChangeConclusion, ...input.plan.plan.attributionAssumptions, "Descriptive, not a causal campaign effect."], requiresReview: true,
+      statement: input.interpretation.learningStatement, conditions: [input.interpretation.conditions, input.interpretation.alternativeExplanations, input.interpretation.wouldChangeConclusion, ...scopedPlan.attributionAssumptions, "Descriptive, not a causal campaign effect."], requiresReview: true,
     } : undefined,
   } };
 }
 
 export function campaignResultBasisDigest(assessment: CampaignResultAssessment): string {
-  return researchSnapshotDigest({ campaign: assessment.campaignSnapshot, measurement: assessment.measurementSnapshot, comparisons: assessment.comparisons,
+  return researchSnapshotDigest({ scope: assessment.targetScope, campaign: assessment.campaignSnapshot, measurement: assessment.measurementSnapshot, comparisons: assessment.comparisons,
     context: assessment.contextBasis ? { ...assessment.contextBasis, excludedRecordCount: undefined } : undefined, interpretation: assessment.interpretation });
 }

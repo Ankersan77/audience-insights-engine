@@ -36,6 +36,13 @@ pilot data, qualified method review, human scorecards, and production restore ex
 named evidence; until supplied, the product must report `unverified` or `needs_context` rather than
 claiming those gates passed.
 
+Pilot decision (2026-10-17): D4WN is the first client. The owner confirms no current dataset or
+existing D4WN synthesis connector. The initial brief is positioning and competitor understanding
+in Denmark for CMOs and marketing managers with decision authority. D4WN's intended human/creative
+AI-transformation position is owner-provided intent to test, not a verified finding. Source inventory,
+provider selection/acceptance, human calibration and production evidence remain open. Build and test
+against labelled synthetic fixtures without inventing client truth or activating paid/live services.
+
 ## 3. Baseline at roadmap approval
 
 The repository currently contains:
@@ -66,7 +73,7 @@ product model, privacy boundary, research methods, or client portability exist.
 | 7 | Proactive monitoring and learning loop | Phases 3–6 |
 | 8 | Client packaging, hardening, and pilot proof | Phases 0–7 |
 
-### 4.1 Execution status — 2026-10-16
+### 4.1 Execution status — 2026-10-17
 
 The deterministic reference path is covered end to end by
 `src/workflows/reference-pilot.test.ts`. That proof is intentionally not presented as live pilot
@@ -135,8 +142,15 @@ proposals must declare scope and replace/review unscoped plans; legacy approvals
 or presented as covered. Scope is frozen after approval.
 Measurement replacement is available before approval and requires review/reassessment; after
 approval the plan is frozen. This closes the prior structural-checklist-only pre-flight path, not
-the automated campaign expert requirement. Multi-market pre-flight coverage is implemented;
-per-market metric plans, pooled-result comparability, complete multi-market learning review,
+the automated campaign expert requirement. Multi-market pre-flight coverage and explicit per-pair
+measurement configurations are implemented. Each pair owns its metric dictionary, population,
+baseline, target, materiality, checkpoints and attribution/decision rules; all configurations are
+reviewed and frozen as one version. Replacement requires expected campaign/plan versions; review
+requires the displayed plan version. Both writes include an atomic named audit. The result form
+switches the configuration and clears selections when the pair changes. Readback rejects
+broad/pooled metric applicability rather than presenting it as a
+single-market result. Historical single-pair plans remain readable; shared multi-market proposals
+require an explicit replacement. Pooled-result comparability, complete multi-market learning review,
 execution/checkpoint alignment and model-assisted interpretation remain implementation work.
 Live/post readbacks reject undeclared or ambiguous pairs. Multi-scope campaigns cannot yet enter
 `learning_reviewed`: a single-market learning must not silently close the entire campaign.
@@ -601,7 +615,8 @@ Brand Lift claim.
    campaigns, studies, and learning.
 2. Design additive migrations from the current schema.
 3. Build the people-blind ingestion/redaction test harness.
-4. Select the first pilot and confirm its source inventory and permissions.
+4. Confirm sources and permissions for D4WN's Danish positioning/competitor pilot (brief selected
+   2026-10-17; no existing data or synthesis connector).
 
 ### Next
 
@@ -649,7 +664,8 @@ A roadmap item is done only when:
 
 ## 9. Decisions required before implementation passes Phase 2
 
-- Name the first pilot client or approved representative dataset.
+- First pilot: D4WN positioning and competitor understanding in Denmark, selected 2026-10-17.
+  Approved sources and representative evidence remain open.
 - Confirm the exact pilot sources and the permitted use for each.
 - Set initial cohort/suppression and raw-retention defaults.
 - Decide whether the current `last30days` adapter can meet the people-blind evidence contract.

@@ -1,6 +1,7 @@
 # Roadmap evaluation and execution corrections
 
 Date: 2026-10-16  
+Updated: 2026-10-17
 Blueprint: `BLUEPRINT.md` v1.0.0  
 Evaluated baseline: commit `c767425`
 
@@ -63,7 +64,8 @@ runbooks, and reproducible analysis can be completed and evidenced in this repos
 The following cannot be truthfully self-certified by code and remain open until named evidence is
 attached:
 
-- first pilot client or approved representative dataset;
+- approved sources and representative data for D4WN's Danish positioning/competitor pilot
+  (client and brief named 2026-10-17; no existing data);
 - source permissions and licensed-provider agreements;
 - live connector credentials and provider acceptance tests;
 - cohort, suppression, and retention values approved for the pilot;
@@ -214,8 +216,26 @@ Unit/database/HTTP tests cover pair selection, missing/incomplete/stale reviews,
 scope-edit races, foreign tenants, role denial and frozen approval lineage. An opt-in synthetic browser
 case checks desktop/mobile coverage, campaign creation, scope editing and two-tab conflicts.
 
-The shared metric plan applies separately to each declared pair; it does not establish valid pooled
-results. Per-market metric plans and complete multi-market learning review remain open. Live/post
+Explicit per-pair configurations now replace the shared metric-plan assumption. Each pair has its
+own population, metric dictionary, baseline, targets, materiality, checkpoints, exposure/attribution
+limitations and decision rules. The API rejects missing/duplicate/foreign pairs, unknown fields,
+coerced numeric values and stale campaign/plan versions. Configuration, review and immutable
+approval cover the whole plan version. Review explicitly identifies the displayed plan version;
+a stale review cannot accidentally approve its replacement. Both save and review commit their
+named audit atomically, and concurrent review decisions cannot both succeed.
+The result form resolves the selected pair and clears previous observation/interpretation choices
+on scope change. Readback uses only that configuration and rejects broad/pooled metric evidence.
+The retained top-level fields are a legacy first-configuration projection, never authority to use
+one market's baseline or target for another. Historical single-pair plans keep their original
+meaning; shared multi-market proposals require a reviewed explicit replacement, not an inferred
+migration. These changes do not establish cross-market comparability or causal lift.
+
+Tests cover separate Danish/Swedish populations and baselines/targets, multiple metrics, persisted
+live/post results, rejected cross-market observations, API role/tenant boundaries, atomic audit and
+concurrent replacement. The opt-in browser cases cover per-pair editing, a two-tab stale-plan
+conflict, scope-change resets and desktop/mobile layout. Synthetic proof is not research validation.
+
+Complete multi-market learning review remains open. Live/post
 readbacks reject undeclared/ambiguous pairs, and a multi-scope campaign cannot enter learning-reviewed
 from a single scoped learning. Existing approved legacy campaigns without scope require a separately
 reviewed migration before new scoped readbacks; no historical authorization is invented.

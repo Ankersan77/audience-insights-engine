@@ -8,7 +8,7 @@
 | Repository | `man-D4wn/Market-research` |
 | Blueprint version | 1.0.0 |
 | Status | Canonical product and architecture source of truth |
-| Updated | 2026-10-16 |
+| Updated | 2026-10-17 |
 | Architecture family | D4WN-compatible, client-configurable intelligence product |
 
 This blueprint defines what Market Research is, which guarantees it makes, and which boundaries
@@ -494,8 +494,22 @@ Qualified human review remains required before claiming expert or agency-grade p
 
 ## 18. Minimum viable proof
 
+The first pilot client is **D4WN** (owner decision, 2026-10-17). The pilot supports **positioning
+and competitor understanding in Denmark**, aimed at CMOs and marketing managers with decision
+authority. D4WN's owner describes a consultancy helping marketing departments and agencies redesign
+their organization and operating model around AI, involving and training people, then building the
+AI ecosystem that delivers client value. The intended position is the human and creative side of
+AI transformation, not buzzwords or a prepackaged system. This is owner-provided strategic intent,
+not independently established differentiation or proof of expertise. Scandinavia and Europe are
+later ambitions, explicitly outside the initial pilot scope.
+
+D4WN currently has no pilot dataset and no existing synthesis connector to reuse; this is its first
+such implementation. Approved sources, provider and reviewer still need to be established. The
+initial research brief and evidence gaps are recorded in `docs/external-validation-register.md`.
+Synthetic fixtures prove implementation, not D4WN's market facts or quality.
+
 The first credible proof uses one real client configuration and a bounded set of sources. The
-Jacobsen-style case is an appropriate reference because it combines brand material, a Dentsu-style
+Jacobsen-style case remains a synthetic reference because it combines brand material, a Dentsu-style
 audience study, campaigns, public market evidence, and measurement needs without defining the
 universal product.
 
@@ -578,7 +592,9 @@ The minimum proof must demonstrate:
 
 ## 22. Open product decisions
 
-- The first pilot client and exact source inventory.
+- D4WN pilot's exact approved source inventory and evidence of buyer needs/differentiation;
+  positioning and competitor understanding in Denmark are selected, but no real dataset or
+  existing synthesis connector was available at the 2026-10-17 decision.
 - The initial industry pack after the first pilot.
 - Minimum cohort/suppression thresholds by source and market.
 - Default raw-acquisition retention windows by source class.
