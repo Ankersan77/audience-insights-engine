@@ -132,11 +132,11 @@ token. Upgrading to this release invalidates older signed-role cookies and requi
 New connectors must use opaque credential references and the provider-neutral contracts in the
 blueprint.
 
-`ENABLE_LEGACY_LAST30DAYS` defaults to `false`. Do not enable it for production ingestion; new
+`ENABLE_LEGACY_LAST30DAYS` cannot enable ingestion anymore; new
 sources must pass through the canonical evidence adapters and minimization policy.
 
 `ENABLE_ENV_CREDENTIAL_RESOLVER` also defaults to `false`. When explicitly enabled, only opaque
-references shaped as `env:VARIABLE_NAME` are resolved inside the worker process; values never enter
+references shaped as `env:MARKET_RESEARCH_SOURCE_KEY_CLIENT_<CLIENT_ID>_<NAME>` are resolved inside the client's worker process; values never enter
 jobs, receipts, logs, exports or the product surface.
 
 ## Implementation status
@@ -196,4 +196,11 @@ docker run --rm --env-file .env.local -p 3000:3000 market-research
 
 `.github/workflows/ci.yml` installs dependencies, lints, type-checks, tests, and builds on pull requests and pushes to `main`.
 
-Deployment infrastructure is intentionally not coupled to a specific hosting platform. Add deployment configuration only after a target environment has been selected.
+Deployment infrastructure remains provider-neutral until each client's hosting target is selected.
+Production is always one client-owned app, worker, PostgreSQL database, identity integration,
+secret store and provider accounts. After migrating a fresh empty database, use
+`pnpm deployment:bootstrap --slug CLIENT --name NAME` to replace its legacy placeholder; existing
+data requires a reviewed migration. Set the resulting client's
+`MARKET_RESEARCH_CLIENT_SLUG` and numeric `MARKET_RESEARCH_CLIENT_ID`, then run
+`pnpm deployment:check` before releasing web or worker. See the
+[operations runbook](docs/operations-runbook.md) for ownership and credential checks.

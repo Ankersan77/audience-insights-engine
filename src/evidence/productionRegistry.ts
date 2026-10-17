@@ -13,7 +13,10 @@ async function resolveDeploymentCredential(reference: CredentialReference): Prom
   if (process.env.ENABLE_ENV_CREDENTIAL_RESOLVER !== "true") throw new Error("credential-resolver-not-configured");
   if (reference.provider !== "secret-store" || !reference.key.startsWith("env:")) throw new Error("credential-reference-provider-unsupported");
   const environmentKey = reference.key.slice(4);
-  if (!/^[A-Z][A-Z0-9_]{2,127}$/.test(environmentKey)) throw new Error("credential-reference-invalid");
+  const clientId = process.env.MARKET_RESEARCH_CLIENT_ID;
+  if (!clientId || !/^[1-9]\d*$/.test(clientId) || !Number.isSafeInteger(Number(clientId))) throw new Error("deployment-client-id-required");
+  if (!new RegExp(`^MARKET_RESEARCH_SOURCE_KEY_CLIENT_${clientId}_[A-Z0-9_]{1,80}$`).test(environmentKey))
+    throw new Error("credential-reference-out-of-scope");
   const value = process.env[environmentKey];
   if (!value) throw new Error("credential-unavailable");
   return value;

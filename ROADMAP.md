@@ -2,7 +2,7 @@
 
 ## 1. Roadmap contract
 
-This roadmap implements `BLUEPRINT.md` version 1.0.0. It replaces the legacy Audience Insights
+This roadmap implements `BLUEPRINT.md` version 1.1.0. It replaces the legacy Audience Insights
 Engine implementation plan. Work is organized by evidence-bearing release gates rather than target
 dates. A phase is complete only when its exit gate passes; code presence or a polished screen is
 not sufficient.
@@ -55,6 +55,16 @@ The importable D4WN owner brief is `fixtures/d4wn/company-context.json`; it is n
 into a tenant and contains no invented evidence or CRM numbers. See `docs/company-context.md`.
 Agent service authentication/tool transport, live aggregate refresh and company-context transfer
 between installations are still open. Solution-pack export does not export client strategy.
+
+Owner decision (2026-10-17): D4WN and every future client must operate a separate app, worker,
+database, identity integration, secret store and provider accounts/keys. Shared D4WN hosting,
+hybrid multi-client runtime and shared credentials are no longer launch options. The repository
+now requires a one-client deployment check for workers, scopes production credential references,
+and disables the historical globally keyed ingestion path. This does not provision infrastructure
+or attest actual ownership of an OpenAI/CRM account. D4WN's hosting target, database/backup owner,
+identity app and OpenAI project/service-account credential remain to be selected and verified.
+The current login implementation is pinned to OneLogin environment names; a provider-neutral OIDC
+configuration and second-client identity proof remain packaging work before broad handoff.
 
 ## 3. Baseline at roadmap approval
 
@@ -572,7 +582,8 @@ evidence of quality, security, recoverability, and operating responsibility.
 - Version Core, ability packages, schemas, industry packs, client profiles, and adapter interfaces.
 - Support pinned versions and explicit migrations.
 - Provide import/export of redacted client configuration without credentials or client content.
-- Document the supported managed, client-owned, and hybrid deployment modes.
+- Package and validate one client-owned installation per customer: app, worker, exclusive database,
+  secret store, identity, observability and backups. No shared/hybrid hosting mode.
 
 ### Workstream 8B: administration
 
@@ -599,6 +610,8 @@ evidence of quality, security, recoverability, and operating responsibility.
 
 - A second client fixture can be configured without modifying Core business logic.
 - Clean-environment verification and restore tests pass.
+- Separate D4WN and second-client installations pass the one-client database check; neither can
+  resolve the other's source/model credential reference.
 - No P0/P1 security, tenancy, evidence-integrity, or causal-claim defects remain.
 - The pilot scorecard passes agreed thresholds and every remaining limitation is explicit.
 
@@ -645,7 +658,7 @@ Brand Lift claim.
 11. Add live campaign monitoring and proactive schedules.
 12. Add survey/panel and platform study adapters.
 13. Add industry packs after the first pilot establishes the reusable boundary.
-14. Prove second-client portability and production handoff.
+14. Prove second-client portability with two independent deployments/databases and production handoff.
 
 ## 7. Cross-cutting test matrix
 

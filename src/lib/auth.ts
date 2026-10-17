@@ -45,7 +45,7 @@ export async function completeSignIn(currentUrl: URL, flowCookieValue: string | 
   if (!claims?.sub) throw new Error("identity-token-required");
   const email = typeof claims.email === "string" ? claims.email : "";
   const name = typeof claims.name === "string" ? claims.name : email;
-  const user = await resolveProvisionedIdentity({ subject: claims.sub, clientSlug: process.env.MARKET_RESEARCH_CLIENT_SLUG?.trim() || "default-client", email, name });
+  const user = await resolveProvisionedIdentity({ subject: claims.sub, clientSlug: requiredEnv("MARKET_RESEARCH_CLIENT_SLUG").trim(), email, name });
   return { user, returnTo: safeReturnPath(flow.returnTo) };
 }
 
@@ -60,7 +60,9 @@ export function flowCookieOptions() {
 /** Every request resolves server expiry/revocation and the current tenant role. No signed role snapshot is trusted. */
 export async function getSession(): Promise<SessionUser | null> {
   const store = await cookies();
-  return resolveAuthSession(store.get(SESSION_COOKIE)?.value);
+  const session = await resolveAuthSession(store.get(SESSION_COOKIE)?.value);
+  const deploymentSlug = process.env.MARKET_RESEARCH_CLIENT_SLUG?.trim();
+  return session && deploymentSlug && session.clientSlug !== deploymentSlug ? null : session;
 }
 
 export async function requireSession(returnTo = "/projects"): Promise<SessionUser> {

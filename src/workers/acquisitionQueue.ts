@@ -68,6 +68,8 @@ export async function processAcquisitionJob(input: {
       const result = await adapter.run(claimed.job,
         { now: new Date().toISOString(), signal: abortController.signal, acquisition: gate, resolveCredential: (reference) => {
           gate.assertCredentialAccess();
+          if (!claimed.job.credentialRef || reference.provider !== claimed.job.credentialRef.provider
+            || reference.key !== claimed.job.credentialRef.key) throw new Error("credential-reference-out-of-scope");
           return input.runtime.resolveCredential(reference);
         } },
         { minimumCohortSize: Number(process.env.MINIMUM_COHORT_SIZE ?? 10), retainedEvidenceDays: claimed.retentionDays, allowVerbatim: false, sensitiveTerms: [] },

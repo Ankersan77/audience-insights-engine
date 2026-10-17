@@ -1,21 +1,58 @@
 # Operations and recovery runbook
 
-## Supported deployment shapes
+## Client-owned deployment boundary
 
-Market Research supports managed, client-owned, and hybrid deployment. In every shape PostgreSQL
-is the system of record, the web and worker processes share the same release version, credentials
-stay in the deployment secret store, and connector adapters expose only opaque credential
-references to Core.
+The only supported production shape is **one installation per client**. The client (D4WN for the
+first pilot) owns/controls its web app, worker, exclusive PostgreSQL database and backups, OIDC
+application, secret store, logs/monitoring and each provider account/project. Web and worker use
+the same release and database. No shared D4WN host, database, worker, fallback API key or
+cross-client secret store is a supported mode. `client_id` checks remain defense in depth.
+
+Migration `0003` creates a `default-client` placeholder even in an empty database. On a freshly
+migrated and otherwise empty database only, run
+`pnpm deployment:bootstrap --slug d4wn --name D4WN` (replace values for other clients). This
+refuses to relabel any database containing other rows or more than one client. Existing data
+requires a separately reviewed migration; never silently assign it to a new customer.
+
+After migrating and explicitly provisioning the sole client, set
+`MARKET_RESEARCH_CLIENT_SLUG` and its numeric `MARKET_RESEARCH_CLIENT_ID` in **that client's**
+environment, then run `pnpm deployment:check`. It rejects an empty, mismatched or multi-client
+database. The worker performs the same check before starting queues. Run the check before each
+web release; the web process itself does not yet enforce the database singleton at boot. Auth
+pins OIDC sign-in to the configured slug and rejects sessions for another slug when configured.
+Treat the release check as mandatory, not as an optional diagnostic.
+
+Source secrets use references of the form
+`env:MARKET_RESEARCH_SOURCE_KEY_CLIENT_<CLIENT_ID>_<NAME>` and resolve only in that client's
+worker after source-budget admission. An adapter can resolve only its job's assigned reference.
+Model secrets use `MARKET_RESEARCH_MODEL_KEY_CLIENT_<CLIENT_ID>_<NAME>`; one binding per installation,
+with exact client ID and separate synthesis-budget/acceptance gates. The name is a scope guard,
+**not proof of ownership**: a named operator must inspect provider organization/project and
+billing ownership, permission/retention settings, key rotation and the destination of backups.
+Never paste a live key into the repository, solution JSON, chat or a shared shell environment.
+The old Last30Days route cannot be re-enabled with `ENABLE_LEGACY_LAST30DAYS`.
+
+Before a client launch, record the client's hosting and database owner, deployment region,
+database backup/restore result, secret-store operator, OIDC owner, each provider project/account,
+approved source rights and incident contact. D4WN currently has no live source or OpenAI key
+configured in this repository. A new client receives a fresh database and secret store, not a
+copy of D4WN's content or credentials.
+The current OIDC implementation uses OneLogin-specific environment names. A customer using a
+different identity provider needs a reviewed OIDC configuration change and acceptance test; do
+not silently substitute D4WN's identity application.
 
 ## Release
 
 1. Run `bash verify.sh` in a clean checkout.
 2. Review generated migrations and take a restorable database backup.
 3. Apply migrations once with `pnpm db:migrate` before starting the new web and worker release.
-4. Start the web service and verify `GET /healthz`.
-5. Start the worker, verify queue connectivity, and confirm no circuit is unexpectedly open.
-6. Confirm `/workspace` shows the expected tenant and canonical record counts.
-7. Activate live connectors only if their external-validation entries are verified.
+4. On a fresh empty database, run `pnpm deployment:bootstrap --slug CLIENT --name NAME`, then
+   explicitly grant access with `pnpm access`.
+5. Run `pnpm deployment:check` against the intended client database and environment.
+6. Start the web service and verify `GET /healthz`.
+7. Start the worker, verify queue connectivity, and confirm no circuit is unexpectedly open.
+8. Confirm `/workspace` shows the expected tenant and canonical record counts.
+9. Activate live connectors only if their external-validation entries are verified.
 
 Research synthesis defaults to disabled. The production factory now resolves explicit server-owned
 client bindings, but requires exact, unexpired processing/quality acceptance, approved current

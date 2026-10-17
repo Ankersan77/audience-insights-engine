@@ -18,13 +18,13 @@ export function parseSynthesisConfiguration(raw: string | undefined, clientId: s
     if (Buffer.byteLength(raw, "utf8") > 64_000) throw new Error();
     const config = JSON.parse(raw);
     if (!config || config.schemaVersion !== 1 || Object.keys(config).some((key) => !["schemaVersion", "bindings"].includes(key))
-      || !Array.isArray(config.bindings) || config.bindings.length > 100) throw new Error();
+      || !Array.isArray(config.bindings) || config.bindings.length > 1) throw new Error();
     const clients = new Set<string>();
     for (const binding of config.bindings as SynthesisDeploymentBinding[]) {
       validateOpenAISynthesisBinding(binding);
       if (Object.keys(binding).some((key) => !keys.has(key)) || binding.adapterId !== "openai-responses"
         || !/^[1-9]\d*$/.test(binding.clientId) || !Number.isSafeInteger(Number(binding.clientId)) || clients.has(binding.clientId)
-        || typeof binding.credentialEnv !== "string" || !/^MARKET_RESEARCH_MODEL_KEY_[A-Z0-9_]{1,80}$/.test(binding.credentialEnv)
+        || typeof binding.credentialEnv !== "string" || !new RegExp(`^MARKET_RESEARCH_MODEL_KEY_CLIENT_${binding.clientId}_[A-Z0-9_]{1,80}$`).test(binding.credentialEnv)
         || !Array.isArray(binding.sourceConnectionIds) || !binding.sourceConnectionIds.length || binding.sourceConnectionIds.length > 100
         || binding.sourceConnectionIds.some((id) => typeof id !== "string" || !/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id)))
         || new Set(binding.sourceConnectionIds).size !== binding.sourceConnectionIds.length

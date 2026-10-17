@@ -1,12 +1,13 @@
 /**
  * The retained last30days path writes provider-shaped, identity-bearing rows.
  * It is migration scaffolding, not a canonical source adapter, and therefore
- * stays fail-closed unless an operator explicitly enables it for controlled
- * legacy data migration.
+ * stays permanently disabled. Historical rows remain readable, but this path
+ * cannot be used to ingest new data or draw from global provider credentials.
  */
 export function legacyLast30DaysEnabled(
-  value = process.env.ENABLE_LEGACY_LAST30DAYS,
+  _value = process.env.ENABLE_LEGACY_LAST30DAYS,
 ): boolean {
-  return value?.trim().toLowerCase() === "true";
+  void _value;
+  return false;
 }
 

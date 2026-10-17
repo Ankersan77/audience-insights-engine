@@ -81,7 +81,8 @@ There is no runtime dependency on another local repository.
 ## Deployment binding and acceptance scopes
 
 `MARKET_RESEARCH_SYNTHESIS_BINDINGS_JSON` is server-only configuration with `schemaVersion: 1` and a
-`bindings` array (maximum 100 clients / 64 KB). One exact numeric database `clientId` per binding;
+`bindings` array (maximum one client / 64 KB). Its numeric database `clientId` must equal the
+installation's `MARKET_RESEARCH_CLIENT_ID`; the worker/database must be dedicated to that client;
 no default/fallback tenant. Unknown fields, duplicate clients, arbitrary endpoint overrides and
 embedded credential values are rejected. The current adapter catalog contains `openai-responses`;
 other providers require their own reviewed adapter, not a change to research logic.
@@ -104,7 +105,7 @@ Example **template**, deliberately invalid until every replacement value is supp
     "qualityApprovalReference": "quality:REPLACE_WITH_EVIDENCE",
     "expiresAt": "REPLACE_WITH_REVIEW_EXPIRY",
     "retention": "standard_api_store_false",
-    "credentialEnv": "MARKET_RESEARCH_MODEL_KEY_CLIENT",
+    "credentialEnv": "MARKET_RESEARCH_MODEL_KEY_CLIENT_<CLIENT_ID>_OPENAI",
     "currency": "DKK",
     "maxCostMicros": "REPLACE_WITH_INTEGER_MICROS",
     "maxInputBytes": 100000,
@@ -137,7 +138,7 @@ requires matching new acceptance. Retain the reviewed configuration revision wit
 evidence so the digest in the spend ledger is historically reproducible.
 
 Install the JSON in the server environment, and the actual key separately under the binding's
-dedicated `MARKET_RESEARCH_MODEL_KEY_*` variable in the deployment secret store. The existing
+dedicated `MARKET_RESEARCH_MODEL_KEY_CLIENT_<CLIENT_ID>_<NAME>` variable in the client's secret store. The existing
 `ENABLE_ENV_CREDENTIAL_RESOLVER=true` is also required. There is no `OPENAI_API_KEY` fallback, and
 the reference cannot select unrelated secrets such as `DATABASE_URL`. Keys are resolved only
 after the durable reservation and one-use dispatch. These bindings and budgets are intentionally

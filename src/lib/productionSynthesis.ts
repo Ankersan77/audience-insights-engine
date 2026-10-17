@@ -14,6 +14,7 @@ export function getProductionSynthesisProvider(clientId: number, options: {
   transport?: typeof fetch;
 } = {}): ResearchSynthesisProvider | undefined {
   const environment = options.environment ?? (() => process.env);
+  if (environment().MARKET_RESEARCH_CLIENT_ID !== String(clientId)) return undefined;
   let binding;
   try {
     binding = parseSynthesisConfiguration(environment().MARKET_RESEARCH_SYNTHESIS_BINDINGS_JSON, String(clientId));
@@ -24,7 +25,8 @@ export function getProductionSynthesisProvider(clientId: number, options: {
   const version = openAISynthesisVersion(approved.model);
   const assertConfiguration = () => {
     const current = parseSynthesisConfiguration(environment().MARKET_RESEARCH_SYNTHESIS_BINDINGS_JSON, String(clientId));
-    if (!current || synthesisBindingDigest(current) !== digest || environment().ENABLE_ENV_CREDENTIAL_RESOLVER !== "true") throw new Error("synthesis-configuration-changed-or-disabled");
+    if (!current || synthesisBindingDigest(current) !== digest || environment().ENABLE_ENV_CREDENTIAL_RESOLVER !== "true"
+      || environment().MARKET_RESEARCH_CLIENT_ID !== String(clientId)) throw new Error("synthesis-configuration-changed-or-disabled");
   };
   return {
     id: approved.adapterId, version,

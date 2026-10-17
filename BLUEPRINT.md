@@ -6,7 +6,7 @@
 |---|---|
 | Product | Market Research |
 | Repository | `man-D4wn/Market-research` |
-| Blueprint version | 1.0.0 |
+| Blueprint version | 1.1.0 |
 | Status | Canonical product and architecture source of truth |
 | Updated | 2026-10-17 |
 | Architecture family | D4WN-compatible, client-configurable intelligence product |
@@ -83,8 +83,10 @@ Market Research follows the same foundational rules as D4WN Core:
 
 1. **Contract first.** Stable input, output, evidence, action, and lifecycle contracts come before
    provider-specific code.
-2. **Client isolation.** Client intelligence and artifacts are physically or cryptographically
-   isolated by `client_id`; no cross-client learning occurs automatically.
+2. **Client-owned installation.** Each client owns and runs a separate app, worker, PostgreSQL
+   database, identity integration, secret store and provider accounts. `client_id` remains a
+   defense-in-depth scope, not a substitute for infrastructure separation. No cross-client
+   learning occurs automatically.
 3. **Connectors are plumbing.** They authenticate, acquire, normalize, and deliver. They do not
    decide what matters or contain research logic.
 4. **Abilities own expertise.** Research methods, decision logic, quality rubrics, and output
@@ -131,8 +133,10 @@ Client files · research reports · analytics · CRM/sales · surveys · public 
 official statistics · news · licensed social/listening · campaign platforms
 ```
 
-Connectors may run through a workflow engine, scheduled worker, managed service, or client-owned
-runtime. Those choices must not alter the contracts or move research judgment into the connector.
+Connectors run inside the client's own installation or call services explicitly approved and paid
+for from that client's accounts. A workflow engine or managed service may be a client-controlled
+component, never a shared D4WN runtime holding multiple clients' data or credentials. These
+choices must not alter contracts or move research judgment into the connector.
 
 ## 7. The Market Twin
 
@@ -310,6 +314,10 @@ Each connector declares:
 
 Provider payloads remain inside the adapter boundary. Core receives normalized records and redacted
 receipts. A connector may be replaced without changing an ability or Market Twin schema.
+Credential references must resolve only within the current client's installation; an adapter may
+request only the reference assigned to its current source job. Shared/global model or connector
+keys, fallback credentials and cross-client secret stores are forbidden. Deployment operators must
+verify actual provider-account ownership; environment-variable names alone cannot prove it.
 
 ### 9.3 Source selection
 
@@ -427,6 +435,14 @@ Each client solution consists of versioned, reviewable configuration rather than
 - review roles, decision rights, approval thresholds, and output destinations;
 - industry pack and client-specific overrides;
 - retention, rights, geography, language, and operating cadence.
+
+The reusable artifact is the code and versioned ability/connector packages, not a shared tenant
+runtime. Each copy has its own server/worker deployment, database (including jobs, audit and
+backups), identity application, secret store, observability and provider projects/API keys.
+Production rollout requires a one-client database check and named owner for hosting, billing,
+backup/restore, key rotation and incident response. D4WN is the first such client, not the shared
+operator for future customers. Moving a client between installations is an explicit export/import
+and credential rebind, never a cross-database query or copied secret.
 
 Reusable industry packs may provide a starting ontology, source suggestions, methods, and benchmark
 questions. They never contain another client's data and never override client truth.
@@ -615,6 +631,9 @@ The minimum proof must demonstrate:
    bindings rather than client-specific branches.
 9. Candidate learning requires provenance, conditions, and review before promotion.
 10. The roadmap must prove one bounded client case before broad connector or industry expansion.
+11. Every client, including D4WN, runs on its own server/application deployment, worker,
+    PostgreSQL database and provider accounts with its own keys. No shared-hosting or shared-key
+    mode is a supported production configuration.
 
 ## 22. Open product decisions
 

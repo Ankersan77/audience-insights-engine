@@ -6,9 +6,8 @@
  * image as the Next.js app (ADR 0002) — never over a network interface, never
  * patched in place. The engine's entry point is
  * `vendor/last30days/skills/last30days/scripts/last30days.py`, a Python 3.12+
- * CLI with zero required dependencies for its keyless sources (Reddit, Hacker
- * News, Polymarket, GitHub, YouTube) and optional X/TikTok coverage unlocked
- * by `X_BEARER_TOKEN` / `XAI_API_KEY` / `SCRAPECREATORS_API_KEY`.
+ * CLI retained for historical compatibility only. The queue gate is permanently
+ * closed, and no provider credentials are forwarded to this child process.
  *
  * `child_process.spawn` (not `exec`) is used deliberately: every instruction
  * field becomes its own argv element, so there is no shell to inject into,
@@ -133,22 +132,13 @@ function buildChildEnv(): Record<string, string> {
   if (process.env.PATH) env.PATH = process.env.PATH;
   if (process.env.HOME) env.HOME = process.env.HOME;
 
-  for (const key of ["X_BEARER_TOKEN", "XAI_API_KEY", "SCRAPECREATORS_API_KEY"] as const) {
-    const value = process.env[key];
-    if (value) {
-      env[key] = value;
-    }
-  }
-
   return env;
 }
 
 /**
  * Runs the vendored `last30days` engine for one research instruction and
- * returns its compact report on stdout, unparsed. Reddit, Hacker News,
- * Polymarket, GitHub and YouTube work with no credentials; X and TikTok
- * coverage activate only when `X_BEARER_TOKEN`/`XAI_API_KEY` are present in
- * `process.env`.
+ * returns its compact report on stdout, unparsed. This is not an active
+ * acquisition route and receives no provider credentials.
  */
 export function runLast30Days(
   instruction: RunLast30DaysInstruction,

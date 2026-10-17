@@ -42,10 +42,10 @@ export async function runSynthesisProviderCases(t: TestContext, db: typeof impor
     const binding: SynthesisDeploymentBinding = { clientId: String(clientId), adapterId: "openai-responses", model: "explicit-test-model", abilityIds: ["market-category-diagnosis"],
       markets: ["DK"], languages: ["da"], allowedSourceClasses: ["official_or_public"], approvalReference: "test:processing", qualityApprovalReference: "test:quality",
       expiresAt: new Date(Date.now() + 60_000).toISOString(), retention: "standard_api_store_false", maxInputBytes: 100_000, maxOutputTokens: 2000, maxResponseBytes: 100_000, timeoutMs: 10_000,
-      sourceConnectionIds: [String(first.source.id), String(second.source.id)], currency: "DKK", maxCostMicros: 50, credentialEnv: "MARKET_RESEARCH_MODEL_KEY_SYNTHETIC" };
+      sourceConnectionIds: [String(first.source.id), String(second.source.id)], currency: "DKK", maxCostMicros: 50, credentialEnv: `MARKET_RESEARCH_MODEL_KEY_CLIENT_${clientId}_SYNTHETIC` };
     const raw = () => JSON.stringify({ schemaVersion: 1, bindings: [binding] });
     let credentialReads = 0; let calls = 0; let duringCall: (() => Promise<void>) | undefined;
-    const env: Record<string, string | undefined> = { MARKET_RESEARCH_SYNTHESIS_BINDINGS_JSON: raw(), ENABLE_ENV_CREDENTIAL_RESOLVER: "true" };
+    const env: Record<string, string | undefined> = { MARKET_RESEARCH_SYNTHESIS_BINDINGS_JSON: raw(), ENABLE_ENV_CREDENTIAL_RESOLVER: "true", MARKET_RESEARCH_CLIENT_ID: String(clientId) };
     Object.defineProperty(env, binding.credentialEnv, { get() { credentialReads++; return "synthetic-not-a-real-key"; } });
     const provider = () => getProductionSynthesisProvider(clientId, { environment: () => env, transport: async (url, options) => {
       calls++; assert.equal(url, "https://api.openai.com/v1/responses");

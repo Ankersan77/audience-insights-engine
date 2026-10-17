@@ -21,6 +21,8 @@ try {
 }
 
 async function main() {
+  const { assertClientOwnedDeployment } = await import("../lib/clientOwnedDeployment");
+  await assertClientOwnedDeployment();
   const { startRunWorker } = await import("./runQueue");
   const { startCanonicalScheduler } = await import("./canonicalQueue");
   const { startSynthesisMaintenance } = await import("./synthesisMaintenance");

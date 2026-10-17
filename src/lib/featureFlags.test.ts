@@ -7,6 +7,6 @@ test("legacy Last30Days ingestion is fail-closed", () => {
   assert.equal(legacyLast30DaysEnabled(""), false);
   assert.equal(legacyLast30DaysEnabled("false"), false);
   assert.equal(legacyLast30DaysEnabled("1"), false);
-  assert.equal(legacyLast30DaysEnabled("TRUE"), true);
+  assert.equal(legacyLast30DaysEnabled("TRUE"), false);
 });
 
