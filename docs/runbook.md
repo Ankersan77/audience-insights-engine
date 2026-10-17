@@ -1,4 +1,7 @@
-# Market Research runbook
+# Legacy research-run runbook
+
+> Historical only. This document covers the disabled `last30days` research-run path scheduled for
+> removal in Roadmap R1. It must not be used for new production operation.
 
 This runbook covers the active product core. Provider-specific connector recovery belongs in the
 adapter's own operational documentation and must use the generic acquisition and delivery

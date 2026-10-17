@@ -1,704 +1,616 @@
-# Market Research — Build Roadmap
+# Market Research — Development Roadmap
 
 ## 1. Roadmap contract
 
-This roadmap implements `BLUEPRINT.md` version 1.1.0. It replaces the legacy Audience Insights
-Engine implementation plan. Work is organized by evidence-bearing release gates rather than target
-dates. A phase is complete only when its exit gate passes; code presence or a polished screen is
-not sufficient.
+This roadmap implements `BLUEPRINT.md` version 2.0.0. It replaces the former platform-oriented
+roadmap and is the only approved delivery sequence.
 
-The roadmap deliberately proves one bounded client case before broadening connectors, industries,
-or automation. The existing application is useful scaffolding, but its Slack/Rill delivery model,
-legacy schema, and internal-tool assumptions are not the target architecture.
+The roadmap has two explicit jobs:
 
-## 2. Delivery principles
+1. remove or park legacy and non-v1 product surface safely; and
+2. build the smallest credible AI-native competitor/positioning product through a remote MCP
+   contract.
 
-1. Build vertical slices that end in a verifiable research work product.
-2. Define and test contracts before adding provider adapters.
-3. Keep migrations additive until the replacement path is proven; remove legacy tables and code in
-   a separate, reviewable cleanup step.
-4. Never fake a live source, delivery receipt, study result, or causal conclusion.
-5. Preserve source methodology, rights, provenance, and uncertainty through every transformation.
-6. Test the people-blind boundary at ingestion and at every product-facing projection.
-7. Use client configuration and ability packages instead of client-specific conditionals.
-8. Treat human benchmark evidence as a release artifact.
+Work is organized by evidence-bearing release gates, not target dates. A phase is complete only when
+its exit gate passes. Code presence, a manifest, a synthetic fixture or a polished screen is not
+completion evidence.
 
-### 2.1 Execution correction
+Historical plans remain available in Git history. They must not be copied into this roadmap as an
+implementation journal.
 
-The phase outcomes below remain canonical, but they are implemented as vertical slices rather than
-independent horizontal layers. Tenancy, security, retention, audit, idempotency, observability,
-failure handling, and owned-surface proof are part of every applicable phase and may not be deferred
-to Phase 8. The rationale and baseline gap analysis are recorded in
-`docs/roadmap-evaluation.md`.
+## 2. Delivery rules
 
-Repository-verifiable completion is distinct from external validation. Live source permissions,
-pilot data, qualified method review, human scorecards, and production restore exercises require
-named evidence; until supplied, the product must report `unverified` or `needs_context` rather than
-claiming those gates passed.
+1. Follow the phases in order. Later product work cannot bypass an open earlier gate.
+2. Keep legacy removal, schema destruction and new MCP functionality in separate commits and
+   releases.
+3. Prefer reversible disable/park steps before destructive deletion.
+4. Never rewrite applied migrations; remove old schema through forward migrations.
+5. Preserve the trend-first, people-blind and fail-closed boundaries throughout cleanup.
+6. Define contract and evaluation failure cases before implementation.
+7. Build one vertical, user-visible research path before broadening sources, tools or abilities.
+8. Treat client permissions, source rights, human research quality and production operations as
+   external evidence gates, never as code tasks that can self-certify.
+9. Do not mix host-specific research logic into host packages.
+10. Do not add a fourth source path, seventh MCP tool, second production ability or second geography
+    before the minimum credible proof passes.
 
-Pilot decision (2026-10-17): D4WN is the first client. The owner confirms no current dataset or
-existing D4WN synthesis connector. The initial brief is positioning and competitor understanding
-in Denmark for CMOs and marketing managers with decision authority. D4WN's intended human/creative
-AI-transformation position is owner-provided intent to test, not a verified finding. Source inventory,
-provider selection/acceptance, human calibration and production evidence remain open. Build and test
-against labelled synthetic fixtures without inventing client truth or activating paid/live services.
-
-### 2.2 Company-context continuation
-
-Current D4WN next-slice order (2026-10-17): persistent company context and its research/agent
-read boundary first; approved source inventory and first evidence-backed positioning/competitor
-brief next; live synthesis and monitoring only after explicit provider/source/budget acceptance.
-The company foundation is implemented in migration `0018`, `/company` and `/api/company-context`:
-owner-confirmed versioned strategy, optional aggregate-source references, immutable history,
-review deadlines, tenant/session authorization, optimistic edits and frozen research basis.
-The importable D4WN owner brief is `fixtures/d4wn/company-context.json`; it is not auto-installed
-into a tenant and contains no invented evidence or CRM numbers. See `docs/company-context.md`.
-Agent service authentication/tool transport, live aggregate refresh and company-context transfer
-between installations are still open. Solution-pack export does not export client strategy.
-
-Owner decision (2026-10-17): D4WN and every future client must operate a separate app, worker,
-database, identity integration, secret store and provider accounts/keys. Shared D4WN hosting,
-hybrid multi-client runtime and shared credentials are no longer launch options. The repository
-now requires a one-client deployment check for workers, scopes production credential references,
-and disables the historical globally keyed ingestion path. This does not provision infrastructure
-or attest actual ownership of an OpenAI/CRM account. D4WN's hosting target, database/backup owner,
-identity app and OpenAI project/service-account credential remain to be selected and verified.
-The current login implementation is pinned to OneLogin environment names; a provider-neutral OIDC
-configuration and second-client identity proof remain packaging work before broad handoff.
-
-## 3. Baseline at roadmap approval
-
-The repository currently contains:
-
-- a Next.js/React application;
-- PostgreSQL and Drizzle migrations;
-- a `pg-boss` background-worker foundation;
-- authentication, roles, audit helpers, and health checks;
-- brand, market, research-run, evidence, and insight concepts;
-- a pinned `last30days` research submodule and worker boundary;
-- legacy provider-specific delivery and ingestion code;
-- legacy client-specific product documents and operational procedures.
-
-This baseline should be reused where it conforms to the blueprint. It is not proof that the new
-product model, privacy boundary, research methods, or client portability exist.
-
-## 4. Release sequence
+## 3. Target release sequence
 
 | Phase | Outcome | Depends on |
 |---|---|---|
-| 0 | Product reset and legacy isolation | Blueprint approved |
-| 1 | Canonical contracts and data foundation | Phase 0 |
-| 2 | People-blind evidence ingestion | Phase 1 |
-| 3 | Market Twin onboarding and resolution | Phase 2 |
-| 4 | Core research abilities and decision briefs | Phase 3 |
-| 5 | Campaign lifecycle and analysis | Phase 4 |
-| 6 | Measurement and Brand Lift | Phase 5 |
-| 7 | Proactive monitoring and learning loop | Phases 3–6 |
-| 8 | Client packaging, hardening, and pilot proof | Phases 0–7 |
+| R0 | Scope lock, capability register and verified baseline | Blueprint v2 approved |
+| R1 | Safe `last30days` and identity-bearing legacy removal | R0 |
+| R2 | One active v1 capability; non-v1 product parked | R1 |
+| R3 | Remote MCP foundation and read-only context tool | R2 |
+| R4 | Three live source paths and competitor/positioning research | R3 |
+| R5 | Complete the four-tool research and review experience | R4 |
+| R6 | Second-host portability proof | R5 |
+| R7 | Deployment, recovery, service and paying-pilot proof | R6 |
 
-### 4.1 Execution status — 2026-10-17
+No new product capability begins before R7. After R7, pilot evidence selects exactly one next
+ability.
 
-The deterministic reference path is covered end to end by
-`src/workflows/reference-pilot.test.ts`. That proof is intentionally not presented as live pilot
-evidence.
+## 4. Cross-cutting definition of done
 
-| Phase | Repository implementation | Open release evidence |
-| --- | --- | --- |
-| 0 | Complete and shipped | None |
-| 1 | Canonical contracts, additive migration, direct client scope, membership and transition tests implemented | Apply and verify migration in the selected environment |
-| 2 | Adapter registry, durable dispatcher/executor, bounded retry, cancellation, stale-job reconciliation, minimization, quarantine, identifier-safe source references, rights-aware expiry, scheduled canonical tombstoning, artifact-linked citation records, normalized quantitative observations/qualitative themes and four deterministic source classes implemented; source policy, scope, rights, lookback, quota and cost limits are runtime-enforced; revocation cancels active work and tombstones retained content; unregistered and legacy ingestion fail closed | Approved sources, registered live adapters and provider acceptance |
-| 3 | Persistent text/CSV/JSON upload and permitted-link onboarding, method preservation, idempotency, contradictions and relevance resolution implemented | Pilot documents, qualified lineage review and any required office/PDF extraction adapter |
-| 4 | All ten blueprint abilities have versioned installable manifests; six research/planning abilities produce persistent governed decision briefs with an inspectable evidence/method drawer while campaign pre-flight/live/post and Brand Lift use their specialized contracts; durable tenant-scoped Ask / Projects workrooms bind decision context and artifacts; provider-neutral synthesis is gated by deterministic evidence selection before drafting and claim validation afterwards; applicability-aware evidence selection, Market Twin review, causal guards and fail-closed human scorecard rubrics are implemented | An approved synthesis provider plus qualified reviewers must record provider acceptance and representative/adversarial scores |
-| 5 | Persistent campaign revisions and evidence, ready pre-flight approval gate, versioned live/post assessments, and reviewer-promoted campaign learning implemented in the owned surface | One real campaign with aggregate result sources through the full lifecycle |
-| 6 | Persistent measurement plans and studies with separate reviewer decisions, strengthened metric/date/sample validation, deterministic classification and reproducible binary-lift analysis implemented | Qualified method review and an approved live study |
-| 7 | Versioned sensing administration includes audiences, occasions, risks, decision contexts, lookback, novelty, seasonality, deduplication, suppression/down-ranking, expiry and mandatory owned-surface review; tenant-scoped durable cadence scheduling, acquisition dispatch, cancellation and reconciliation, historical-baseline qualification, auditable qualification receipts, fail-closed `needs_context`, no-change/source-health outcomes, an owned Market Pulse for pending-review signals, briefing contracts, governed learning promotion and monitoring scorecards are implemented | Registered live connectors, real baselines, approved risk metadata and shadow-mode evidence |
-| 8 | Five-role runtime authorization, source/sensing/solution administration, atomic tenant-neutral checksum-verified solution+sensing v3 import/export with a v2 migration path, second-client proof, concurrency locks, durable quality/remediation evidence, expiry-aware validation gates, automated evidence/collection/intelligence retention enforcement, resilience controls and operations runbook implemented | Named pilot inputs, clean deployment, restore evidence and operating owners |
+Every applicable work item includes:
 
-Anything in the final column remains `needs_context`; it is not silently converted into completion.
+- versioned contract and migration impact;
+- normal, boundary, adversarial and failure tests;
+- tenant, role, purpose and source-rights enforcement;
+- bounded resource, deadline and cost behavior;
+- idempotency, cancellation and retry semantics;
+- redacted audit and observability;
+- people-blind retained output and host projection;
+- explicit deployment and rollback instructions;
+- documentation and capability-register update;
+- clean lint, typecheck, deterministic tests and production build;
+- PostgreSQL integration tests when persistence changes;
+- durable external evidence when the gate cannot be proved in code.
 
-The implementation column is an inventory, not a completion declaration. The follow-up audit in
-`docs/roadmap-evaluation.md` tracks remaining production synthesis acceptance, durable briefing production,
-live adapter budget compliance and broader runtime verification. Those repository tasks remain
-open alongside the external gates. Source-policy persistence and revocation concurrency now have
-dedicated PostgreSQL integration coverage in `integration/source-governance.integration.ts`.
-Scheduled review packets now persist and support owned-surface review; narrative synthesis, urgent
-alert delivery and explicit late-evidence revisions are still open. Briefing HTTP authorization
-and viewer server rendering are covered with synthetic sessions; this is not a full browser pilot.
-
-An optional Responses synthesis transport now implements the provider-neutral seam, with an
-ability-owned versioned prompt, explicit client/model/scope/retention binding, finite resource
-limits, strict response-envelope handling and synthetic HTTP/Core tests. It is not production
-activation or live model acceptance. Separate synthesis budget admission now has a provider-neutral
-wrapper, daily client-wide currency/request limits, single-use dispatch, budget-version revocation,
-deadline/expiry checks, atomic audit and operator crash reconciliation (migration `0015`). Synthetic
-PostgreSQL tests exercise contention and late-result suppression. Production factory wiring now
-resolves exact client bindings from server configuration and requires matching unexpired
-processing/quality gates, approved current source IDs and locked evidence/Market Twin revalidation
-at reservation, dispatch and completion. Synthetic transport/database tests cover the actual
-factory; authenticated HTTP proves absent configuration remains disabled. No real client is enabled.
-An independent five-minute worker now reconciles expired attempts across authorization days in
-bounded, tenant-locked batches without replay or refund. Partial deadline indexes (`0016`),
-all-day backlog visibility and synthetic real-pg-boss execution cover this recovery path.
-Owners/admins can now inspect and explicitly edit both budget types in Sources & Setup, with exact
-currency entry, expected-version conflicts, live membership/session checks and atomic named audit.
-Migration `0017` adds acquisition edit versions without changing issued authorization semantics.
-Live acceptance, actual usage reconciliation, live-provider HTTP proof and human benchmarks remain open. See
-`docs/synthesis-provider-acceptance.md`.
-
-New decision briefs preserve fingerprints of their used evidence/methods and reviewed Market Twin
-records as well as their project, solution and bound sensing versions. Saving revalidates and locks
-that basis, rejects changed rights/context, and rolls back if inputs expire while waiting to write.
-Concurrency tests cover strategy edits and retention races. This guarantees the checked basis at
-save time, not perpetual freshness or automatic re-analysis of historical work. Campaign snapshot
-and read-time availability coverage is described below; full interactive pilot proof remains open.
-
-Campaign pre-flight now has an owned-surface, analyst-authored strategic review with seven
-evidence-linked dimensions, alternatives, explicit contradiction rationale and current Market Twin
-context. Campaigns explicitly declare market/language pairs (not a Cartesian product of solution
-settings). Approval revalidates the latest review for **every** declared pair, the exact campaign
-revision and accepted measurement version under database locks. A newer incomplete review cannot
-reuse an older ready verdict for that pair. Approval freezes all scoped review IDs in its revision
-and audit. The owned surface shows missing, outdated and saved reviews separately from historical
-approval. Proposed scope changes use optimistic revision checks and invalidate prior assessments;
-the measurement plan snapshots the server-owned scope and must match before approval. Legacy
-proposals must declare scope and replace/review unscoped plans; legacy approvals are not backfilled
-or presented as covered. Scope is frozen after approval.
-Measurement replacement is available before approval and requires review/reassessment; after
-approval the plan is frozen. This closes the prior structural-checklist-only pre-flight path, not
-the automated campaign expert requirement. Multi-market pre-flight coverage and explicit per-pair
-measurement configurations are implemented. Each pair owns its metric dictionary, population,
-baseline, target, materiality, checkpoints and attribution/decision rules; all configurations are
-reviewed and frozen as one version. Replacement requires expected campaign/plan versions; review
-requires the displayed plan version. Both writes include an atomic named audit. The result form
-switches the configuration and clears selections when the pair changes. Readback rejects
-broad/pooled metric applicability rather than presenting it as a
-single-market result. Historical single-pair plans remain readable; shared multi-market proposals
-require an explicit replacement. Pooled-result comparability, complete multi-market learning review,
-execution/checkpoint alignment and model-assisted interpretation remain implementation work.
-Live/post readbacks reject undeclared or ambiguous pairs. Multi-scope campaigns cannot yet enter
-`learning_reviewed`: a single-market learning must not silently close the entire campaign.
-
-Live/post readbacks now select normalized baseline/result observation IDs instead of trusting
-free-form outcome numbers. Core verifies current source permission, campaign, metric dictionary,
-population, methodology, ordered windows and the frozen approved baseline, then records numerical
-comparisons and context fingerprints atomically. First-party aggregate transcription is available
-in evidence onboarding, with cohort suppression and replay protection. Read-time projection hides
-unavailable copies; retention removes copied values/deltas while keeping lineage. This is a usable
-descriptive reconciliation path, not automated detection of fatigue or, by itself, a substantive
-campaign learning. The human interpretation/review path below supplies that separate work product;
-a numerical join alone no longer generates a generic learning candidate.
-
-Analyst-authored live/post interpretation now separates observation, hypothesis, insight and
-recommendation, and records client relevance, alternatives, falsification conditions, confidence
-and explicit metric/evidence/Market Twin references. A post interpretation can propose a conditional
-learning; creation and named review both revalidate the latest assessment and locked source/context
-basis. Concurrent retries are idempotent, audits are atomic, and accepted learning is scoped and
-time-bounded by evidence/current source rights. Generic acceptance cannot bypass this promotion
-path. The reviewed campaign transition checks that the learning is still supported. This restores
-an end-to-end human-led learning workflow, not automatic expert interpretation or pilot proof.
-
-Queued acquisitions now reserve explicit currency-denominated cost, record and request upper bounds
-against one client-wide UTC-day allowance before adapter execution. Retries require new durable
-authorizations; cancellation, crashes and cheaper-than-planned success do not automatically refund
-them. An operator CLI configures and inspects these conservative bounds. Synthetic database/worker
-tests cover contention, isolation and retry failures; real provider metering acceptance, measured
-cost reconciliation remain open; owned-surface budget administration is now implemented as above.
-Session hardening now uses server-side expiry/revocation, current tenant permissions, explicit
-operator provisioning and same-origin write checks. The external OIDC/deployment login proof is
-still required; migration `0013` forces older signed-role cookies through sign-in again.
-
-## Phase 0 — Product reset and legacy isolation
-
-**Status: complete (2026-10-16).** Evidence: `docs/phase-0-legacy-inventory.md`,
-`src/connectors/contracts.ts`, connector contract tests, and the CI-enforced
-`check:source-of-truth` command. Legacy database structures remain only under the additive-migration
-exception documented in the inventory.
+## 5. R0 — Scope lock and safe baseline
 
 ### Outcome
 
-The repository has one product definition, no active Slack/Rill requirement, and an explicit map
-from reusable current code to legacy code scheduled for retirement.
+The repository has one machine-readable capability inventory, the version 1 product decisions are
+owned, and cleanup starts from a reproducible green state.
 
 ### Work
 
-- Make `BLUEPRINT.md` and `ROADMAP.md` the canonical documents.
-- Mark `product-spec.md` and `implementation-plan.md` as superseded compatibility pointers.
-- Update `README.md` and `AGENTS.md` to reference the new source of truth.
-- Inventory every Slack- and Rill-specific file, environment variable, database field, workflow,
-  screen, test, runbook step, and dependency.
-- Classify each item as:
-  - remove now;
-  - retain temporarily for migration;
-  - generalize behind a provider-neutral contract;
-  - historical record only.
-- Supersede the Rill-specific ADR without rewriting history.
-- Define the replacement seams:
-  - `EvidenceSourceAdapter` for inbound evidence;
-  - `MetricSourceAdapter` for aggregate metrics;
-  - `DeliveryAdapter` for optional outbound artifacts;
-  - `SourceAcquisitionJob` and redacted receipt contracts.
-- Remove Slack/Rill from active navigation, default configuration, health/readiness claims, and
-  acceptance criteria.
-- Add a source-of-truth check that prevents legacy specifications from being treated as current.
+#### R0.1 Capability register
+
+Create `product-capabilities.yaml` and a CI validator. Each capability records:
+
+- stable ID, purpose and non-purpose;
+- owner and release state;
+- contract, tool and ability versions;
+- data classes and source paths;
+- dependencies and human gates;
+- evaluation suite and evidence references;
+- supported hosts;
+- operational requirements;
+- deprecation and removal condition.
+
+The validator rejects duplicate IDs, cycles, unknown versions, forbidden dependency directions and
+`production_supported` without current evidence.
+
+#### R0.2 Compatibility manifest
+
+Create a machine-readable manifest covering:
+
+- Blueprint version;
+- Core contract version;
+- database schema version;
+- MCP toolset version;
+- production ability versions;
+- supported host-package versions;
+- migration state.
+
+#### R0.3 Decision owners
+
+Record owners and deadlines for:
+
+- primary host and second portability host;
+- D4WN competitor set and source inventory;
+- licensed listening/public-conversation provider;
+- research, source-rights, security and operational review;
+- cohort, suppression and retention values;
+- deployment region and managed-service responsibility split;
+- OAuth/IdP reference flow;
+- cost ceilings and pilot commercial terms;
+- DPA, subprocessors, DSR/DPIA decisions;
+- service objectives, RPO/RTO and support terms.
+
+Unresolved items remain visible blockers for the phase that needs them. They do not invite speculative
+implementation.
+
+#### R0.4 Baseline evidence
+
+- tag the pre-trim revision;
+- run the complete repository verification;
+- apply all migrations to an empty PostgreSQL test database;
+- run integration and authenticated HTTP cases;
+- test an upgrade from a representative existing database;
+- take and restore a test backup;
+- inventory all active routes, queues, tables and provider dependencies.
 
 ### Exit gate
 
-- No canonical documentation names Slack or Rill as a requirement.
-- The application can build and run with all Slack/Rill environment variables absent.
-- A reviewed deletion/generalization manifest covers every Slack/Rill reference.
-- Existing tests remain green or are deliberately replaced by equivalent provider-neutral tests.
+- Blueprint and roadmap versions agree.
+- Capability and compatibility manifests validate in CI.
+- Decision register has named owners and blockers.
+- Empty and representative-upgrade database tests pass.
+- Backup restore is evidenced.
+- The pre-trim revision is tagged and recoverable.
 
-## Phase 1 — Canonical contracts and data foundation
+### Rollback
+
+Documentation and manifests can be reverted without runtime change. The baseline tag and database
+backup remain the recovery point for later phases.
+
+## 6. R1 — Safe legacy removal
+
+R1 is deliberately separate from MCP work. It is delivered as two reviewable releases.
+
+### R1A — Data decision and code detachment
+
+#### Outcome
+
+`last30days` and the legacy brand/instruction/run/insight workflow no longer execute, ship or appear
+as an active product, while legacy database state remains readable for a safe migration decision.
+
+#### Data preflight
+
+Inventory rows and dependencies for at least:
+
+- `channel` and `insight_route`;
+- `research_instruction` and `research_run`;
+- legacy `evidence`, including `author_handle`;
+- legacy `insight` and `insight_evidence`;
+- related audit records, brands and markets.
+
+For every known installation, decide whether each class is exported, tombstoned, retained for a
+bounded audit period or deleted. Do not drop brands or markets until canonical dependencies prove
+they are unused.
+
+#### Code and packaging removal
+
+- remove `/runs`, legacy run trigger/cancel APIs and run UI;
+- remove brand research-instruction surfaces that only configure `last30days`;
+- remove legacy insights queue/review surfaces that do not use canonical artifacts;
+- remove `runQueue`, `runLast30Days`, legacy `draftInsights`, compact-report parsing and smoke script;
+- remove the legacy feature flag and metrics;
+- stop the worker subscribing to the legacy queue;
+- remove Python and the vendored engine from the runtime image;
+- remove the Git submodule and `.gitmodules` requirement;
+- remove submodule checkout from CI and local setup;
+- mark the old subprocess ADR superseded;
+- update runbooks, README and agent instructions;
+- make the source-of-truth check reject new active `last30days` references.
+
+#### Exit gate
+
+- repository search finds `last30days` only in explicit historical records and the removal migration
+  documentation;
+- legacy routes return 404;
+- worker starts only canonical queues;
+- production image contains neither Python nor the vendored engine;
+- build and all non-destructive integration tests pass;
+- legacy data remains unchanged and readable pending R1B.
+
+#### Rollback
+
+Revert the code release. The legacy schema remains available, while ingestion stays fail-closed.
+
+### R1B — Forward schema cleanup
+
+#### Outcome
+
+Identity-bearing and unused legacy storage is removed after explicit data sign-off.
+
+#### Work
+
+- create a forward migration from the current schema;
+- remove approved legacy tables, enums, columns, indexes and foreign keys;
+- remove `author_handle` and any retained provider-shaped personal fields;
+- preserve required redacted audit/tombstone history;
+- update Drizzle schema and queries;
+- test both fresh install and upgrade from the current migration head with representative rows;
+- execute a timed backup/restore and forward-fix exercise.
+
+Historical migration files remain unchanged.
+
+#### Exit gate
+
+- data owner approves export/retention/deletion evidence;
+- fresh and upgrade migrations pass;
+- canonical source, evidence, brief, context and review smoke tests pass;
+- no active schema can retain a legacy identity-bearing record;
+- restore/forward-fix procedure is timed and documented.
+
+#### Rollback
+
+There is no production down-migration. Recover from the verified backup or issue a reviewed forward
+fix. Tag the release before applying the production migration.
+
+## 7. R2 — Activate only the v1 product
 
 ### Outcome
 
-The system can represent clients, sources, evidence, the Market Twin, abilities, studies, campaigns,
-and governed learning without provider-specific fields or person-level consumer records.
+One bounded competitor/positioning capability is active. Deferred capabilities cannot be configured,
+invoked or presented as supported.
 
-### Workstream 1A: tenancy and configuration
+### Active capability
 
-- Introduce `client` and client-partitioned storage boundaries.
-- Define a versioned client solution profile containing enabled abilities, provider bindings,
-  markets, languages, sensing rules, review roles, and retention policies.
-- Add authorization tests proving that one client cannot read or mutate another client's records.
-- Keep credentials outside application records; store opaque `credential_ref` values only.
+Create `competitor-positioning-research@1` as the only production-target ability. Existing competitor
+and brand-positioning methods may be reused internally, but the host sees one coherent product job,
+not two overlapping abilities.
 
-### Workstream 1B: canonical evidence
+### Supporting capabilities
 
-- Define schemas for:
-  - source connection;
-  - source-acquisition job and receipt;
-  - evidence item and evidence collection;
-  - normalized quantitative observation;
-  - normalized qualitative theme;
-  - signal and contradiction;
-  - citation and citation level;
-  - method, sample, weighting, rights, freshness, and applicability.
-- Separate raw acquisition references from retained evidence.
-- Implement candidate/live/quarantined/expired/superseded lifecycle states.
+Retain only what the vertical slice needs:
 
-### Workstream 1C: Market Twin
+- tenant, identity, role and audit boundaries;
+- versioned company context;
+- canonical sources, acquisition jobs, receipts and budgets;
+- evidence, citations, rights, retention and minimization;
+- deterministic evidence resolution;
+- research artifacts and decision briefs;
+- Market Twin candidate/review transitions;
+- synthesis seam and spend admission;
+- quality evaluations and external gates;
+- operational resilience used by the active path.
 
-- Implement the entity and relationship schema from the blueprint.
-- Represent observation, fact, hypothesis, insight, recommendation, decision, and learning as
-  separate types.
-- Add explicit contradiction, uncertainty, evidence-gap, and supersession relationships.
-- Add client and global scope separation; block automatic client-to-global promotion.
+### Parked capabilities
 
-### Workstream 1D: abilities and outputs
+Park market/category diagnosis, broad audience research, cultural trends, general research planning,
+campaign pre-flight/live/post, Brand Lift, monitoring/sensing/briefings, external delivery and broad
+industry packs.
 
-- Define versioned ability manifests, evidence selectors, method declarations, quality rubrics,
-  output schemas, and human gates.
-- Define one product-facing decision-brief contract with progressive detail.
-- Define candidate-learning and promotion contracts.
+Parking first means reversible deny-by-default controls:
+
+- not enabled by default;
+- not importable as active configuration;
+- not shown as supported in navigation or APIs;
+- direct calls return a stable unsupported/deferred result;
+- no scheduler or external work runs for them.
+
+After the version 1 pilot, delete parked code and schema that create material maintenance or security
+cost. Git history is the archive; dormant runtime code is not.
+
+### Administration surface
+
+Reduce active navigation to company context, sources/rights, briefs/review and quality/operations.
+`/projects` may remain an internal artifact view, but it is not the primary user experience.
+
+### Contract corrections before MCP
+
+- model source independence explicitly; a connector ID is not a publisher/origin and cannot by
+  itself establish corroboration;
+- distinguish evidence lifecycle from human brief review state in contracts and UI;
+- resolve the verbatim-citation validation mismatch and exclude unreviewed exact excerpts from v1;
+- define every wire-status semantic and remove states no active path can produce;
+- revalidate current rights, freshness and context during review, not only during drafting;
+- prepare identity mapping by issuer and subject rather than subject alone.
 
 ### Exit gate
 
-- JSON/schema validation covers every canonical contract.
-- Tenant-isolation tests fail closed.
-- The schema can represent the complete first-pilot fixture without Slack, Rill, or client-specific
-  code.
-- A deterministic test proves that a signal cannot enter the Market Twin as a fact or learning
-  without the required transition.
+- only `competitor-positioning-research@1` can enter an active solution;
+- parked endpoints, schedulers and imports fail closed;
+- active UI and documentation make no campaign, Brand Lift or monitoring product claim;
+- capability register matches runtime behavior;
+- existing canonical artifacts remain readable.
 
-## Phase 2 — People-blind evidence ingestion
+### Rollback
+
+Parking controls can be reverted. A parked capability may return only through a new reviewed
+capability version and release gate, never a hidden feature flag.
+
+## 8. R3 — MCP foundation and read-only context
 
 ### Outcome
 
-The product can acquire permitted source material, transform it into useful retained trends and
-evidence, and prove that it does not create consumer profiles.
+The primary host can install Market Research and safely read current D4WN company/market context
+through one canonical remote MCP tool.
 
-### Workstream 2A: adapter SDK
+### Work
 
-- Build the provider-neutral source adapter interface.
-- Support activation checks, bounded acquisition, pagination/cursor handling, retry, cancellation,
-  quotas, costs, and redacted receipts.
-- Ensure raw provider payloads and credentials never cross the adapter boundary.
-- Add connector health states that distinguish configured, verified, degraded, unavailable, and
-  producing evidence.
+#### R3.1 Application boundary
 
-### Workstream 2B: minimization and transformation
+- introduce application services and redacted DTOs between persistence and all surfaces;
+- prohibit MCP and web handlers from importing query modules directly;
+- codify dependency boundaries in lint/CI;
+- version request/response envelopes and error states.
 
-- Create the ephemeral acquisition zone and configurable raw retention.
-- Strip handles, avatars, profile IDs, user URLs, device IDs, and unnecessary timestamps before
-  retained storage.
-- Add identifying/sensitive-content detection and quarantine.
-- Add aggregation, cohort thresholds, suppression, language detection, topic classification,
-  deduplication, and bot/manipulation indicators.
-- Store the method used to produce every aggregate or qualitative theme.
+#### R3.2 Remote MCP transport
 
-### Workstream 2C: citation policy
+- implement Streamable HTTP MCP at a versioned endpoint;
+- publish tool metadata and schemas;
+- implement only `get_market_context` initially;
+- provide health, protocol and bounded resource handling;
+- keep optional host UI out until the tool-only flow is proven.
 
-- Implement statistical, paraphrased, and verbatim citation levels.
-- Default product output to statistical or paraphrased evidence.
-- Require a review reason, retention rule, and safe reference for verbatim public excerpts.
-- Test that exact searchable quotes cannot be mislabeled as anonymous.
+#### R3.3 Agent identity
 
-### Workstream 2D: first source adapters
+- implement service/delegated OAuth separately from browser-cookie authentication;
+- bind token to installation tenant, host/client identity, subject, role, purpose and scope;
+- support revocation and expiry;
+- audit host, subject, tenant, role, purpose, contract version and result status;
+- reject tenant selectors supplied in tool arguments.
 
-Build only the source classes required by the first pilot:
+#### R3.4 Security and compatibility
 
-- uploaded/client-mounted documents and common office formats;
-- public and official web sources;
-- official statistics or search-trend inputs;
-- one permitted forum/social/listening adapter;
-- one aggregate first-party metric adapter if pilot data is available.
-
-The existing `last30days` integration may be retained only if its source access and output can meet
-the new adapter, rights, minimization, and provenance contracts without patching vendored code.
+- golden request/response fixtures;
+- prior-minor compatibility rules;
+- size, nesting, timeout and rate limits;
+- malicious company/source text tests;
+- cross-tenant, expired, revoked and over-scoped token cases;
+- field-level host exposure snapshot.
 
 ### Exit gate
 
-- Red-team fixtures containing names, handles, profile URLs, sensitive statements, and linkable
-  combinations do not enter retained trend storage.
-- Every retained item has source, rights, method, freshness, confidence, and client scope.
-- Raw acquisition can be expired without breaking retained aggregate evidence.
-- At least three source classes produce normalized evidence through the same Core contract.
+- a real installation in the selected primary host reads current D4WN context;
+- no browser session is used as an agent credential;
+- invalid scope and membership fail closed;
+- only redacted DTO fields reach the host;
+- application dependency checks and MCP contract tests pass.
 
-## Phase 3 — Market Twin onboarding and resolution
+### Rollback
+
+Disable MCP ingress and revoke the host client. Core and the admin/review surface continue without a
+schema rollback.
+
+## 9. R4 — Live sources and competitor/positioning research
 
 ### Outcome
 
-A client can turn its strategy, brand, audience research, market material, and campaign history into
-a reviewed Market Twin that is useful, inspectable, and honest about gaps.
+The primary host can request the first real, governed D4WN competitor/positioning brief.
 
-### Workstream 3A: source-first onboarding
+### R4.1 Source approval before adapter code
 
-- Add client source inventory and upload/link workflows.
-- Extract candidate entities, relationships, facts, hypotheses, constraints, and methods.
-- Preserve tables, survey methodology, segment definitions, weights, dates, and limitations from
-  reports rather than treating them as plain text.
-- Provide contradiction and duplicate review before promotion.
+Approve the D4WN source inventory, purpose, rights, retention, geography, cost and reviewer before
+registering a production adapter.
 
-### Workstream 3B: canonical client views
+Deliver source paths sequentially:
 
-- Build canonical client strategy, brand, audience, market, competitor, purchase-journey, campaign,
-  measurement, and ways-of-working views.
-- Add an explicit knowledge-gap register and research backlog.
-- Add Market Twin version history and source lineage.
+1. approved client documents;
+2. trusted public/official web;
+3. one licensed listening or public-conversation provider.
 
-### Workstream 3C: relevance resolution
+Each path must pass live connection/receipt, normalized provenance, minimization, failure/degradation,
+quota/cost, retention/expiry, revocation/deletion and human contribution-to-brief checks before work
+begins on the next path.
 
-- Resolve evidence using decision requirements, client scope, applicability, source grade,
-  freshness, rights, confidence, contradiction, and diversity.
-- Preserve decision-critical requirements even when semantic similarity is low.
-- Emit a redacted selection basis showing why evidence was used or excluded.
+“Trusted web” receives an operational policy: primary/official preference, authority tiers,
+freshness, allowed retrieval, conflict handling, safe references and reproducibility.
 
-### Reference pilot fixture
+### R4.2 Synthesis provider
 
-Use a Jacobsen-style fixture containing:
+Register exactly one reference synthesis provider after processing, retention, quality, budget and
+failure acceptance. Core selects evidence before provider access and revalidates claims and current
+authority before persistence. Provider output cannot grant citations, rights or review status.
 
-- a brand guide and strategy;
-- a Dentsu-style audience study with method and segment weights;
-- product/value proposition material;
-- competitor definitions;
-- proposed and completed campaign material;
-- aggregate result data;
-- current public market evidence.
+### R4.3 Research tool
 
-The fixture validates the generic model; no Jacobsen-specific code or taxonomy is allowed.
+Implement `research_competitor_positioning` for the server-pinned
+`competitor-positioning-research@1` ability. The host cannot supply an ability ID, source/evidence IDs
+or a completed analysis. The tool is asynchronous and returns a bounded state such as `queued`,
+`success`, `needs_context`, `blocked` or `failed`, plus a durable research reference.
+
+Persist invocations independently of the MCP session with a unique tenant/subject/tool/idempotency
+key, input digest, state, artifact reference and timestamps. Host timeouts and retries must not create
+duplicate external work or briefs.
+
+The tool must freeze company context, source policy, selected evidence, ability, model and contract
+versions. Insufficient coverage returns `needs_context`.
 
 ### Exit gate
 
-- A qualified reviewer can trace every canonical Market Twin statement to evidence or an explicit
-  synthesis record.
-- Contradictory source claims remain visible and cannot be resolved by ingestion order.
-- A Dentsu-style report retains its method, population, weights, thresholds, and applicability.
-- Re-running onboarding is idempotent and does not silently overwrite reviewed intelligence.
+- all three source paths produce current live receipts;
+- every material brief claim has traceable, permitted evidence;
+- release evaluation meets the Blueprint's initial thresholds;
+- named reviewers record remediation and retest;
+- p50/p95 latency, maximum brief cost and acceptable abstention range are recorded;
+- source/model kill switches and budget revocation stop new work immediately.
 
-## Phase 4 — Core research abilities and decision briefs
+### Rollback
+
+Disable the research tool or individual adapter, revoke its budget/credentials and retain historical
+artifacts with their frozen basis and changed availability state.
+
+## 10. R5 — Complete research and review experience
 
 ### Outcome
 
-The system performs useful market research, not merely retrieval or summarization.
+An authorized user completes question → brief → evidence/gaps → named review inside the AI host,
+while administrators use only the narrow supporting surface.
 
-### Ability 4A: market and category diagnosis
+### Toolset completion
 
-- Market structure, demand, growth, seasonality, macro/regulatory/technology forces.
-- Price, promotion, distribution, availability, category entry points, and whitespace.
-- Explicit research questions and evidence gaps.
+Add two tools:
 
-### Ability 4B: audience and purchase behavior
+- `get_research_brief`, which returns queued/running/final state and includes evidence, limitations
+  and research gaps when complete;
+- `review_research_brief`, which accepts, rejects or requests revision of the exact displayed brief
+  version.
 
-- Segments, needs, tensions, occasions, jobs, barriers, triggers, journey, switching, and channel
-  behavior.
-- Clear separation of stated attitudes, observed behavior, and modeled inference.
+Together with `get_market_context` and `research_competitor_positioning`, this completes the initial
+four-tool set. Source health remains in the administration surface. A fifth or sixth tool requires a
+named pilot case, failing evaluation and Blueprint-compliant change record.
 
-### Ability 4C: competitor intelligence
+### Review and artifact rules
 
-- Competitor and substitute set, positioning, claims, products, pricing, distribution, creative
-  patterns, partnerships, public response, and material changes.
-- Source-backed comparison rather than a generic SWOT template.
-
-### Ability 4D: brand positioning diagnosis
-
-- Category frame, tension, promise, reasons to believe, differentiation, distinctive assets,
-  mental/physical availability, portfolio role, and evolution choices.
-- Current brand law remains distinct from proposed evolution.
-
-### Product output
-
-- Implement the decision brief: change/question, point of view, client relevance, evidence,
-  contradictions, uncertainty, recommendation, research gap, and next decision.
-- Provide an evidence drawer and method appendix without making them the primary answer.
+- material recommendations return `needs_human` until reviewed;
+- `review_research_brief` is explicitly write/review-gated;
+- retries are idempotent and conflicting decisions serialize;
+- review revalidates current role, source rights, evidence, company context and artifact basis;
+- audits and state transitions commit atomically;
+- write-tool availability can be disabled independently of read access;
+- brief/context projections reveal necessary coverage/freshness/rights state, never credentials or
+  provider payloads.
 
 ### Exit gate
 
-- All four abilities pass structural contract tests.
-- Human reviewers score representative and adversarial cases for accuracy, relevance, evidence,
-  strategic value, and executive usability.
-- Unsupported evidence produces `needs_context`, not plausible filler.
-- The output correctly distinguishes attitudes, behavior, demand, and causality.
+- the end-to-end primary-host flow passes with real D4WN evidence;
+- viewer, researcher, reviewer and administrator boundaries hold;
+- no host instruction can bypass Core review or policy;
+- every tool passes normal, edge, adversarial and out-of-scope conformance tests;
+- the secondary web surface contains only necessary administration and review.
 
-## Phase 5 — Campaign lifecycle and analysis
+### Rollback
+
+Disable `review_research_brief` independently while preserving read-only research history. Roll back
+a tool contract only within the declared compatibility window.
+
+## 11. R6 — Second-host portability proof
 
 ### Outcome
 
-One campaign can be assessed before launch, monitored while active, and reviewed after completion
-against the Market Twin and the evidence available at each point in time.
+The same canonical service works in a second AI host without research-logic forks.
 
-### Workstream 5A: campaign record and lifecycle
+### Work
 
-- Add persistent proposed/approved/active/completed/learning-reviewed/archived states.
-- Preserve brief, objectives, audience, proposition, routes, assets, channels, budget assumptions,
-  measurement plan, approvals, and revision history.
-- Link campaign evidence by time and scope without rewriting historical assessments.
-
-### Workstream 5B: pre-flight ability
-
-- Evaluate strategic fit, audience logic, proposition, brand distinctiveness, cultural permission,
-  channel roles, execution feasibility, evidence sufficiency, risks, and measurement readiness.
-- Return one clear point of view, watchouts, required decisions, and research gaps.
-
-### Workstream 5C: live campaign ability
-
-- Compare actual delivery and response with baseline and checkpoints.
-- Detect anomalies, fatigue, emerging reactions, contextual changes, and competitor interference.
-- Frame optimization ideas as hypotheses until appropriate evidence exists.
-
-### Workstream 5D: post-campaign ability
-
-- Join approved plan, execution evidence, result sources, data-quality checks, and external context.
-- Separate observed results, attribution assumptions, causal limits, alternative explanations, and
-  candidate learning.
+- package and install a thin adapter for the selected second host;
+- map its OAuth/admin lifecycle to the same authorization contract;
+- run the shared golden and adversarial MCP suite;
+- compare tool selection, error handling, confirmations and field exposure;
+- document host-specific network, policy, UI and installation differences;
+- prohibit prompt forks that change method, rights, review or evidence logic.
 
 ### Exit gate
 
-- One pilot campaign completes the lifecycle without losing versioned evidence.
-- Pre-flight output cannot pass without a credible measurement plan or explicit remediation.
-- Live monitoring never presents interim correlation as causal learning.
-- Post-campaign learning remains conditional and requires review before Market Twin promotion.
+- identical canonical inputs produce contract-equivalent artifacts in both hosts;
+- authorization and revocation behave consistently;
+- field-level exposure snapshots contain no unexplained difference;
+- limitations are published and support ownership is named;
+- portability is claimed only for these conformance-tested hosts.
 
-## Phase 6 — Measurement and Brand Lift
+### Rollback
+
+Remove or disable the second host package. No Core, evidence or database migration is required.
+
+## 12. R7 — Production service and paying pilot proof
 
 ### Outcome
 
-The product can design and evaluate defensible campaign studies while refusing unsupported causal
-claims.
+Market Research can be bought, operated, recovered, upgraded and offboarded as a premium service.
 
-### Workstream 6A: measurement-plan contract
+### R7.1 Managed single-tenant reference
 
-- Objective, hypothesis, population, metric definitions, baseline, target, checkpoint, exposure,
-  source, attribution, incrementality, materiality, and decision thresholds.
-- Metric dictionary prevents incompatible measures from being compared silently.
+- reproducible deployment and environment validation;
+- regional database, encryption and secret storage;
+- least-privilege source/model accounts;
+- content-safe logs, metrics and alerts;
+- tested key rotation and access revocation;
+- backup schedule, timed restore and RPO/RTO evidence;
+- upgrade, compatibility, forward-fix and rollback process;
+- cost caps and per-installation usage visibility.
 
-### Workstream 6B: study classifier
+### R7.2 Customer-operated enterprise option
 
-- Deterministically classify proposed methods as diagnostic, directional, or causal.
-- Explain missing requirements and the strongest claim the design can support.
-- Block the term `Brand Lift` for designs that cannot support it.
+Document the required infrastructure, ownership matrix, signed artifacts, upgrade window, support
+boundary, diagnostic bundle, security notifications and acceptance checklist. Do not represent this
+mode as supported until a clean external deployment passes.
 
-### Workstream 6C: Brand Lift planner
+### R7.3 Legal, support and offboarding
 
-- Survey outcomes and instrument quality.
-- Treatment/control or approved alternative design.
-- Sample, power/feasibility, fieldwork window, weighting, exclusions, uncertainty, and stopping
-  rules.
-- Provider-neutral handoff to a platform, panel, survey, or analytics adapter.
+- DPA, subprocessors, residency and privacy roles;
+- source-rights and policy owners;
+- incident severity, contacts and response commitments;
+- export format and completeness checks;
+- credential revocation and data destruction evidence;
+- commercial inclusion/exclusion of provider usage;
+- customer modification and support policy.
 
-### Workstream 6D: analysis and reporting
+### R7.4 Paying pilot
 
-- Validate study integrity before analysis.
-- Report effect, uncertainty, base rates, subgroup cautions, multiplicity where relevant, and
-  practical significance.
-- Preserve pre-registration and distinguish planned from exploratory analysis.
-
-### Exit gate
-
-- A test suite rejects naive before/after and social-sentiment analyses as causal Brand Lift.
-- A valid holdout fixture produces reproducible results with uncertainty and interpretation.
-- A low-power or contaminated study returns inconclusive rather than inventing lift.
-- A qualified research reviewer signs off the method and output language.
-
-## Phase 7 — Proactive monitoring and learning loop
-
-### Outcome
-
-Market Research becomes a selective ongoing expert rather than a manual report generator.
-
-### Workstream 7A: sensing profile and scheduler
-
-- Configure themes, markets, competitors, products, sources, cadences, materiality, confidence,
-  freshness, deduplication, suppression, and quiet periods.
-- Emit provider-neutral acquisition and analysis jobs.
-- Keep no-change outcomes and source-health failures visible.
-
-### Workstream 7B: signal qualification
-
-- Compare with historical baseline, known seasonality, source bias, and current Market Twin.
-- Require corroboration appropriate to the signal class.
-- Detect duplicate, manipulated, bot-heavy, low-sample, and stale signals.
-
-### Workstream 7C: briefings
-
-- Urgent material alert.
-- Weekly market/competitor pulse.
-- Monthly audience/positioning/campaign review.
-- Quarterly Market Twin health and research-gap review.
-- Deliver first in the owned product surface; external destinations remain optional adapters.
-
-### Workstream 7D: governed learning
-
-- Convert reviewed campaign/study outcomes into candidate learnings.
-- Preserve conditions, evidence, causal limitations, contradictions, confidence, and decay.
-- Require accept, reject, revise, or time-bound review decisions.
+Run multiple real D4WN competitor/positioning cases, including adversarial and sparse-context cases.
+Record user/reviewer outcomes, decision value, time saved, cost, latency, abstention and remediation.
+Do not broaden scope to compensate for a quality problem.
 
 ### Exit gate
 
-- Shadow-mode evaluation covers a meaningful volume of real pilot signals.
-- Human reviewers score relevance, novelty, timeliness, trust, and actionability.
-- Duplicate/noise and dismissal rates meet agreed thresholds.
-- No proactive run silently promotes learning or performs an external action.
+- clean managed deployment passes;
+- timed restore, incident and release rollback exercises pass;
+- all source, rights, research-quality, security and operations gates have named current evidence;
+- no P0/P1 isolation, evidence-integrity or review defects remain;
+- primary and second host remain conformant;
+- pilot users rate the product at the declared quality threshold;
+- commercial terms and willingness to pay are evidenced;
+- every remaining limitation is explicit.
 
-## Phase 8 — Client packaging, hardening, and pilot proof
+## 13. Post-v1 selection gate
 
-### Outcome
+After R7, choose exactly one next capability from measured pilot demand:
 
-The reusable product can be configured for another client without a code fork and handed off with
-evidence of quality, security, recoverability, and operating responsibility.
+- audience synthesis;
+- proactive monitoring;
+- campaign learning; or
+- research/study planning.
 
-### Workstream 8A: solution packaging
+The chosen capability receives a separate job-to-be-done, source and tool impact, method, quality
+thresholds and paid pilot. Existing code creates no priority entitlement.
 
-- Version Core, ability packages, schemas, industry packs, client profiles, and adapter interfaces.
-- Support pinned versions and explicit migrations.
-- Provide import/export of redacted client configuration without credentials or client content.
-- Package and validate one client-owned installation per customer: app, worker, exclusive database,
-  secret store, identity, observability and backups. No shared/hybrid hosting mode.
+Brand Lift, full campaign lifecycle, real-time alerts, broad industry packs and marketplace work
+remain deferred until a separate business and evidence gate justifies them.
 
-### Workstream 8B: administration
+## 14. Required test matrix
 
-- Source connections, Market Twin onboarding, abilities, sensing profile, methods, roles, retention,
-  and provider bindings.
-- Keep provider credentials and raw payloads outside the admin surface.
-- Show configuration, verification, and evidence-producing states distinctly.
+Every relevant phase covers:
 
-### Workstream 8C: operational hardening
+- cross-client, cross-role and cross-purpose access;
+- revoked, expired and concurrently changed identity or policy;
+- missing, stale, conflicting, dependent, low-quality and biased evidence;
+- personal identifiers, searchable excerpts and combined-field re-identification;
+- malicious source instructions, redirects and cross-tool exfiltration;
+- duplicate, bot-like, coordinated and manipulated conversation signals;
+- source revocation, deletion, quota, cost and partial failure;
+- provider replacement behind the same Core contract;
+- host tool confusion and competing installed tools;
+- unsupported claim states and overconfident language;
+- client configuration without code branches;
+- audit, retention, expiry, supersession and rollback;
+- crash recovery, unknown external outcome and replay;
+- fresh installation and supported-version upgrade.
 
-- Durable worker execution, idempotency, bounded retry, circuit breakers, cancellation, and
-  reconciliation.
-- Backup/restore exercise, migrations, observability, alerts, cost controls, rate/quotas, incident
-  runbooks, and rollback.
-- Security, cross-client isolation, prompt/source injection, artifact access, and leakage testing.
+## 15. External evidence gates
 
-### Workstream 8D: client pilot
+These cannot be closed by repository code alone:
 
-- Run representative direct research, proactive monitoring, campaign, and study cases.
-- Record qualified human scorecards, remediation, retests, and client calibration evidence.
-- Measure decision usefulness, time saved, citation quality, and alert precision.
+- client-approved pilot scope, competitors and sources;
+- source permission, licence, purpose and quotation rights;
+- live connector/provider acceptance;
+- retention, cohort and suppression approval;
+- qualified research, rights, security and operations reviewers;
+- human scorecards on real briefs;
+- host administrator acceptance and conformance evidence;
+- production deployment, backup, restore and incident exercises;
+- commercial terms and willingness to pay.
 
-### Exit gate
+The application and capability register expose these as `needs_context`, `blocked`, expired or
+verified with owner, scope, date and durable reference.
 
-- A second client fixture can be configured without modifying Core business logic.
-- Clean-environment verification and restore tests pass.
-- Separate D4WN and second-client installations pass the one-client database check; neither can
-  resolve the other's source/model credential reference.
-- No P0/P1 security, tenancy, evidence-integrity, or causal-claim defects remain.
-- The pilot scorecard passes agreed thresholds and every remaining limitation is explicit.
+## 16. Commit, release and push policy
 
-## 5. MVP scope
+Use one reviewable commit and green gate per boundary:
 
-The MVP is the smallest vertical proof spanning Phases 0–6 for one client. It includes:
+1. Blueprint, roadmap and baseline manifests;
+2. legacy code/runtime detachment;
+3. legacy schema cleanup migration;
+4. v1 activation and capability parking;
+5. MCP application/auth/context contract;
+6. live sources and competitor/positioning research;
+7. complete review toolset;
+8. second-host portability;
+9. service operations and pilot proof.
 
-- files/reports, public web/official sources, one public-conversation source, and one aggregate
-  result source;
-- Market Twin onboarding for strategy, brand, audience, market, competitors, purchase journey,
-  campaigns, and measurement;
-- market pulse, competitor brief, audience synthesis, and brand-positioning diagnosis;
-- proposed-campaign pre-flight and completed-campaign readback;
-- Brand Lift study planning with method classification;
-- evidence citations, contradictions, uncertainty, and candidate-learning review;
-- owned product-surface delivery only.
+Never combine legacy destruction with MCP functionality in the same commit or release. Never push a
+known-red build or a half-applied destructive migration. Tag the verified pre-trim baseline, the
+schema-cleanup release and every production release.
 
-The MVP does not include every social platform, real-time monitoring, autonomous publishing,
-cross-client benchmarks derived from client data, person-level analysis, or an automatic causal
-Brand Lift claim.
+## 17. Immediate next actions
 
-## 6. Initial backlog order
-
-### Now
-
-1. Write canonical schemas for client, source, evidence, citations, Market Twin, abilities,
-   campaigns, studies, and learning.
-2. Design additive migrations from the current schema.
-3. Build the people-blind ingestion/redaction test harness.
-4. Confirm sources and permissions for D4WN's Danish positioning/competitor pilot (brief selected
-   2026-10-17; no existing data or synthesis connector).
-
-### Next
-
-5. Implement file/report and public-web adapters.
-6. Implement Market Twin onboarding and contradiction review.
-7. Implement the decision brief and first four research abilities.
-8. Add campaign pre-flight and post-campaign readback.
-9. Add measurement-plan and Brand Lift classification.
-
-### Later
-
-10. Add licensed social/listening providers source by source.
-11. Add live campaign monitoring and proactive schedules.
-12. Add survey/panel and platform study adapters.
-13. Add industry packs after the first pilot establishes the reusable boundary.
-14. Prove second-client portability with two independent deployments/databases and production handoff.
-
-## 7. Cross-cutting test matrix
-
-Every relevant phase must cover:
-
-- cross-client access attempts;
-- missing, stale, conflicting, low-quality, and biased evidence;
-- personal identifiers and searchable verbatim excerpts;
-- sensitive statements and child-related content;
-- duplicate, bot-like, coordinated, and manipulated public signals;
-- source revocation, deletion, quota, and partial failure;
-- provider replacement behind the same contract;
-- unsupported causal claims and low-powered studies;
-- client-specific configuration without code branches;
-- audit, retention, expiry, supersession, and learning rollback.
-
-## 8. Definition of done
-
-A roadmap item is done only when:
-
-- its contract and behavior are implemented;
-- automated tests cover normal, boundary, and failure paths;
-- tenant, source-rights, retention, and people-blind rules are enforced;
-- the product-facing state is honest and actionable;
-- evidence and audit records are complete but redacted;
-- relevant documentation and migration notes are updated;
-- the clean verification gate passes;
-- any human-method or quality gate has named evidence rather than an assumed pass.
-
-## 9. Decisions required before implementation passes Phase 2
-
-- First pilot: D4WN positioning and competitor understanding in Denmark, selected 2026-10-17.
-  Approved sources and representative evidence remain open.
-- Confirm the exact pilot sources and the permitted use for each.
-- Set initial cohort/suppression and raw-retention defaults.
-- Decide whether the current `last30days` adapter can meet the people-blind evidence contract.
-- Select the first aggregate performance source.
-- Name the qualified reviewers for market research and Brand Lift methodology.
-
-These are external validation gates. Their absence does not block implementation with deterministic,
-non-production fixtures, but it does block live-source activation, a production-ready claim, and
-final completion of the affected phase exit gates.
-
+1. Approve Blueprint v2 and this roadmap.
+2. Commit the canonical documentation reset.
+3. Execute R0 before deleting or building runtime code.
+4. Name primary/secondary hosts and decision owners.
+5. Produce the legacy data inventory and pre-trim recovery evidence.

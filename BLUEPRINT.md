@@ -6,645 +6,667 @@
 |---|---|
 | Product | Market Research |
 | Repository | `man-D4wn/Market-research` |
-| Blueprint version | 1.1.0 |
-| Status | Canonical product and architecture source of truth |
+| Blueprint version | 2.0.0 |
+| Status | Canonical product, architecture, governance and release contract |
 | Updated | 2026-10-17 |
-| Architecture family | D4WN-compatible, client-configurable intelligence product |
+| Architecture family | AI-native, client-isolated evidence intelligence service |
 
-This blueprint defines what Market Research is, which guarantees it makes, and which boundaries
-must survive changes to providers, connectors, clients, industries, and interfaces. `ROADMAP.md`
-defines the implementation sequence. If an older specification, plan, implementation, fixture, or
-integration conflicts with this document, this document wins until it is deliberately versioned.
+This blueprint defines what Market Research is, what a client installs, which guarantees the product
+makes, and which boundaries must survive changes to AI hosts, models, sources, providers, clients,
+industries and interfaces. `ROADMAP.md` defines the only approved delivery sequence.
 
-## 2. Product thesis
+If code, an older plan, a fixture, an integration or an architecture decision conflicts with this
+document, this document wins until deliberately versioned. Historical migrations and decisions remain
+interpretable history; they are not active product requirements.
 
-Market Research is an evidence-driven market intelligence and campaign-learning system. It helps a
-marketing leader understand what is changing, why it matters for a particular brand, what remains
-uncertain, and what decision or research step should follow.
+## 2. Product contract
 
-The product is not an all-knowing market oracle. Its promise is narrower and more valuable:
+### 2.1 Product thesis
 
-> Turn governed evidence from client data, commissioned research, public sources, market signals,
-> and campaign results into traceable market understanding and decision-ready recommendations.
+Market Research is a governed market-intelligence capability used directly from a company's chosen
+AI environment. It turns approved client material, trusted web evidence and permitted market signals
+into source-backed, decision-ready research without turning public conversation into consumer
+profiles or weak correlations into facts.
 
-The reusable product supplies connectors, contracts, research abilities, evaluation standards,
-and governance. Each client supplies a private configuration and intelligence layer describing its
-brand, market, audiences, products, priorities, constraints, evidence, and learned outcomes.
+The product's first promise is deliberately narrow:
 
-The central client model is called the **Market Twin**. It is not a predictive simulation of a
-market. It is a living, versioned evidence model of how the client currently understands its
-market, including disagreements, uncertainty, and missing knowledge.
+> Give a marketing decision-maker a critical, source-backed competitor and positioning brief inside
+> the AI tool they already use, showing what is known, contradicted, uncertain and worth validating
+> next.
 
-## 3. Product outcomes
+The product is not an all-knowing market oracle. Its premium value is traceability, decision
+relevance, disciplined uncertainty and safe reuse of company context—not the number of generated
+pages or connected platforms.
 
-Market Research must help an authorized user answer six recurring questions:
+### 2.2 Buyer, users and decision rights
 
-1. What changed in the market, audience, category, culture, or competitive situation?
-2. Which change is material for this client, brand, product, or campaign?
-3. What evidence supports the conclusion, and what evidence contradicts it?
-4. What should the client consider doing next?
-5. How should a proposed, live, or completed campaign be evaluated against that understanding?
-6. What has been learned, under which conditions, and should it update the Market Twin?
+- **Buyer:** a marketing, insights, strategy or transformation leader responsible for research
+  quality and adoption.
+- **Primary user:** an authorized strategist, marketer, researcher or agency employee working in
+  ChatGPT, Claude, Copilot or another supported MCP host.
+- **Administrator:** configures identity, sources, rights, budgets and host availability.
+- **Reviewer:** accepts, rejects or requests revision of material recommendations and Market Twin
+  candidates.
+- **Operator:** owns deployment, recovery, upgrades and incidents; this may be D4WN or the client,
+  depending on the selected deployment mode.
 
-The default output is a concise decision brief, not a dashboard full of unprioritized data. Deeper
-evidence, methods, source coverage, confidence, and working detail remain inspectable.
+Authentication never grants a role by itself. Tenant membership and product permissions are explicit,
+revocable and checked on every request.
 
-## 4. Product boundaries
+### 2.3 First job-to-be-done
 
-### 4.1 The product is
+For the first pilot, an authorized D4WN user must be able to ask how D4WN should position itself for
+Danish CMOs and marketing managers, compare observable competitor and substitute claims, inspect the
+supporting evidence and gaps, and obtain a responsible next research or positioning decision.
 
-- A reusable market-research expert configured per client and industry.
-- A governed synthesis of first-party, commissioned, licensed, and lawful public evidence.
-- A monitoring system for meaningful changes, not a firehose of mentions.
-- A campaign decision and learning system covering proposed, active, and completed work.
-- A research planner that identifies evidence gaps and recommends the smallest responsible study.
-- A D4WN-compatible product built from replaceable connectors and versioned abilities.
+The first output is a competitor/positioning decision brief. It is not a general social-listening
+dashboard, campaign-effect report or proof of buyer demand.
 
-### 4.2 The product is not
+## 3. Product form and packaging
 
-- A system for identifying, tracking, scoring, or targeting individual consumers.
-- A universal scraper or an entitlement to data from every social platform or forum.
-- A generic social-listening dashboard, BI replacement, or unrestricted data explorer.
-- A source of causal claims without an appropriate experimental or quasi-experimental design.
-- A system that silently turns observations, model output, or public comments into client truth.
-- A fully autonomous campaign publisher, media buyer, or customer-contact engine.
-- A client-specific code fork for every implementation.
+### 3.1 Primary experience
 
-### 4.3 Explicit provider decisions
+The primary experience is the client's existing AI host. Market Research is installed there as a
+versioned plugin, connector or equivalent package backed by a remote Model Context Protocol (MCP)
+server.
 
-Slack and Rill are not required product dependencies. They must be removed from the active solution
-profile and may not define the product's contracts, information architecture, delivery model, or
-data model. If a future client selects either provider, it may return only as an optional adapter
-behind a provider-neutral contract.
+The web application is a secondary, narrow administration and review surface. It may manage company
+context, sources, rights, quality evidence, review queues and operational status. It must not become a
+second general research workspace that duplicates the AI host.
 
-## 5. D4WN architectural principles
+### 3.2 Reusable product artifacts
 
-Market Research follows the same foundational rules as D4WN Core:
+The sellable product consists of:
 
-1. **Contract first.** Stable input, output, evidence, action, and lifecycle contracts come before
-   provider-specific code.
-2. **Client-owned installation.** Each client owns and runs a separate app, worker, PostgreSQL
-   database, identity integration, secret store and provider accounts. `client_id` remains a
-   defense-in-depth scope, not a substitute for infrastructure separation. No cross-client
-   learning occurs automatically.
-3. **Connectors are plumbing.** They authenticate, acquire, normalize, and deliver. They do not
-   decide what matters or contain research logic.
-4. **Abilities own expertise.** Research methods, decision logic, quality rubrics, and output
-   standards live in versioned abilities.
-5. **Core owns product truth.** Planning, relevance, evidence resolution, policy, review, learning,
-   and audit remain provider-neutral Core responsibilities.
-6. **Human judgment is explicit.** Material recommendations, client-truth promotion, and causal
-   claims have named review gates.
-7. **Learning is governed.** New knowledge enters as a candidate with provenance, applicability,
-   confidence, and decay; it never becomes standing truth merely because a model produced it.
-8. **Honest uncertainty.** Missing, stale, conflicting, biased, or insufficient evidence is a
-   first-class product state.
-9. **Replaceable surfaces.** A web application, client portal, API, document, or future delivery
-   channel must consume the same redacted Core contracts.
-10. **No provider lock-in.** A provider may be useful, but no provider name belongs in business
-    logic or canonical intelligence schemas.
+1. a versioned host package containing minimal instructions and connection metadata;
+2. a canonical remote MCP gateway with stable, typed tools;
+3. provider-neutral Market Research Core contracts and policies;
+4. a client-isolated data plane containing jobs, evidence, Market Twin state and audit;
+5. approved source and synthesis adapters bound to client-owned accounts or explicitly accepted
+   managed accounts;
+6. a private client configuration containing company context, source policy, roles, markets and
+   enabled abilities;
+7. evaluation, deployment, upgrade, recovery and offboarding evidence.
+
+Host packages contain no client facts, provider credentials or duplicated research logic. Business
+logic remains in Core so the same governed result can be reproduced across supported AI hosts.
+
+### 3.3 Host portability promise
+
+The product promises one canonical MCP tool contract with thin, tested host packages. It does not
+promise identical host features or installation mechanics.
+
+Each supported host receives a compatibility record covering transport, authentication, tool and UI
+support, administrator installation, network/data-policy constraints, conformance evidence, known
+limitations and minimum supported version. A host is not called supported until its conformance tests
+pass. Host-specific extensions may improve presentation but may not change product truth,
+permissions, evidence selection or review semantics.
+
+## 4. Scope discipline
+
+### 4.1 Version 1 includes
+
+- installation in one primary AI host and portability proof in one second host;
+- remote MCP with the bounded toolset in section 7;
+- versioned company context;
+- three source paths: approved client documents, trusted public/official web sources, and one
+  permitted licensed listening or public-conversation provider;
+- competitor and positioning research for Denmark;
+- one evidence-backed decision-brief contract;
+- evidence selection, contradiction handling, research gaps and honest abstention;
+- reviewer-gated material recommendations and Market Twin candidates;
+- a narrow source, rights, review, quality and operations administration surface;
+- one managed single-tenant reference deployment and a documented customer-operated option;
+- live source receipts, human evaluations and recovery evidence before a production claim.
+
+### 4.2 Version 1 does not include
+
+- a generic social-listening dashboard or unrestricted data explorer;
+- every social, forum, news or analytics provider;
+- full campaign lifecycle management or live campaign optimization;
+- Brand Lift execution or analysis;
+- general survey, panel or primary-research orchestration;
+- real-time alerts or autonomous monitoring actions;
+- autonomous publishing, media buying, recruitment, customer contact or spend;
+- a graph database, universal ontology, generic workflow engine or vector database without measured
+  evidence that the bounded product requires one;
+- cross-client learning from client content;
+- client-specific code forks.
+
+Campaign learning, Brand Lift, broader audience intelligence, proactive monitoring and industry
+packs are deferred capabilities. Existing code for them may be parked or removed; its presence does
+not make the capability part of the supported product.
+
+### 4.3 Overbuild budget
+
+Version 1 starts with four MCP tools and is limited to six, one production ability, three production
+source paths, one primary geography, one primary output contract, one reference synthesis adapter
+and one reference identity flow behind a provider-neutral boundary. No new platform capability is
+accepted before the first human-reviewed live pilot brief.
+
+A proposed addition must identify the pilot case that needs it, the evaluation that can fail, the
+existing contract it reuses, its owner, operating cost and removal condition. Otherwise it is
+deferred.
+
+## 5. Product invariants
+
+1. **Contract first.** Stable tool, input, output, evidence, review and lifecycle contracts precede
+   provider code and host packages.
+2. **AI host is a surface, not authority.** The host may orchestrate conversation; Core decides
+   authorization, evidence eligibility, claim state, review state and durable product truth.
+3. **Client isolation.** Client content, credentials, jobs, evidence and audit are isolated by data
+   plane. `client_id` remains defense in depth, never a substitute for isolation.
+4. **Connectors are plumbing.** They authenticate, acquire and normalize. They do not decide what
+   matters or create accepted insight.
+5. **Abilities own research methods.** A production ability has a versioned method, source
+   requirements, claim taxonomy, failure modes, evaluations and human gates.
+6. **Human judgment is explicit.** Material recommendations and client-truth promotion have named
+   review paths.
+7. **Learning is governed.** Model output never becomes standing client truth merely because it was
+   generated fluently.
+8. **Honest uncertainty.** Missing, stale, conflicting, biased or insufficient evidence is a valid
+   `needs_context` result.
+9. **Provider names stay outside Core.** Reference adapters are explicit; canonical business schemas
+   and policies remain provider-neutral.
+10. **Historical reproducibility.** Durable outputs freeze the versions and evidence basis used.
+11. **No silent activation.** A migration, import, deployment or model upgrade never enables a
+   source, budget, ability or write action.
+12. **No feature by code presence.** A capability is supported only at the release state defined in
+   section 16.
 
 ## 6. Logical architecture
 
 ```text
-CLIENT SURFACES
-Research workspace · decision briefs · source setup · campaign studies · exports
-                              │
-                              ▼
-MARKET RESEARCH CORE
-Intent and ability planning · evidence resolution · relevance · policy · audit
-                              │
-              ┌───────────────┼────────────────┐
-              ▼               ▼                ▼
-RESEARCH ABILITIES       MARKET TWIN       STUDY & LEARNING
-Market pulse             Client truth       Baselines/targets
-Competitor intelligence  Evidence graph     Experiments
-Audience synthesis       Hypotheses          Readbacks
-Positioning diagnosis    Contradictions      Candidate learnings
-Campaign analysis        Knowledge gaps
-              ▲               ▲                ▲
-              └───────────────┼────────────────┘
-                              │
-NORMALIZED EVIDENCE AND SIGNAL CONTRACTS
-                              ▲
-                              │
-CONNECTOR ADAPTERS
-Client files · research reports · analytics · CRM/sales · surveys · public web
-official statistics · news · licensed social/listening · campaign platforms
+CHATGPT · CLAUDE · COPILOT · OTHER SUPPORTED MCP HOST
+                         │
+             thin host package + OAuth
+                         │
+                         ▼
+                 REMOTE MCP GATEWAY
+       bounded tools · schemas · authorization · audit context
+                         │
+                         ▼
+                MARKET RESEARCH CORE
+ intent/ability planning · evidence resolution · methods · policy
+ claim validation · review transitions · reproducible artifacts
+                         │
+          ┌──────────────┼──────────────┐
+          ▼              ▼              ▼
+   COMPANY CONTEXT   MARKET TWIN   RESEARCH ARTIFACTS
+   declared intent   accepted       briefs · gaps
+                     intelligence   review candidates
+          ▲              ▲              ▲
+          └──────────────┼──────────────┘
+                         │
+           NORMALIZED EVIDENCE CONTRACTS
+                         ▲
+                         │
+                  SOURCE ADAPTERS
+ client documents · trusted web · licensed listening/public signals
+
+SECONDARY ADMIN/REVIEW SURFACE
+identity · sources · rights · company context · review · quality · operations
 ```
 
-Connectors run inside the client's own installation or call services explicitly approved and paid
-for from that client's accounts. A workflow engine or managed service may be a client-controlled
-component, never a shared D4WN runtime holding multiple clients' data or credentials. These
-choices must not alter contracts or move research judgment into the connector.
+The conversational host never queries the database or provider directly. MCP handlers call
+application services, which apply the same policy and authorization as every other surface. Source
+adapters and synthesis providers never receive more client context than the approved request needs.
 
-## 7. The Market Twin
+## 7. Canonical MCP contract
 
-### 7.1 Purpose
+### 7.1 Initial toolset
 
-The Market Twin provides a coherent, client-specific view of the market without flattening all
-inputs into one undifferentiated vector store. It connects evidence to the decisions for which that
-evidence is valid.
+The initial version 1 toolset contains four tools:
 
-### 7.2 Core entities
-
-- Client, business unit, market, geography, language, and category.
-- Brand, product, offer, portfolio role, value proposition, claim, and distinctive asset.
-- Audience, segment, need, tension, behavior, barrier, trigger, occasion, and job-to-be-done.
-- Journey stage, touchpoint, channel, retailer, distributor, and availability constraint.
-- Competitor, substitute, entrant, claim, positioning, price, promotion, product move, and creative
-  pattern.
-- Campaign, creative route, asset, exposure, audience, channel, objective, budget assumption, and
-  measurement plan.
-- Signal, evidence item, research finding, hypothesis, insight, opportunity, risk, decision,
-  experiment, result, and learning.
-- External context including cultural, economic, technological, regulatory, seasonal, and category
-  forces.
-
-### 7.3 Intelligence states
-
-The following states are not interchangeable:
-
-| State | Meaning | May guide decisions? |
+| Tool | Purpose | Default action class |
 |---|---|---|
-| Observation | A captured occurrence or metric | Only as raw evidence |
-| Signal | A normalized change or pattern candidate | With source and materiality context |
-| Fact | Verified statement within a declared scope and date | Yes, within applicability limits |
-| Hypothesis | A falsifiable explanation requiring validation | As a hypothesis, never as fact |
-| Insight | Evidence-backed interpretation relevant to a decision | Yes, with uncertainty shown |
-| Recommendation | Proposed action derived from insight and client priorities | Requires the declared gate |
-| Learning | Reviewed outcome tied to conditions and measurement | Yes, after promotion |
+| `research_competitor_positioning` | Start or resume the one server-pinned production research ability | Read/compute |
+| `get_research_brief` | Retrieve task status or a governed brief with its safe evidence drawer and gaps | Read-only |
+| `get_market_context` | Read current approved company context and applicable Market Twin records | Read-only |
+| `review_research_brief` | Accept, reject or request revision of a material brief | Write/review-gated |
 
-Sentiment is not behavior, conversation volume is not demand, engagement is not purchase intent,
-and correlation is not causation. The system must never collapse these distinctions.
+Research gaps remain part of context and brief output; source health remains in the administration
+surface. A separate gap, source-status or Market Twin-review tool may be added only for a named pilot
+need and may not raise the total above six. Generic CRUD tools and direct database/query tools are
+prohibited. Administrative source setup, credential management and destructive operations do not
+belong in the version 1 conversational toolset.
 
-### 7.4 Record requirements
+The host cannot supply an `abilityId`, evidence IDs, source IDs or a completed analysis. Core pins the
+production ability and owns source selection.
 
-Every evidence-bearing record must include, where applicable:
+### 7.2 Common request envelope
 
-- client and market scope;
-- source and safe source reference;
-- source type and acquisition method;
-- publication, observation, ingestion, and expiry timestamps;
-- rights/licensing and permitted-use status;
-- methodology, universe, sample, weighting, and known limitations;
-- geography, language, category, audience, and campaign applicability;
-- confidence and evidence grade;
-- review state: `candidate`, `live`, `quarantined`, `expired`, or `superseded`;
-- contradiction and dependency references;
-- an explicit distinction between source content and D4WN synthesis.
+Each request resolves authenticated subject and client scope, host and package version, purpose,
+market/language, project context, contract version, idempotency where needed, resource bounds, role
+and review authority. The client cannot select another tenant through a request field. Human-readable
+text is untrusted data, not executable instructions.
 
-Reports such as a Dentsu audience study must preserve their segment definitions, population,
-fieldwork date, method, weights, score definitions, thresholds, and limitations. Splitting a report
-into text chunks is not sufficient ingestion.
+### 7.3 Common response envelope
 
-### 7.5 Persistent company context
+Every tool returns:
 
-Every client has one maintained, versioned company profile: offer/operating model, target audience
-and decision-makers, value proposition, intended positioning, priorities, constraints and scope.
-This is owner-declared strategy, not independent market evidence. Research findings may suggest
-a change, but may not silently overwrite it or promote strategic intent into an established fact.
+- status: `success`, `needs_context`, `needs_human`, `blocked` or `failed`;
+- a concise human-facing result or progress state;
+- typed claims when research is returned;
+- safe evidence references, selection basis, freshness and method;
+- contradictions, uncertainty and limitations;
+- the next permitted decision or research step;
+- artifact and contract versions;
+- a redacted correlation ID.
 
-Keep three layers distinct: company intent; dated, governed business evidence (including CRM/sales
-aggregates); and reviewed market intelligence. The profile references approved sources instead of
-copying sales figures or contact-level CRM records. Source binding alone grants no collection or
-processing permission and is not proof of fresh data.
+Tool output never contains credentials, raw provider payloads, hidden reasoning, unnecessary personal
+data or unrestricted internal records. Errors are bounded and redacted.
 
-A future agent reads current company context for each task through a tenant-authorized Core
-contract. It must not rebuild the profile from conversation memory, treat an old revision as current,
-or execute commands embedded in profile text. Owner/admin changes create append-only revisions with
-reason, author, timestamp and review deadline; competing edits must conflict rather than overwrite.
-Research freezes the version/digest it used. A changed or overdue declared profile requires refresh
-before an in-flight result can be persisted or a governed campaign decision revalidated. Historical
-artifacts retain their original basis, not a claim of current validity.
+### 7.4 Host conformance
 
-The owned `/company` surface and session-scoped `company-context@1` API implement this foundation.
-Agent service authentication, agent tools and live CRM/sales synchronization remain separate release
-work requiring an explicit integration and data boundary. Existing clients without this new profile
-retain the reviewed-Market-Twin path; the company-context endpoint honestly reports `needs_context`.
+Before a host package is released, normal, edge, adversarial and out-of-scope prompts verify correct
+tool selection, tenant/role/review enforcement, no reliance on host memory as current company truth,
+correct abstention, resistance to injected source content, equivalent canonical artifacts and safe
+fallback when an optional host capability is missing.
 
-## 8. Trend-first, people-blind data boundary
+## 8. Deployment and identity
 
-### 8.1 Product rule
+### 8.1 Supported deployment modes
 
-Market Research studies populations, themes, behaviors, and changes. It does not build intelligence
-about identifiable individuals.
+**Managed single-tenant is the version 1 default.** D4WN operates an isolated data plane per client
+under a documented DPA, support model and regional deployment choice. Client data and credentials are
+not pooled, and no automatic cross-client learning occurs.
 
-The target state is anonymous aggregate intelligence. Public availability alone does not make a
-record anonymous, so the ingestion boundary must minimize personal data before it reaches the
-Market Twin.
+**Customer-operated single-tenant is the enterprise option.** The same versioned artifacts run in the
+client's approved environment. The client or its operator owns infrastructure, while D4WN supplies
+documented requirements, signed releases, upgrade/migration guidance and compatibility support.
 
-### 8.2 Prohibited behavior
+A shared multitenant data plane is not supported. A central distribution/control service may publish
+signed versions and non-content health metadata, but it may not hold client evidence, credentials or
+research artifacts.
 
-- No consumer profile or identity graph.
-- No cross-platform matching of people, handles, devices, cookies, or account identifiers.
-- No longitudinal scoring or monitoring of an individual.
-- No audience activation lists derived from public conversations.
-- No storage of avatars, personal profile fields, or unnecessary handles.
-- No inference of sensitive traits about a person.
-- No use of exact public statements as model-training material for a global D4WN pack.
+### 8.2 Installation ownership
 
-### 8.3 Ingestion requirements
+“Installed in the client's AI toolkit” means the client's administrator approves and enables the
+host package/MCP connection for authorized users. It does not by itself determine who operates the
+isolated backend.
 
-Connector adapters must separate an ephemeral acquisition zone from retained intelligence. Before
-retention, the pipeline must:
+Every production installation has named owners for AI-host administration, identity/access, data
+plane/database, secrets/provider accounts, source rights/data policy, backup/restore/incidents,
+research review and billing/usage limits.
 
-1. validate source permission and purpose;
-2. remove unnecessary identifiers and provider payload fields;
-3. detect sensitive or identifying content;
-4. classify source, topic, market, language, and time;
-5. aggregate where the research question permits it;
-6. apply minimum cohort and suppression rules;
-7. assign retention and deletion behavior;
-8. emit only normalized evidence or a quarantined review item.
+### 8.3 Authentication and authorization
 
-Raw source material must have bounded retention and restricted access. Retained trends must not be
-reversible into people by combining stored fields.
+Remote MCP uses standards-based OAuth 2.0/OIDC appropriate to the selected host. The canonical
+authorization layer supports delegated user identity and narrowly scoped workload identities. Shared
+credentials are allowed only when explicitly selected, least-privileged and visible as a shared
+access boundary.
 
-### 8.4 Citation levels
+Browser session cookies are never reused as agent credentials. Each tool call checks current tenant
+membership, role, purpose and data scope. Removal of membership or source permission takes effect on
+the next request and blocks in-flight persistence where applicable.
 
-The product uses three explicit citation levels:
+## 9. Company context and Market Twin
 
-| Level | Use | Default treatment |
+### 9.1 Three distinct knowledge layers
+
+1. **Company intent:** owner-declared offer, audience, value proposition, intended positioning,
+   priorities and constraints.
+2. **Governed business evidence:** dated aggregate CRM, sales, analytics, research and campaign data.
+3. **Reviewed market intelligence:** accepted evidence-backed facts, insights, hypotheses and gaps.
+
+Company intent is not independent evidence. Research may challenge it but cannot silently overwrite
+it or promote it into a market fact.
+
+### 9.2 Market Twin purpose
+
+The Market Twin is a versioned evidence model of the client's current accepted market understanding.
+It is not a predictive simulation, a consumer graph or an undifferentiated vector store.
+
+Version 1 uses only the record kinds needed by the first ability: accepted market or competitor fact,
+accepted audience/positioning insight, hypothesis, knowledge gap and a material signal when supported
+by the selected source path. New record kinds require a production ability and an evaluation that
+needs them.
+
+### 9.3 Intelligence states
+
+| State | Meaning | Permitted use |
 |---|---|---|
-| Statistical evidence | Aggregated counts, rates, distributions, and changes | Preferred; no person-level material |
-| Paraphrased qualitative evidence | A recurring meaning or formulation | Preferred for reports and the Market Twin |
-| Verbatim public excerpt | Wording itself is materially relevant | Exception; minimal excerpt, reviewed, time-bounded, source-aware |
-
-An exact quote may be searchable and therefore identifiable even after a username is removed. It
-must never be presented as anonymous by default. Product-facing citations should normally point to
-the source collection, report, query, or thread context rather than creating a durable person
-record. Sensitive verbatim excerpts are quarantined or excluded.
-
-### 8.5 Additional source obligations
-
-Privacy is only one constraint. Every source also needs explicit treatment of platform terms,
-commercial-use permission, copyright/quotation rights, data freshness, geographic coverage,
-sampling bias, bot/manipulation risk, and reproducibility. A configured connector is not proof that
-the resulting data is representative or lawful for a particular use.
-
-## 9. Source and connector model
-
-### 9.1 Source classes
-
-1. **Client-owned evidence:** brand guides, strategy, customer research, reports, presentations,
-   spreadsheets, survey data, approved examples, campaign archives, and decision history.
-2. **First-party behavioral and commercial evidence:** aggregate web/app analytics, search, CRM,
-   sales, support, reviews, distribution, availability, price, promotion, and campaign performance.
-3. **Commissioned and licensed research:** agency, panel, media, audience, brand-tracking, category,
-   and syndicated datasets.
-4. **Official and public evidence:** statistics, filings, legislation, official publications,
-   product/price pages, competitor sites, press releases, news, search trends, and public web.
-5. **Public conversation signals:** accessible and permitted social posts, comments, forums,
-   communities, creator/content patterns, and review platforms.
-6. **Primary research:** surveys, interviews, diaries, communities, concept tests, and experiments.
-
-### 9.2 Connector contract
-
-Each connector declares:
-
-- `connector_id`, version, client scope, source class, and provider adapter;
-- credential reference, never the credential value;
-- permissions, data classifications, markets, languages, and permitted purposes;
-- sync direction, cadence, lookback, quotas, and cost limits;
-- normalization schema and evidence fields produced;
-- retention, deletion, rights, and licensing rules;
-- freshness, health, and last successful receipt;
-- whether the connector is configured, verified, degraded, quarantined, or unavailable.
-
-Provider payloads remain inside the adapter boundary. Core receives normalized records and redacted
-receipts. A connector may be replaced without changing an ability or Market Twin schema.
-Credential references must resolve only within the current client's installation; an adapter may
-request only the reference assigned to its current source job. Shared/global model or connector
-keys, fallback credentials and cross-client secret stores are forbidden. Deployment operators must
-verify actual provider-account ownership; environment-variable names alone cannot prove it.
-
-### 9.3 Source selection
-
-Abilities declare which evidence they require and which source classes are acceptable. Core
-resolves the smallest sufficient evidence set based on client scope, applicability, freshness,
-quality, rights, confidence, contradiction, and decision relevance. Lexical or vector similarity
-alone never establishes relevance.
-
-Live research is invoked when a question depends on current, named, stale, or externally changing
-facts. It supplements client intelligence; it does not silently override approved strategy or
-brand law.
-
-## 10. Research abilities
-
-Abilities are versioned capability packages, not hardcoded controller branches. Each declares
-intent, required evidence, method, outputs, uncertainty rules, quality rubric, actions, measurement
-hooks, and human gates.
-
-The target ability set is:
-
-1. **Market and category diagnosis** — market structure, demand, growth, seasonality, drivers,
-   barriers, whitespace, external forces, and knowledge gaps.
-2. **Audience and purchase-behavior intelligence** — segments, needs, occasions, journeys,
-   decision criteria, search/research behavior, barriers, switching, and channel behavior.
-3. **Competitor intelligence** — positioning, claims, products, price/promotion, distribution,
-   partnerships, media/creative behavior, customer reaction, and meaningful change.
-4. **Brand positioning diagnosis** — category frame, audience tension, promise, reasons to believe,
-   distinctiveness, mental/physical availability, portfolio role, and brand evolution boundaries.
-5. **Cultural and trend intelligence** — emerging themes, occasions, language, creators, social
-   patterns, technology, regulation, and their client-specific relevance.
-6. **Campaign pre-flight** — strategic fit, audience logic, proposition, brand distinctiveness,
-   cultural permission, channel role, measurement readiness, risks, and evidence gaps.
-7. **Live campaign intelligence** — delivery and response changes, anomalies, creative fatigue,
-   emerging reactions, competitor context, and bounded optimization hypotheses.
-8. **Post-campaign learning** — results, counterfactual limits, audience/brand/commercial effects,
-   conditional learnings, and follow-up research.
-9. **Brand Lift study design and analysis** — objectives, hypotheses, metrics, survey instrument,
-   power/feasibility, treatment/control design, analysis, uncertainty, and result interpretation.
-10. **Research planning** — identify the decision-critical knowledge gap and propose the smallest
-    useful desk, qualitative, quantitative, or experimental study.
-
-## 11. Proactive monitoring
-
-Monitoring is strategy-led, not keyword-led. Each client has a versioned sensing profile defining:
-
-- priority markets, audiences, competitors, products, themes, occasions, and risks;
-- required sources and evidence thresholds;
-- cadence, lookback, freshness, expiry, and seasonality;
-- materiality, confidence, novelty, and corroboration thresholds;
-- down-ranking, suppression, deduplication, and quiet-period rules;
-- destinations and human-review requirements;
-- the decision or capability each signal may inform.
+| Observation | Captured occurrence or metric | Raw evidence only |
+| Signal | Normalized change/pattern candidate | With materiality and source context |
+| Fact | Verified statement within declared scope/date | Decisions within applicability |
+| Hypothesis | Falsifiable explanation requiring validation | Clearly labelled exploration |
+| Insight | Evidence-backed interpretation for a decision | Decisions with uncertainty shown |
+| Recommendation | Proposed action derived from insight and company priorities | Named review gate |
+| Learning | Reviewed outcome tied to conditions and measurement | Deferred from v1 production scope |
 
-Recommended rhythms:
-
-- urgent alerts only for high-materiality time-sensitive changes;
-- daily or weekly market/competitor pulse;
-- monthly positioning, audience, and campaign review;
-- quarterly Market Twin health, research-gap, and strategy review.
-
-No-change is a valid result. The product is successful when it suppresses noise as well as when it
-finds something new.
-
-## 12. Campaign lifecycle
-
-One campaign record may move through:
-
-`proposed → approved → active → completed → learning_reviewed → archived`
+Sentiment is not behavior, conversation volume is not demand, engagement is not purchase intent and
+correlation is not causation.
 
-At each stage, Market Research supplies a different work product:
-
-- **Proposed:** evidence sufficiency, strategic/brand/audience fit, assumptions, alternatives,
-  measurement plan, and decision required.
-- **Approved:** baseline, targets, study design, source readiness, checkpoints, and execution risks.
-- **Active:** observed delivery, response, external context, deviations, hypotheses, and safe next
-  decision; no causal claim from interim correlation.
-- **Completed:** result readback, attribution and incrementality limits, brand and commercial
-  outcomes, contradictions, and candidate learnings.
-- **Learning reviewed:** accepted, rejected, or time-bound learnings with applicability conditions.
+### 9.4 Versioning
 
-Campaign analysis must compare the work with the current Market Twin while preserving the campaign
-brief and contemporary evidence used at the time. Later knowledge must not silently rewrite the
-historical assessment.
+Owner/admin changes to company intent are append-only and include reason, author, time and review
+deadline. Research freezes the revision and digest used. Changed, invalid or overdue context blocks a
+new canonical result until refreshed. Historical artifacts retain their original basis without
+claiming current validity.
 
-## 13. Brand Lift and causal claims
+## 10. Evidence and source model
 
-The product distinguishes three measurement classes:
+### 10.1 Version 1 source paths
 
-| Class | Typical evidence | Permitted claim |
-|---|---|---|
-| Brand diagnostics | Tracking surveys, search, conversation, traffic, sentiment, recall proxies | Descriptive association only |
-| Directional lift | Pre/post with matched markets, interrupted time series, synthetic controls | Directional effect with limitations |
-| Causal Brand Lift | Randomized treatment/control or another defensible exposure/holdout design | Incremental effect within the study scope |
+1. **Approved client documents:** strategy, brand material, commissioned research and other files the
+   client has authority to process.
+2. **Trusted public/official web:** an allowlisted or policy-resolved set of official publications,
+   statistics, filings, legislation, competitor sites, product pages and reputable current sources.
+3. **Licensed listening/public conversation:** one named provider whose commercial use, retention,
+   quotation and aggregation conditions are approved.
 
-A Brand Lift result requires a pre-registered measurement plan containing the outcome, population,
-exposure definition, baseline, control/counterfactual, sample and power assumptions, fieldwork
-window, weighting, exclusions, significance/uncertainty method, and interpretation rules.
+Source availability is never implied by public accessibility. A connector is not healthy or
+evidentiary until a current receipt proves it produced permitted data.
 
-The system may design, orchestrate, quality-check, analyze, and report a study. It must refuse to
-rename ordinary campaign KPIs, social conversation, or a simple before/after change as Brand Lift.
-When a causal design is unavailable, the output must use the appropriate diagnostic or directional
-label.
+### 10.2 Connector contract
 
-## 14. Client configuration and portability
+Each connector declares connector/adapter version, client scope, source class, opaque credential
+reference, permissions, classifications, purpose, markets/languages, cadence/lookback, resource and
+currency limits, output schema, retention/deletion/rights, freshness and verified health.
 
-Each client solution consists of versioned, reviewable configuration rather than a code fork:
+Provider payloads remain inside the ephemeral adapter boundary. Core receives normalized evidence
+and redacted receipts. Credentials, raw payloads and fallback/global keys never enter jobs, logs,
+exports, profiles, artifacts or host output.
 
-- enabled ability packages and versions;
-- Market Twin taxonomy and canonical client strategy;
-- maintained company profile with review ownership and aggregate business-source bindings;
-- source connections and sensing profile;
-- brand, audience, product, competitor, journey, and campaign definitions;
-- metric dictionary, benchmark sources, and measurement rules;
-- provider bindings and allowed data classes;
-- review roles, decision rights, approval thresholds, and output destinations;
-- industry pack and client-specific overrides;
-- retention, rights, geography, language, and operating cadence.
+### 10.3 Evidence record
 
-The reusable artifact is the code and versioned ability/connector packages, not a shared tenant
-runtime. Each copy has its own server/worker deployment, database (including jobs, audit and
-backups), identity application, secret store, observability and provider projects/API keys.
-Production rollout requires a one-client database check and named owner for hosting, billing,
-backup/restore, key rotation and incident response. D4WN is the first such client, not the shared
-operator for future customers. Moving a client between installations is an explicit export/import
-and credential rebind, never a cross-database query or copied secret.
-
-Reusable industry packs may provide a starting ontology, source suggestions, methods, and benchmark
-questions. They never contain another client's data and never override client truth.
-
-Client onboarding follows:
-
-1. source inventory and permissions;
-2. structured extraction into candidates;
-3. contradiction and gap review;
-4. Market Twin synthesis;
-5. representative tasks and benchmark trials;
-6. human calibration and activation approval.
-
-## 15. Core contracts
-
-### 15.1 Ability input
-
-- task or trigger;
-- `client_id` and market scope;
-- resolved Market Twin context;
-- normalized evidence and safe source references;
-- client configuration and sensing profile;
-- prior work, feedback, and campaign/study state where relevant.
-
-### 15.2 Ability output
-
-- structured result and human-facing executive brief;
-- status: `success`, `needs_context`, `needs_human`, `blocked`, or `failed`;
-- observations, hypotheses, insights, and recommendations as separately typed objects;
-- evidence references, selection basis, freshness, confidence, contradictions, and limitations;
-- requested research, review, measurement, or external actions;
-- candidate Market Twin updates, never automatic promotion;
-- method and quality report.
-
-### 15.3 Normalized signal
-
-A signal includes client scope, signal type, subject, observation window, values or qualitative
-theme, comparison baseline, materiality, freshness, confidence, provenance, rights status,
-deduplication identity, and review state. Connectors cannot submit a signal as accepted truth.
-
-### 15.4 External actions
-
-Modules request actions; they do not perform them. Reads and internal analysis may be autonomous.
-Writes, publishing, research recruitment, survey launch, customer contact, and spend are gated.
-Irreversible or high-blast-radius actions are forbidden by default.
-
-## 16. Product experience
-
-The primary experience is organized around the user's research and decision workflow:
-
-1. **Ask / Projects** — direct research questions and durable workrooms.
-2. **Market Pulse** — selective, source-backed changes and why they matter.
-3. **Market Twin** — current client understanding, confidence, contradictions, and gaps.
-4. **Campaign Studies** — proposed, live, completed, and Brand Lift work.
-5. **Sources & Setup** — abilities, connectors, sensing profile, taxonomies, methods, and review
-   responsibilities.
-
-Every substantial output leads with:
-
-- what changed or what decision is being addressed;
-- D4WN's point of view;
-- why it matters for this client now;
-- the evidence and uncertainty;
-- what would change the conclusion;
-- the recommended next decision or research step.
-
-Raw provider payloads, hidden reasoning, credentials, personal profiles, and connector internals
-never appear in the product surface.
-
-## 17. Quality and evaluation
-
-Quality is demonstrated, not inferred from the presence of modules or fluent prose.
-
-Required evaluation dimensions:
-
-- evidence accuracy and citation validity;
-- correct separation of observation, hypothesis, insight, recommendation, and causality;
-- relevance to the client's strategy and decision;
-- contradiction detection and uncertainty calibration;
-- source coverage, freshness, representativeness, and rights compliance;
-- alert precision, novelty, materiality, and actionability;
-- market/competitor/audience diagnosis quality;
-- campaign recommendation and measurement quality;
-- Brand Lift statistical validity;
-- protection against identity reconstruction and cross-client leakage;
-- usefulness to a senior marketing or insights leader.
-
-The benchmark suite must include representative, sparse-context, stale-data, conflicting-evidence,
-manipulated-social-signal, small-sample, regulated-category, multi-market, and recovery cases.
-Qualified human review remains required before claiming expert or agency-grade performance.
-
-## 18. Minimum viable proof
-
-The first pilot client is **D4WN** (owner decision, 2026-10-17). The pilot supports **positioning
-and competitor understanding in Denmark**, aimed at CMOs and marketing managers with decision
-authority. D4WN's owner describes a consultancy helping marketing departments and agencies redesign
-their organization and operating model around AI, involving and training people, then building the
-AI ecosystem that delivers client value. The intended position is the human and creative side of
-AI transformation, not buzzwords or a prepackaged system. This is owner-provided strategic intent,
-not independently established differentiation or proof of expertise. Scandinavia and Europe are
-later ambitions, explicitly outside the initial pilot scope.
-
-D4WN currently has no pilot dataset and no existing synthesis connector to reuse; this is its first
-such implementation. Approved sources, provider and reviewer still need to be established. The
-initial research brief and evidence gaps are recorded in `docs/external-validation-register.md`.
-Synthetic fixtures prove implementation, not D4WN's market facts or quality.
-
-The first credible proof uses one real client configuration and a bounded set of sources. The
-Jacobsen-style case remains a synthetic reference because it combines brand material, a Dentsu-style
-audience study, campaigns, public market evidence, and measurement needs without defining the
-universal product.
-
-The minimum proof must demonstrate:
-
-1. ingestion of a brand guide, strategy, audience report, and campaign/result material;
-2. a reviewed Market Twin with explicit gaps and contradictions;
-3. a market pulse and competitor brief from permitted current sources;
-4. an audience and purchase-behavior synthesis preserving research methodology;
-5. a proposed campaign pre-flight assessment;
-6. a completed campaign readback with honest causal limits;
-7. a Brand Lift study plan that correctly distinguishes diagnostic, directional, and causal
-   measurement;
-8. one candidate learning reviewed and either promoted, rejected, or time-bounded;
-9. evidence that retained output contains trends rather than consumer profiles;
-10. provider-neutral operation with Slack and Rill absent.
-
-## 19. Launch guardrails
-
-- No cross-client data exposure.
-- No person-level consumer intelligence or cross-platform identity matching.
-- No source used outside its documented permission and rights scope.
-- No verbatim excerpt represented as anonymous when it is reasonably searchable.
-- No recommendation without inspectable evidence, limitations, and applicability.
-- No Market Twin promotion without the declared review path.
-- No causal or Brand Lift claim beyond the study design.
-- No configured connector represented as healthy or evidentiary without a receipt.
-- No provider-specific business logic in Core or abilities.
-- No client readiness claim without real client calibration and human-reviewed benchmark evidence.
-
-## 20. Success measures
-
-### Decision value
-
-- proportion of briefs that lead to a decision, research action, or explicit no-action;
-- time from question or material signal to a trusted decision brief;
-- user rating of relevance, clarity, novelty, and decision usefulness;
-- reduction in manual synthesis time without reduced evidence quality.
-
-### Intelligence quality
-
-- citation correctness and source freshness;
-- contradiction and research-gap detection recall;
-- alert precision and duplicate/noise suppression;
-- confidence calibration against later evidence;
-- percentage of learnings retaining clear applicability conditions.
-
-### Measurement quality
-
-- campaigns with baseline, target, checkpoint, and named counterfactual limits;
-- studies correctly classified as diagnostic, directional, or causal;
-- Brand Lift studies passing method and power review before launch.
+Every retained evidence item includes, where applicable:
+
+- client, market, language and subject scope;
+- source class, connector version and safe source reference;
+- acquisition method and publication/observation/ingestion/expiry timestamps;
+- policy version, rights basis, purpose and restrictions;
+- methodology, universe, sample, weighting and limitations;
+- applicability to market, audience, category, competitor and research task;
+- explainable quality dimensions;
+- lifecycle/review state, contradictions and dependencies;
+- explicit separation of source content and system synthesis.
+
+Version 1 explains quality through source authority, directness, recency, methodological fit,
+independence and applicability. A combined confidence score may be shown only after calibration.
+Multiple publications derived from one origin do not count as independent corroboration.
+
+### 10.4 Evidence selection
+
+Core selects the smallest sufficient, diverse evidence set using the ability method, applicability,
+freshness, quality, rights, contradiction and decision relevance. Lexical or vector similarity alone
+never establishes relevance.
+
+Current facts require live research. Live evidence supplements company intent; it cannot silently
+override it. Missing coverage produces a research gap, not plausible filler.
+
+## 11. Trend-first, people-blind boundary
+
+### 11.1 Product rule
+
+Market Research studies populations, themes, behaviors and changes. It does not identify, track,
+score or target individual consumers.
+
+Prohibited behavior includes consumer profiles, identity graphs, cross-platform matching,
+longitudinal individual monitoring, public-conversation activation lists, unnecessary handles or
+profile fields, sensitive-trait inference and durable exact public statements as training material
+for a reusable pack.
+
+### 11.2 Ingestion boundary
+
+Before retention, every adapter must validate permission/policy/purpose, minimize identifiers,
+detect identifying/sensitive/instruction-like content, classify scope, aggregate where permitted,
+apply approved cohort/suppression rules, assign retention and emit normalized evidence or quarantine.
+
+Raw acquisition is encrypted, access-restricted, excluded from ordinary logs and backups unless
+explicitly required, and deleted on a bounded schedule. Crash leftovers and temporary files follow
+the same policy. Retained aggregates are tested for re-identification risk through combined fields.
+
+### 11.3 Citation levels
+
+| Level | Default treatment |
+|---|---|
+| Statistical evidence | Preferred; no person-level material |
+| Paraphrased qualitative evidence | Preferred for briefs and Market Twin |
+| Verbatim public excerpt | Exceptional, minimal, reviewed, time-bounded and source-aware |
+
+An exact quote may be searchable and identifiable even without a username. It is never described as
+anonymous by default. Sensitive excerpts are quarantined or excluded.
+
+## 12. Security, privacy and rights
+
+### 12.1 Trust boundaries
+
+The release dataflow identifies the AI host, MCP gateway, Core, synthesis provider, data plane,
+source adapters, observability and operator access as separate trust boundaries. A field-level data
+inventory states what crosses each boundary, for which purpose, for how long and under whose
+authority.
+
+### 12.2 Prompt and tool security
+
+Source, company and tool text is untrusted data. The product requires instruction/data separation,
+provenance tagging, bounded input/output/nesting/redirects/deadlines, acquisition egress policy,
+least-privilege tool annotations, confirmation for material writes, source quarantine, an operational
+kill switch, cross-tool exfiltration evaluations and redacted errors/logs/telemetry. Pattern matching
+is defense in depth, never proof of complete prompt-injection protection.
+
+### 12.3 Rights and privacy governance
+
+Every production source has a versioned policy decision recording owner, purpose, legal or
+contractual basis, commercial-use and quotation rights, geography, retention, deletion path,
+approver, review date and expiry. The result is `allow`, `allow_with_controls`, `quarantine` or
+`deny`; deny is the default for missing, expired or conflicting policy.
+
+Before a paying pilot, client and operator record controller/processor roles, DPA, subprocessors,
+data residency, DSR/deletion SLA, incident path and any DPIA requirement. Changed source rights can
+block new use and trigger governed expiry of retained material.
+
+## 13. Research ability and output contract
+
+### 13.1 Production ability
+
+Version 1 has one production ability: `competitor-positioning-research`.
+
+It frames the decision and comparison set; distinguishes competitor self-description from
+independent evidence; compares observable audience, promise, offer, proof, delivery model and
+positioning claims; surfaces contradictions and unknowns; tests positioning options against company
+intent and market evidence; states trade-offs and counter-evidence; recommends the smallest useful
+validation step; and abstains when evidence cannot support a material conclusion.
+
+An ability is production-supported only when it has a versioned method, claim taxonomy, source
+requirements, failure modes, adversarial evaluations, named reviewer and live pilot evidence.
+
+### 13.2 Decision brief
+
+The canonical `decision-brief@2` contains decision/scope, point of view, current client relevance,
+typed material claims, citations, source-selection basis, method, contradictions, alternative
+explanations, uncertainty, falsification/change conditions, recommendation/review requirement,
+research gaps, next decision, frozen context/evidence/contract versions and freshness status.
+
+The host may summarize the brief conversationally, but only the canonical artifact is durable and
+reviewable. Host wording may not upgrade claim type or remove limitations.
+
+## 14. Quality contract
+
+Quality is demonstrated by versioned evaluation evidence, not inferred from code, module names or
+fluent prose.
+
+### 14.1 Initial release thresholds
+
+The pilot uses these initial targets, calibrated and deliberately versioned before general
+availability:
+
+- at least 98% correct and resolvable citations;
+- 100% evidence lineage for material claims;
+- zero accepted consumer profiles, cross-client leaks, rights-denied evidence or unapproved
+  promotions;
+- at least 95% correct claim-state classification;
+- at least 95% recall on planted material contradictions;
+- no more than 1% unsupported material claims;
+- median qualified-reviewer score of at least 4/5 for relevance, clarity and usefulness;
+- documented response-time and total-cost ceilings per brief;
+- an explicit calibrated abstention rate and review of false confidence.
+
+Synthetic fixtures validate structure and policy but cannot satisfy live-source, research-quality or
+production-readiness gates.
+
+### 14.2 Evaluation suite
+
+The suite includes representative, sparse-context, stale-data, conflicting-evidence, malicious-
+source, manipulated-social-signal, small-sample, multi-language, permission-revocation, host-tool-
+confusion and recovery cases.
+
+Each supported host runs the same canonical cases plus host-specific conformance cases. Human scores
+record reviewer, method, artifact version, limitations, remediation and retest. Expired evidence
+reopens the gate.
+
+## 15. Operations and commercial service boundary
+
+Before a paying pilot, each installation defines service owner and incident model; availability and
+freshness objectives; RPO/RTO and timed restore; signed release, patch, migration and rollback;
+compatible version window; spend owner and quotas; privacy/security/source-rights contacts;
+offboarding, credential revocation and destruction evidence; content-free telemetry; and the
+responsibility split between D4WN, client and providers.
+
+Commercial packaging states implementation fee, subscription/support fee, usage/provider costs,
+included hosts and sources, customer modification rights and the support consequence of unapproved
+changes. Client content and credentials are never reused as a hidden product-improvement subsidy.
+
+## 16. Capability and change governance
+
+### 16.1 Release states
+
+Every capability has one evidence-backed state:
+
+`designed → implemented → externally_validated → production_supported → deprecated → removed`
+
+Only `production_supported` capabilities may be sold without an explicit pilot limitation. Code
+presence or a passing unit test is insufficient.
+
+### 16.2 Capability register
+
+One machine-readable register records purpose/non-purpose, owner, state, contract/ability versions,
+sources/data classes, review gates, dependencies, evaluation evidence, supported hosts, operational
+requirements and deprecation/removal condition. CI rejects duplicate identifiers, unknown versions,
+prohibited dependency directions and production status without current evidence.
+
+### 16.3 Dependency rules
+
+- Core does not import provider, host or UI modules.
+- MCP and web handlers call application services, never database queries directly.
+- Source adapters cannot create accepted insight, recommendation or learning.
+- Synthesis providers cannot authorize access, rights, spend or review transitions.
+- UI and MCP expose only redacted application DTOs.
+- Migrations cannot activate sources, abilities, budgets or write actions.
+- Client specialization belongs in configuration and evidence, not Core branches.
+
+### 16.4 Change contract
+
+A material capability change includes problem evidence, alternatives, dataflow impact, contract
+change, evaluations, migration/deprecation impact, operational cost and rollback. Contract versions
+follow semantic compatibility rules; incompatible changes require a migration path and host
+compatibility update.
+
+## 17. Legacy and deletion policy
+
+`last30days`, the identity-bearing legacy evidence path, research-run UI/queue and related provider-
+shaped schema are not part of the target product. They are migration debt and must be removed through
+the roadmap after verifying whether any installation contains data that must be exported, tombstoned
+or retained for audit.
+
+Historical migrations are not rewritten. A forward cleanup migration removes obsolete runtime
+structures after the data decision and rollback plan are reviewed. Historical ADRs may remain marked
+superseded; they may not impose active dependencies, Docker contents, setup steps, CI checkout
+requirements or agent instructions.
+
+Campaign, Brand Lift and monitoring code that does not serve version 1 is treated separately from
+legacy: it may be parked behind unsupported status or removed when carrying it creates security,
+schema, UI or maintenance cost. No deferred capability may appear enabled or production-ready.
+
+## 18. Success measures
+
+### Customer value
+
+- briefs leading to a decision, research action or explicit no-action;
+- qualified user score for relevance, clarity, novelty and usefulness;
+- time from question to trusted brief;
+- reduced manual synthesis time without reduced evidence quality;
+- repeat use by the intended role in the client's chosen AI host.
+
+### Product quality
+
+- citation validity and material-claim lineage;
+- contradiction/gap detection and confidence calibration;
+- source coverage, freshness, independence and rights compliance;
+- correct abstention and review-gate behavior;
+- equivalent canonical results across supported hosts;
+- cost and latency within the declared service envelope.
 
 ### Guardrails
 
-- zero cross-client leaks;
-- zero stored consumer profiles;
+- zero cross-client leaks or retained consumer profiles;
 - zero unsupported causal claims presented as fact;
-- zero unapproved promotion of candidate intelligence;
-- zero provider credentials or raw provider payloads exposed in product surfaces.
+- zero unapproved Market Twin promotions;
+- zero credentials or raw provider payloads in surfaces, logs or exports;
+- zero source use after permission or policy expiry.
 
-## 21. Locked product decisions
+## 19. Minimum credible proof
 
-1. Market Research is a D4WN-compatible, reusable client product, not a client-specific internal
-   tool.
-2. The Market Twin is the client-specific intelligence center; it is an evidence model, not a
-   simulation claim.
-3. The product is trend-first and people-blind. It does not create consumer profiles.
-4. Exact public excerpts are an exception class, not the default retained evidence format.
-5. Slack and Rill are removed as product dependencies; all connectors and destinations remain
-   provider-neutral.
-6. Social and forum coverage is source-by-source, permission-aware, and cannot be promised
-   universally.
-7. Brand Lift is a method class with explicit causal requirements, not a label for campaign
-   correlation.
-8. Client specialization belongs in configuration, the Market Twin, industry packs, and provider
-   bindings rather than client-specific branches.
-9. Candidate learning requires provenance, conditions, and review before promotion.
-10. The roadmap must prove one bounded client case before broad connector or industry expansion.
-11. Every client, including D4WN, runs on its own server/application deployment, worker,
-    PostgreSQL database and provider accounts with its own keys. No shared-hosting or shared-key
-    mode is a supported production configuration.
+The first credible proof is complete only when:
 
-## 22. Open product decisions
+1. D4WN company intent is reviewed and current;
+2. the Danish competitor/positioning source inventory and rights are approved;
+3. all three version 1 source paths produce live normalized evidence and receipts;
+4. the production ability returns a traceable `decision-brief@2` or honest `needs_context`;
+5. a qualified reviewer scores representative and adversarial live briefs against release thresholds;
+6. one candidate is accepted, rejected or revised through the governed review path;
+7. retained output passes people-blind and host-data-exposure checks;
+8. the same MCP contract passes in the primary host and one second host;
+9. cost, latency, failure and revocation stay within declared bounds;
+10. deployment, backup, restore, rollback, offboarding and incident ownership are evidenced.
 
-- D4WN pilot's exact approved source inventory and evidence of buyer needs/differentiation;
-  positioning and competitor understanding in Denmark are selected, but no real dataset or
-  existing synthesis connector was available at the 2026-10-17 decision.
-- The initial industry pack after the first pilot.
-- Minimum cohort/suppression thresholds by source and market.
-- Default raw-acquisition retention windows by source class.
-- The first licensed social/listening providers and their permitted commercial uses.
-- Which first-party analytics, CRM, sales, and campaign systems are required for the pilot.
-- Which survey/panel or platform partners will support causal Brand Lift execution.
-- The final customer-facing product name; repository name remains `Market-research`.
+This proof does not require campaign lifecycle, Brand Lift or real-time monitoring.
 
+## 20. Locked product decisions
+
+1. Market Research is AI-native; the client's AI host is the primary user surface.
+2. Remote MCP is the canonical host integration boundary for version 1.
+3. Core owns durable research truth; host prompts and memory do not.
+4. Version 1 supports competitor/positioning research for the D4WN Denmark pilot.
+5. Version 1 starts with four tools and has an absolute maximum of six, one production ability and
+   three production source paths.
+6. The web application is a secondary administration/review surface.
+7. The product is trend-first and people-blind and never creates consumer profiles.
+8. Exact public excerpts are exceptional, reviewed and time-bounded.
+9. Social/listening coverage is source-specific, permission-aware and never universal by promise.
+10. Managed single-tenant is the default deployment; customer-operated single-tenant is an enterprise
+    option. A shared multitenant data plane is unsupported.
+11. No automatic cross-client learning from client content occurs.
+12. Client specialization belongs in configuration, policy and evidence, not code forks.
+13. Material recommendations and Market Twin updates require declared human review.
+14. `last30days` and its legacy runtime/data path are scheduled for safe removal.
+15. Campaign lifecycle, Brand Lift, broad monitoring and additional abilities are deferred until the
+    first credible proof passes and product evidence justifies them.
+
+## 21. Open decisions
+
+The roadmap may implement safe scaffolding but may not claim production completion until these are
+resolved:
+
+- primary launch host and second portability host;
+- D4WN's exact competitor set and approved source inventory;
+- first licensed listening/public-conversation provider and permitted commercial use;
+- named research, source-rights, security and operational reviewers;
+- approved cohort/suppression and raw/evidence retention values;
+- production region, hosting owner and managed-service responsibility split;
+- OAuth/IdP reference implementation and role mapping;
+- pilot price, provider cost ownership and usage ceilings;
+- DPA, subprocessors, DSR SLA and any DPIA requirement;
+- service objectives, RPO/RTO and support terms;
+- calibrated quality thresholds after the first live evaluation round;
+- final customer-facing product name.
+
+## 22. Deferred capability rule
+
+After the minimum credible proof, the next ability is selected from actual pilot demand and measured
+failure/gap data. Audience synthesis, proactive monitoring, campaign learning or study design must
+compete for priority; none resumes automatically because code already exists.
+
+The selected capability receives its own bounded job-to-be-done, source requirements, tool impact,
+quality thresholds and paid pilot evidence before production activation.

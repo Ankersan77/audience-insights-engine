@@ -1,40 +1,84 @@
 # Market Research
 
-Market Research is a reusable, client-configurable market intelligence and campaign-learning
-product built on D4WN principles. It combines governed client evidence, commissioned research,
-aggregate behavioral and commercial signals, official/public sources, and permitted public
-conversation into a versioned **Market Twin** and decision-ready research outputs.
+Market Research is an AI-native, client-isolated evidence intelligence service for marketing
+decisions. Users access it from their company's chosen AI host through a versioned remote MCP
+contract. The first production target is a source-backed competitor and positioning brief for the
+D4WN Denmark pilot.
 
-The product is trend-first and people-blind: it studies populations, themes, behaviors, and changes
+The product is trend-first and people-blind. It studies populations, themes, behaviors and changes
 without building consumer profiles or cross-platform identity graphs.
 
 ## Source of truth
 
-- [`BLUEPRINT.md`](BLUEPRINT.md) — canonical product, architecture, data, research, and quality
-  contract.
-- [`ROADMAP.md`](ROADMAP.md) — phased build plan and release gates.
+- [`BLUEPRINT.md`](BLUEPRINT.md) — canonical product, architecture, governance and release contract.
+- [`ROADMAP.md`](ROADMAP.md) — canonical trim-and-build sequence.
+- [`docs/blueprint-audit-2026-10-17.md`](docs/blueprint-audit-2026-10-17.md) — evidence and rationale
+  for the v2 reset.
 - [`product-spec.md`](product-spec.md) and [`implementation-plan.md`](implementation-plan.md) —
   compatibility pointers for legacy links only.
 
-## Stack
+## Version 1 product boundary
 
-- Next.js 16 and React 19
-- PostgreSQL with Drizzle ORM
-- `pg-boss` background jobs
-- OneLogin OIDC authentication
-- Provider-neutral evidence, metric, source-acquisition, and delivery adapters (target architecture)
-- A pinned `last30days` research engine in `vendor/last30days`, retained as disabled migration
-  scaffolding; it is not part of the canonical people-blind ingestion path
+Version 1 has:
 
-Provider-specific integrations belong behind the connector contracts in
-`src/connectors/contracts.ts`; none is required to build or run the core product.
+- one production ability: `competitor-positioning-research`;
+- one primary geography: Denmark;
+- three source paths: approved client documents, trusted public/official web, and one approved
+  licensed listening/public-conversation provider;
+- four initial MCP tools, with an absolute maximum of six;
+- one canonical `decision-brief@2` output;
+- a narrow web surface for company context, sources/rights, review, quality and operations;
+- managed single-tenant as the default deployment and customer-operated single-tenant as an
+  enterprise option.
+
+Campaign lifecycle, Brand Lift, proactive monitoring, broader audience research and additional
+abilities are deferred. Existing implementation for those areas is not a supported v1 product and
+will be parked or removed through the roadmap.
+
+## Architecture
+
+The target path is:
+
+```text
+AI host → remote MCP → application services/Core → client-isolated data plane → approved sources
+```
+
+The AI host owns the conversation, not product truth. Core owns authorization, source selection,
+research method, claim state, evidence lineage, review and durable artifacts. Host packages contain
+no client facts, credentials or duplicated research logic.
+
+The implementation stack currently uses:
+
+- Next.js 16 and React 19;
+- PostgreSQL with Drizzle ORM;
+- `pg-boss` durable background jobs;
+- a hardened browser OIDC/session flow;
+- provider-neutral evidence, acquisition and synthesis contracts.
+
+Remote MCP, agent OAuth and the application-service boundary are roadmap work; they are not yet
+implemented. OneLogin-named browser configuration is a current reference implementation, not the
+target provider-neutral agent identity contract.
+
+## Transition status
+
+The repository predates Blueprint 2.0.0 and contains implemented campaign, Brand Lift, monitoring
+and legacy `last30days` surfaces. They must not be treated as active v1 product claims.
+
+`last30days` ingestion is permanently fail-closed, but its submodule, Python runtime, worker wrapper,
+legacy routes and identity-bearing legacy schema are still present. Roadmap R1 removes them only
+after a data inventory, recovery baseline and reviewed forward migration. Until R1 completes, local
+and CI builds still need the pinned submodule.
+
+The canonical production source registry is empty until live adapters pass source-rights,
+people-blind, cost, failure and provider acceptance. Synthetic adapters and fixtures prove contracts,
+not live research quality.
 
 ## Requirements
 
 - Node.js 24
 - pnpm 11
-- PostgreSQL
-- Git submodules enabled
+- PostgreSQL 16+
+- Git submodules until Roadmap R1 completes
 
 ## Local setup
 
@@ -47,72 +91,15 @@ pnpm db:migrate
 pnpm dev
 ```
 
-The application is available at `http://localhost:3000`. Its health endpoint is `GET /healthz`.
-The authenticated `/workspace` surface configures governed sources and onboards extracted text,
-Markdown, CSV, JSON, or permitted public-link content into canonical evidence. PDF and office-file
-extraction must be supplied by a verified document adapter; the application never stores the raw
-upload as a substitute for that boundary.
+The current transition application is available at `http://localhost:3000`; `GET /healthz` is the
+container health endpoint.
 
-The same owned surface provides reviewed Market Twin records and persistent decision briefs.
-`/projects` provides the canonical Ask / Projects experience: tenant-scoped workrooms preserve the
-decision context, market/language scope, status and every linked decision brief. A provider-neutral
-synthesis seam may draft from Core-selected evidence, but deterministic evidence and claim gates
-run both before and after synthesis. With no approved provider configured, the product returns
-`needs_context` instead of invented expert prose.
-`/campaigns` handles campaign revisions, measurement-plan and study review, pre-flight/live/post
-assessments, governed learning, and lifecycle transitions. Requesting Brand Lift never bypasses
-the deterministic causal-design gate. `/monitoring` manages versioned sensing profiles and durable
-tenant-scoped runs; `/configuration` manages portable solution-profile versions and redacted
-exports.
+## Environment and access
 
-`/company` maintains the tenant's owner-declared offer, audience, value proposition and positioning
-with review deadlines and append-only versions. Research reuses the current declaration and freezes
-its revision in the result basis. CRM/sales source bindings reference governed aggregates; they do
-not copy contact records or activate sync. See [company context](docs/company-context.md) for the
-D4WN import and the session-scoped API seam; future agent service access is not yet connected.
+Required variables and transitional provider-specific names are documented in `.env.example`.
+Never commit credentials.
 
-Market Pulse also provides opt-in weekly/monthly/quarterly review packets with closed UTC windows,
-restart-safe scheduling and human accept/reject gates. These are traceable indexes of available
-research, not autonomous expert synthesis. Missing source coverage stays explicit. Enable rhythms
-only after binding a sensing profile to the active solution.
-
-`/evaluation` records rubric-scored human benchmark evidence, remediation/retests, and the eight
-expiry-aware external validation gates. Method, monitoring, and operations gates cannot be marked
-verified without a passing scorecard of the matching type.
-
-The worker dispatches canonical acquisition jobs through the runtime-only registry in
-`src/evidence/productionRegistry.ts`. The registry is intentionally empty until a source adapter
-has passed permission, people-blind and provider acceptance review. Missing adapters produce a
-redacted failure receipt and degraded source health; they never yield synthetic evidence.
-
-Every governed source declares scopes, data classifications, permitted purposes, markets,
-languages, cadence, lookback, rights, retention, quota and optional cost limits. Those declarations
-are enforced when a job is claimed and when its receipt returns; an out-of-policy acquisition is
-failed before evidence is persisted. Administrators can revoke a source from `/workspace`, which
-cancels active work, blocks future collection and immediately sends its retained material through
-the canonical tombstoning flow.
-
-Queued connectors additionally require an explicitly enabled client acquisition budget and an
-adapter preflight plan. `npm run budget -- show --client CLIENT_SLUG` shows the policy and today's
-conservatively authorized upper bounds. Client owners/admins can inspect and explicitly edit both
-acquisition and synthesis limits in **Sources & Setup → Budgets & recovery**; operator CLIs remain
-available. Migration `0017` adds acquisition edit versions; migrations never enable a budget.
-See `docs/operations-runbook.md` for confirmation, concurrency and revocation semantics. No paid
-source is activated by migrating or starting the worker.
-
-Successful aggregate and public-conversation adapters persist normalized observations/themes with
-their canonical evidence. Monitoring uses comparable aggregate observations, one latest historical
-baseline per source, explicit corroboration/materiality/freshness/risk gates, and an auditable
-qualification artifact. Passing changes become pending-review Market Twin signals only; missing
-baselines return `needs_context`, and no monitor can automatically promote learning or act outside
-the owned product surface. `/monitoring` presents those candidates as the Market Pulse with their
-confidence, scope, evidence count and uncertainty while keeping review state unmistakable.
-
-## Environment variables
-
-Required and optional variables are documented in `.env.example`. Keep real values in local or hosted secret storage; never commit them.
-
-The minimum application setup requires:
+The current browser application requires:
 
 - `DATABASE_URL`
 - `SESSION_SECRET`
@@ -120,87 +107,50 @@ The minimum application setup requires:
 - `ONELOGIN_CLIENT_ID`
 - `ONELOGIN_CLIENT_SECRET`
 
-Before sign-in, explicitly provision the exact OIDC subject into the configured client using
-`pnpm access grant --client CLIENT_SLUG --subject OIDC_SUBJECT --role ROLE` (see the operations
-runbook for first-client creation and revocation). Identity-provider groups no longer automatically
-grant or restore membership. `APP_ORIGIN` should pin the public origin in production.
+Explicitly provision the exact browser OIDC subject with:
 
-Sessions use random opaque cookies backed by hashed database tokens with an eight-hour server-side
-expiry. Permissions are read from current membership on every request, and logout revokes the
-token. Upgrading to this release invalidates older signed-role cookies and requires sign-in again.
+```bash
+pnpm access grant --client CLIENT_SLUG --subject OIDC_SUBJECT --role ROLE
+```
 
-New connectors must use opaque credential references and the provider-neutral contracts in the
-blueprint.
+OIDC proves identity but never grants product membership automatically. Agent/MCP identity will use
+a separate OAuth bearer path; a human browser cookie must never be reused as an agent credential.
 
-`ENABLE_LEGACY_LAST30DAYS` cannot enable ingestion anymore; new
-sources must pass through the canonical evidence adapters and minimization policy.
-
-`ENABLE_ENV_CREDENTIAL_RESOLVER` also defaults to `false`. When explicitly enabled, only opaque
-references shaped as `env:MARKET_RESEARCH_SOURCE_KEY_CLIENT_<CLIENT_ID>_<NAME>` are resolved inside the client's worker process; values never enter
-jobs, receipts, logs, exports or the product surface.
-
-## Implementation status
-
-The repository implements and tests the canonical contracts, additive data model, tenant scope,
-people-blind evidence boundary, Market Twin transitions and resolution, four core research
-abilities plus cultural/trend and research-planning briefs, four specialized campaign/study
-abilities, campaign lifecycle analysis, measurement and Brand Lift guardrails, selective
-monitoring, solution packaging, and operational resilience. `/workspace` is the owned, tenant-
-scoped control surface. Runtime permissions distinguish owner, administrator, researcher,
-reviewer, and viewer responsibilities; product actions are protected at the API boundary rather
-than only hidden in the interface.
-
-Portable configuration format v3 carries both the solution profile and its tenant-neutral sensing
-policy. Import allocates both active versions atomically and verifies all local connector bindings;
-valid v2 packages remain importable through the explicit compatibility path.
-
-The canonical worker also applies source-rights-aware expiry: expired evidence is reduced to a
-non-reversible lineage tombstone, structured sidecars and copied citation wording are removed, and
-decayed Market Twin intelligence is marked expired with a tenant-scoped audit entry.
-
-Decision briefs persist canonical citation rows atomically with the artifact and expose their safe
-references, method, uncertainty and contradictions in the owned product surface. Linkable source
-references are replaced with opaque identifiers at ingestion, and unreviewed verbatim evidence is
-never selected automatically for a brief.
-
-Live-source activation and production readiness still require the named external evidence in
-`docs/external-validation-register.md`; code and deterministic fixtures never silently satisfy
-those gates.
+`ENABLE_LEGACY_LAST30DAYS` cannot enable ingestion. New source work must use canonical adapters and
+the minimization policy. `ENABLE_ENV_CREDENTIAL_RESOLVER` remains disabled by default and, when
+explicitly enabled for the current transition runtime, accepts only client-scoped opaque references.
 
 ## Commands
 
 ```bash
-pnpm dev          # local development
-pnpm lint         # ESLint
-pnpm typecheck    # generated Next.js types plus TypeScript
-pnpm test         # unit and deterministic fixture tests
-pnpm test:integration # PostgreSQL integration tests; requires dedicated TEST_DATABASE_URL ending in _test
-pnpm check:source-of-truth # canonical documentation check
-pnpm build        # production build
-pnpm worker       # background worker
-pnpm db:generate  # create Drizzle migrations
-pnpm db:migrate   # apply Drizzle migrations
-bash verify.sh    # complete local verification gate
+pnpm dev                    # local transition application
+pnpm lint                   # ESLint
+pnpm typecheck              # generated Next.js types plus TypeScript
+pnpm test                   # deterministic unit/fixture tests
+pnpm test:integration       # requires dedicated TEST_DATABASE_URL ending in _test
+pnpm check:source-of-truth  # canonical documentation check
+pnpm build                  # production build
+pnpm worker                 # background worker
+pnpm db:generate            # create forward migrations
+pnpm db:migrate             # apply migrations
+bash verify.sh              # complete local gate
 ```
 
-## Container
+## Current verification boundary
 
-The included multi-stage Dockerfile builds the standalone Next.js server, includes the pinned research-engine submodule, runs as a non-root user, listens on port 3000, and checks `/healthz`.
+The repository has extensive deterministic coverage for tenant scope, evidence policy, claims,
+rights, retention, budgets, campaigns, studies and monitoring. Passing those tests is implementation
+evidence only. It does not prove remote MCP support, live source coverage, human research quality,
+external OIDC, production restore or commercial readiness.
 
-```bash
-docker build -t market-research .
-docker run --rm --env-file .env.local -p 3000:3000 market-research
-```
+The CI workflow runs source-of-truth checks, lint, typecheck, deterministic tests, production build
+and PostgreSQL integration/authenticated HTTP tests.
 
-## Continuous integration
+## Deployment
 
-`.github/workflows/ci.yml` installs dependencies, lints, type-checks, tests, and builds on pull requests and pushes to `main`.
+The current Dockerfile and deployment checker implement the pre-v2 customer-operated application
+shape. They remain transitional until Roadmap R1-R7 replaces legacy runtime contents, adds remote
+MCP/agent identity and proves the managed single-tenant reference deployment.
 
-Deployment infrastructure remains provider-neutral until each client's hosting target is selected.
-Production is always one client-owned app, worker, PostgreSQL database, identity integration,
-secret store and provider accounts. After migrating a fresh empty database, use
-`pnpm deployment:bootstrap --slug CLIENT --name NAME` to replace its legacy placeholder; existing
-data requires a reviewed migration. Set the resulting client's
-`MARKET_RESEARCH_CLIENT_SLUG` and numeric `MARKET_RESEARCH_CLIENT_ID`, then run
-`pnpm deployment:check` before releasing web or worker. See the
-[operations runbook](docs/operations-runbook.md) for ownership and credential checks.
+Do not describe an installation as production-supported until its current source, quality, host,
+security, recovery and operations evidence is recorded and valid.

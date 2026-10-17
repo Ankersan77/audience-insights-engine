@@ -22,6 +22,22 @@ type. Expired evidence automatically presents as `needs_context`.
 | Monitoring | Shadow-mode signal volume, reviewer scores, noise/dismissal thresholds, and retest | Unassigned | `needs_context` | — |
 | Production operations | Deployment owner, backup evidence, timed restore result, alerts, rollback and incident exercise | Unassigned | `needs_context` | — |
 
+Brand Lift and monitoring are deferred by Blueprint 2.0.0; their open legacy gates do not block the
+version 1 competitor/positioning release. They may not be marked verified or used to imply an active
+capability while deferred.
+
+## Blueprint 2.0 release gates pending runtime representation
+
+Roadmap R0 must add these gates to the capability register and, where useful, the runtime evaluation
+contract. Until then this document is their durable bootstrap record; the current evaluation API
+does not accept them as gate keys.
+
+| Gate | Required evidence | Owner | Status | Evidence reference |
+| --- | --- | --- | --- | --- |
+| AI-host integration | Named primary and portability hosts, OAuth/admin acceptance, MCP conformance and field-exposure evidence | Unassigned | `needs_context` | — |
+| Security and privacy | DPA, roles, subprocessors, residency, DSR/DPIA decision, threat review and adversarial host/source tests | Unassigned | `needs_context` | — |
+| Commercial pilot | Price, provider-cost responsibility, service boundary, support terms and evidenced willingness to pay | Unassigned | `needs_context` | — |
+
 ## D4WN bootstrap decision — 2026-10-17
 
 The owner selected D4WN as the first pilot and confirmed there is currently no data and no earlier

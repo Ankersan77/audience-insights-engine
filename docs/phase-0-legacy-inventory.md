@@ -1,7 +1,10 @@
 # Phase 0 legacy integration inventory
 
+> Historical inventory. `BLUEPRINT.md` 2.0.0 and Roadmap R1 now require safe removal of the retained
+> `last30days` and identity-bearing legacy path after data and recovery review.
+
 Date: 2026-10-16
-Blueprint: `BLUEPRINT.md` v2.0
+Blueprint at time of inventory: pre-2.0 reset
 
 This is the reviewed deletion/generalization manifest for the former Slack/Rill product model.
 Slack and Rill are not optional modules of the target product; they are removed from active runtime,

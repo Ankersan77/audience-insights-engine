@@ -1,6 +1,11 @@
 # Operations and recovery runbook
 
-## Client-owned deployment boundary
+> Transition note: this runbook documents the currently implemented pre-Blueprint-2.0
+> customer-operated web/worker deployment. Blueprint 2.0.0 makes managed single-tenant the v1
+> default and remote MCP the primary integration; those procedures are delivered through Roadmap
+> R3-R7. Do not use this runbook as evidence that the v2 service or MCP path is production-supported.
+
+## Current customer-operated deployment boundary
 
 The only supported production shape is **one installation per client**. The client (D4WN for the
 first pilot) owns/controls its web app, worker, exclusive PostgreSQL database and backups, OIDC

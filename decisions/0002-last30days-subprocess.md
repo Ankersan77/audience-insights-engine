@@ -1,6 +1,6 @@
 # ADR 0002: `last30days` runs as a local worker subprocess in the single platform-built image
 
-- Status: Accepted
+- Status: Superseded by `BLUEPRINT.md` 2.0.0 and `ROADMAP.md` R1 (2026-10-17)
 - Date: 2026-10-08
 - Initiative: `init-20261002-audience-insights-engine` (Audience Insights Engine)
 
@@ -29,3 +29,9 @@ This fits the platform's one-image/one-tag convention exactly: no custom CI work
 - One image, one CI pipeline, one tag — no new deployment surface, no new network-reachable endpoint.
 - The worker container is larger (carries a Python runtime and the vendored submodule) and needs CPU/memory sizing that accounts for running `last30days` as a child process; this is stated explicitly in `product-spec.md` §11 and sized in the implementation plan.
 - Bumping the pinned submodule tag is a reviewed action (a named person checks the upstream diff before moving the pin), since it is third-party executable code running with live external API credentials.
+
+## Supersession note
+
+The target product is now AI-native and uses the canonical people-blind source-adapter boundary.
+`last30days` is permanently disabled and scheduled for data-audited removal. This ADR remains only to
+explain historical deployments; it must not be used to justify new dependencies or runtime work.

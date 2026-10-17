@@ -1,5 +1,9 @@
 # Roadmap evaluation and execution corrections
 
+> Historical note: this evaluation explains the pre-Blueprint-2.0 platform roadmap. It was
+> superseded by `BLUEPRINT.md` 2.0.0 and the replacement `ROADMAP.md` on 2026-10-17. Its implementation
+> observations remain useful evidence, but its capability scope and sequencing are not current.
+
 Date: 2026-10-16  
 Updated: 2026-10-17
 Blueprint: `BLUEPRINT.md` v1.0.0  

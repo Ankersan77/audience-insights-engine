@@ -18,13 +18,19 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Preserve the trend-first, people-blind boundary: do not create consumer profiles, cross-platform
   identities, or retained person-level public-source intelligence.
 - Keep observations, signals, facts, hypotheses, insights, recommendations, and learnings as
-  distinct states. Do not upgrade correlation to causality or call a result Brand Lift unless the
-  blueprint's study requirements are met.
+  distinct states. Do not upgrade correlation to causality.
 - Slack and Rill are legacy integrations, not product dependencies. New work must use the
   provider-neutral source, metric, acquisition, and delivery seams defined in the blueprint.
-- Keep infrastructure provider-neutral until a deployment target is explicitly selected.
+- Treat the AI host as the primary product surface and remote MCP as the canonical v1 integration
+  boundary. Host packages must not copy Core research, rights, authorization, or review logic.
+- Keep Core provider-neutral. Managed single-tenant is the v1 deployment default; customer-operated
+  single-tenant is an enterprise option. Shared multitenant data planes are unsupported.
+- Keep v1 limited to the server-pinned competitor/positioning ability, three source paths, four
+  initial MCP tools (six maximum), Denmark, and `decision-brief@2`.
 - The application listens on port 3000 and exposes `GET /healthz` for container health checks.
 - Never commit credentials. Read secrets from environment variables and document required variable names in `.env.example`.
-- Preserve the pinned `vendor/last30days` submodule; integrate with it through the existing worker boundary rather than patching vendored code.
+- `vendor/last30days` and its legacy run/evidence path are scheduled for safe removal in Roadmap R1.
+  Do not extend, re-enable, or patch them. Inventory and preserve required data before deletion, use
+  forward migrations, and keep legacy removal separate from MCP feature work.
 - Before changing Next.js behavior, read the matching guide in `node_modules/next/dist/docs/`.
 - Run lint, type-checks, tests, and a production build before shipping changes that can affect runtime behavior.
