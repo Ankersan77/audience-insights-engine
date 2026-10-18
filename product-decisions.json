@@ -142,7 +142,7 @@
       "proposal": null,
       "owner": "operations-owner",
       "requiredBefore": "R7",
-      "blocker": "No service objectives or timed restore evidence exist.",
+      "blocker": "A synthetic native restore is evidenced, but no sold service objectives, production RPO/RTO or support commitment exists.",
       "decisionEvidence": null
     },
     {
@@ -152,17 +152,17 @@
       "proposal": "Do not auto-promote legacy evidence or insights; reconcile useful brand intent manually.",
       "owner": "data-owner",
       "requiredBefore": "R1B",
-      "blocker": "Installation inventory, row counts, legal holds, export checksums and restore proof are missing.",
+      "blocker": "The current estate is verified-zero, but the data owner has not accepted whether and how the legacy schema is removed from the product baseline in R1B.",
       "decisionEvidence": null
     },
     {
       "id": "legacy-code-removal-data-access",
       "question": "How will each installation retain controlled access to legacy records after the R1A2 application surfaces and workers are removed?",
       "status": "needs_context",
-      "proposal": "Keep the legacy schema unchanged and operator-readable through controlled SQL or an approved checksum-bearing export until the separate R1B disposition decision.",
+      "proposal": "For the verified-zero current estate, no installation records require preservation or access. Keep the legacy schema unchanged in the test baseline until the separate R1B disposition decision.",
       "owner": "data-owner",
       "requiredBefore": "R1A2",
-      "blocker": "The authoritative installation register and a per-installation preservation, access and rollback record are not owner-accepted.",
+      "blocker": "The verified-zero preservation/access outcome still requires data-owner acceptance before R1A2.",
       "decisionEvidence": null
     },
     {

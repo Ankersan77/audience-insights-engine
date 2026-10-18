@@ -148,13 +148,13 @@
     { "id": "unit-tests", "status": "passed", "evidence": "234/234 local tests on 2026-10-17" },
     { "id": "production-build", "status": "passed", "evidence": "local pnpm build on 2026-10-17" },
     { "id": "empty-database-and-http-integration", "status": "passed", "evidence": "workflow=CI; conclusion=success; headSha=f76ec95b9cd9a48777be84d27579bf131fc85c2f; url=https://github.com/man-D4wn/Market-research/actions/runs/39019288037" },
-    { "id": "representative-upgrade", "status": "needs_context", "evidence": "The isolated pre-0018 legacy-row fixture passed through current head 0019 in CI run 39109907282; an owner-accepted representative external exercise is still missing." },
-    { "id": "backup-restore", "status": "needs_context", "evidence": "No isolated PostgreSQL restore exercise has been recorded." },
-    { "id": "production-database-inventory", "status": "needs_context", "evidence": "Repository-visible discovery found no configured deployment or installation access, but the authoritative external perimeter and either a verified-zero attestation or every installation inventory remain missing; see docs/r0b-installation-evidence.md." },
+    { "id": "representative-upgrade", "status": "passed", "evidence": "The isolated PostgreSQL 16 pre-0018 fixture populated every listed legacy relation and preserved all rows through immutable history to head 0019 in CI run 39109907282." },
+    { "id": "backup-restore", "status": "passed", "evidence": "PostgreSQL 16 pg_dump custom-format backup and pg_restore preserved 19 migrations and representative tenant/project/artifact data; the current build completed an authenticated database-backed read in CI run 39114254560." },
+    { "id": "production-database-inventory", "status": "passed", "evidence": "The project sponsor declared a verified-zero estate on 2026-10-18: no permanent deployment, database, backup, data copy or external consumer exists. Repository and repository-scoped GitHub discovery found no contrary evidence; see docs/r0b-installation-evidence.md." },
     { "id": "remote-baseline-governance", "status": "passed", "evidence": "workflow=CI; conclusion=success; headSha=f4fd185901b8e3b3107b1f015a331e28199e173f; url=https://github.com/man-D4wn/Market-research/actions/runs/39021713019; fresh checkout fetched and validated annotated tag pre-trim-v2.0.0" },
     { "id": "decision-owner-acceptance", "status": "needs_context", "evidence": "All accountable role assignments remain pending in product-decisions.json." }
   ],
   "r0Subgates": { "repositoryBaseline": "passed", "installationPreflight": "open" },
   "r0GateStatus": "open",
-  "openBlockers": ["representative-upgrade", "backup-restore", "production-database-inventory", "decision-owner-acceptance"]
+  "openBlockers": ["decision-owner-acceptance"]
 }

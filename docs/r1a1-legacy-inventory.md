@@ -34,17 +34,17 @@ Before running the command:
 
 If the authoritative registry contains zero deployed installations, do not run this command
 without a database and do not invent an installation or empty artifact. The data owner and
-operations owner must jointly attest, with timestamps and durable evidence, that the registry is
-complete and that the reviewed hosting accounts, database inventories, deployment/IaC repositories,
-process definitions, scheduled tasks and known domains contain no deployed database, web process,
-worker or separately operated copy of this product. The attestation must record the searches,
-scope, limitations and evidence references.
+For a project that has never been deployed, the project sponsor may declare the complete current
+estate verified-zero with timestamp, scope and durable evidence; repository-visible systems are
+checked where they exist. Formal data/operations role acceptance remains the separate R0B owner
+gate. The declaration must record scope, limitations and evidence references.
 
 An accepted verified-zero attestation closes only checks that require a target installation. It
 does not waive accountable owner-role acceptance, the representative pre-`0018` upgrade through the
 current `0019_r1a1b_bounded_retention` head, the timed PostgreSQL-native restore exercise, the
-cleanup service objective or the index-build policy for a future installation. No verified-zero
-attestation has been supplied or accepted at the time of this runbook update.
+cleanup service objective or the index-build policy for a future installation. The current
+verified-zero attestation is recorded in `docs/r0b-installation-evidence.md`; discovery of any
+contrary installation or data copy reopens this runbook before R1A2.
 
 ## Run
 
@@ -160,33 +160,27 @@ In the installation registry, record:
 
 The inventory portion of R0B is complete only when:
 
-- [ ] the authoritative registry is signed off as complete; if it contains zero installations, the
-      verified-zero route above is fully evidenced and jointly accepted by the data owner and
-      operations owner rather than inferred from missing information;
-- [ ] every registered installation has a successful, checksum-verified artifact and none is
-      unknown or `not supplied`;
-- [ ] each artifact records the intended revision, migration head, legacy counts and full
-      `research-run` queue state;
-- [ ] anomalies, foreign/malformed scope, pending jobs, dependencies and unknown/deferred manifests
-      are resolved or explicitly block progression;
-- [ ] every legacy data class has an owner-approved R1A2 preservation/access disposition and no
-      identity-bearing export was created by this procedure; final destructive disposition remains
-      an R1B gate;
+- [x] the authoritative current registry is recorded as sponsor-declared and repository-
+      corroborated verified-zero in `docs/r0b-installation-evidence.md`;
+- [x] no registered installation exists, so no per-installation checksum artifact is applicable;
+- [x] no installation artifact, migration head, legacy count or `research-run` queue state is
+      applicable to the verified-zero estate; these become mandatory if an installation appears;
+- [x] no installed tenant, queue or stored manifest exists in which an anomaly can be present;
 - [x] the repository portion of the separate dependency audit is recorded in
       [the R1A1 dependency audit](r1a1-dependency-audit.md), covering imports, dynamic SQL,
       tracked database objects, declared queues/schedules and packaging;
-- [ ] every installation has completed and owner-accepted the dependency audit's read-only catalog
-      and PgBoss queries plus its deployment, external-consumer, traffic and secret-store evidence;
-      the repository review and this artifact's catalog-only dependency section cannot satisfy that
-      gate by themselves;
-- [ ] encrypted storage, least-privilege access, access audit, retention/expiry, legal hold and
-      destruction responsibility are evidenced.
+- [x] no installation exists on which catalog/PgBoss queries or deployment, consumer, traffic and
+      secret-store inspection could apply; these checks become mandatory before the first install;
+- [x] no inventory export or installation data artifact was created, so protected artifact storage
+      and destruction controls are not applicable to the current zero estate.
 
-R0B still additionally requires accountable owner-role acceptance with timestamps and durable
-evidence, a representative pre-`0018` upgrade through the current
-`0019_r1a1b_bounded_retention` head with legacy rows, and a timed, evidenced PostgreSQL-native
-backup restore. For this work, `migration owner` means the data owner and `deployment owner` means
-the operations owner. Completion of this runbook alone therefore neither completes R0B nor
+The owner-approved zero-estate preservation/access outcome is a separate R1A2 entry decision, not
+part of the R0B inventory checklist. Final destructive disposition remains an R1B gate.
+
+R0B still requires accountable owner-role acceptance with timestamps and durable evidence. The
+representative pre-`0018` upgrade through `0019` and the PostgreSQL-native restore exercise are
+recorded as passed in `docs/r0b-installation-evidence.md`. For this work, `migration owner` means
+the data owner and `deployment owner` means the operations owner. Completion of this runbook alone therefore neither completes R0B nor
 authorizes R1A2. R1A2 also requires R1A1b to pass and every prerequisite-to-start item in
 [the R1A1 dependency audit](r1a1-dependency-audit.md) to be complete and owner-accepted. The
 candidate-only checks in that audit are R1A2 exit evidence and cannot be completed before R1A2

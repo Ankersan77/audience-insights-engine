@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "project": "market-research",
+  "recordedAt": "2026-10-18",
+  "repository": "man-D4wn/Market-research",
+  "repositoryDiscoveryRevision": "2ca715506c144a9d018afba51400a9ac432c6e08",
+  "estateOutcome": "verified-zero",
+  "ownerDeclaration": {
+    "role": "project-sponsor",
+    "statement": "The product has not yet had a permanent deployment, persistent database, backup, retained data copy or external consumer.",
+    "scope": [
+      "hosted applications and workers",
+      "persistent local development databases",
+      "managed or self-hosted PostgreSQL",
+      "database dumps, snapshots, exports and PITR archives",
+      "scheduled jobs, process managers and webhooks",
+      "legacy API, BI, script and manual-procedure consumers"
+    ],
+    "ephemeralCiDatabasesExcluded": true
+  },
+  "repositoryObservations": {
+    "localEnvironmentFilesPresent": false,
+    "relevantEnvironmentVariablesConfigured": false,
+    "deploymentDefinitions": ["Dockerfile"],
+    "marketResearchContainerRunningInInspectedContext": false,
+    "githubActionsWorkflowCount": 1,
+    "githubDeploymentWorkflowCount": 0,
+    "githubEnvironmentCount": 0,
+    "githubDeploymentRecordCount": 0,
+    "githubActionsVariableCount": 0,
+    "githubActionsSecretNameCount": 0,
+    "githubReleaseCount": 0
+  },
+  "technicalEvidence": {
+    "representativeUpgradeCiRun": 39109907282,
+    "nativeBackupRestoreCiRun": 39114254560,
+    "nativeBackupSha256": "383b950b05cf77075c1608889bca3ec30b0706f763cc5469f361686a7e09273a"
+  },
+  "reopenCondition": "Any discovered deployment, database, backup, data copy or consumer invalidates verified-zero before R1A2."
+}

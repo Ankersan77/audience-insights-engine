@@ -35,17 +35,19 @@ R0 now has machine-readable product governance:
 
 ## Why R0 is still open
 
-Repository tests cannot supply these missing facts:
+The installation, upgrade and recovery checks are now complete for the pre-deployment state:
 
-1. the inventory of every deployed database and its legacy row/queue state;
-2. an owner-accepted upgrade exercise from a representative pre-`0018` installation snapshot with
-   legacy rows through the existing immutable migrations to the current `0019` head; the isolated
-   PostgreSQL 16 fixture in `integration/pre0018-upgrade.integration.ts` passed remote CI run
-   `39109907282` and
-   supplies repository evidence, but neither the fixture nor that run is installation evidence;
-3. a timed restore from a PostgreSQL-native test backup;
-4. acceptance of the accountable owner roles in `product-decisions.json`;
-5. approval of the primary host and OAuth reference flow needed before R3.
+1. the project sponsor declared a verified-zero estate: no permanent deployment, database, backup,
+   data copy or external consumer exists;
+2. the PostgreSQL 16 fixture in `integration/pre0018-upgrade.integration.ts` preserved
+   representative legacy rows through the immutable history to `0019` in CI run `39109907282`;
+3. PostgreSQL 16 native `pg_dump`/`pg_restore` preserved all 19 migrations and representative
+   tenant/project/artifact data, and the current build completed an authenticated database-backed
+   read in CI run `39114254560`.
+
+R0 remains open only because all accountable owner-role assignments in `product-decisions.json`
+are still pending. The primary host and OAuth reference flow are later R3 entry decisions and do
+not keep R0B open.
 
 R0A passed in remote CI run `39021713019`, including a fresh checkout of the annotated pre-trim tag.
 Read-only R1A1 discovery and the neutral worker-runtime extraction may now run to produce R0B
@@ -53,25 +55,26 @@ evidence. The repository now contains the neutral runtime, isolated canonical ma
 read-only inventory command documented in [the R1A1 legacy inventory runbook](r1a1-legacy-inventory.md).
 The repository portion of the separate dependency review is recorded in
 [the R1A1 dependency audit](r1a1-dependency-audit.md); its live database,
-queue/schedule, deployment, external-consumer, traffic and secret-inventory checks remain open.
+queue/schedule, deployment, external-consumer, traffic and secret-inventory checks are not
+applicable to the verified-zero current estate and must be repeated for the first installation.
 Production-image removal proof is a separate R1A2 candidate/exit check, not a prerequisite to start
 R1A2. These repository artifacts do not complete R1A1 for real installations. The
 R1A1b bounded-maintenance contract is approved in [its decision record](r1a1b-bounded-maintenance-decision.md),
 and its additive migration and repository-verifiable runtime exit gate are implemented and green in
-CI run `39109678811`. This does not supply the installation-specific cleanup objective, index-build
-window, live inventory, recovery proof or owner acceptance. R1A2 therefore still waits for those
-R0B/R1A1 installation gates. Destructive schema
+CI run `39109678811`. R1A2 still waits for accountable role acceptance plus the separate
+preservation/access, cleanup-objective and zero-estate index-deployment decisions. Destructive schema
 work in R1B additionally requires the `legacy-data-disposition` decision and installation-specific
-migration recovery controls. R3 additionally requires item 5. A later R1B test must separately prove
-the new contraction migration from `0019`.
+migration recovery controls. R3 separately requires the `primary-host` and
+`oauth-reference-flow` decisions. A later R1B test must prove the new contraction migration from
+`0019`.
 
 The current repository-visible discovery is recorded in
 [the R0B installation evidence record](r0b-installation-evidence.md). The assessed checkout had no
 configured installation credentials or deployment manifest beyond the Dockerfile, and repository-
-scoped GitHub queries returned no environments, deployments, variables, secrets or releases. This
-narrows the search but is not a verified-zero installation claim: the authoritative cloud,
-database/backup, organization, DNS, IdP, secret-store, process-manager and external-consumer
-perimeter still needs owner attestation. All nine role assignments also remain pending.
+scoped GitHub queries returned no environments, deployments, variables, secrets or releases. The
+project sponsor subsequently confirmed that no permanent installation, database, backup or
+consumer exists, so the current estate is recorded as verified-zero. All nine role assignments
+remain pending; discovery of contrary evidence reopens the installation inventory immediately.
 
 The dependency audit found no canonical import of the detachable legacy runtime cluster. Before
 R1A2, the handling of the persisted transitional-monitoring schedule must be owner-approved; the

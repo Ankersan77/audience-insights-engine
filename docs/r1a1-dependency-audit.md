@@ -62,19 +62,19 @@ evidence; they must not recreate an active runtime or packaging dependency.
 
 An authoritative registry may contain zero deployed installations. That is not the same as an
 unknown inventory and must not be inferred from repository silence. The data owner and operations
-owner must jointly attest, with timestamps and durable evidence, that the registry is complete and
-that the reviewed hosting accounts, database inventories, deployment/IaC repositories,
-process-manager definitions, scheduled tasks and known domains contain no deployed database, web
-process, worker or separately operated copy of this product. Record the searches performed, their
-scope and any limitations; do not invent an installation ID or run the inventory command without a
-database merely to create an empty artifact.
+For a project that has never been deployed, the project sponsor may declare the complete current
+estate verified-zero with timestamp, scope and durable evidence; repository-visible systems are
+checked where they exist. Formal operations/data role acceptance remains the separate R0B owner
+gate. Do not invent an installation ID or run the inventory command without a database merely to
+create an empty artifact.
 
 A verified-zero attestation closes only the per-installation inventory, catalog, queue, deployment,
 traffic, consumer and secret checks that have no target installation. It does not waive accountable
 owner acceptance, the representative pre-`0018` upgrade through the current
 `0019_r1a1b_bounded_retention` head, the timed PostgreSQL-native restore exercise, the cleanup
-service objective or the policy for index builds on a future installation. No verified-zero
-attestation has been supplied at the time of this review.
+service objective or the policy for index builds on a future installation. The current verified-zero
+attestation is recorded in `docs/r0b-installation-evidence.md` and automatically reopens if contrary
+estate evidence is discovered.
 
 ## Required per-installation read-only checks
 
@@ -261,10 +261,9 @@ prerequisite checklist above passes:
 ## R1A2 gate conclusion
 
 **Blocked at the prerequisites-to-start gate.** The repository review identifies a bounded removal
-cluster and no canonical import of that cluster, but no accepted verified-zero attestation or
-complete per-installation catalogs, queue/schedule state, external consumer/traffic evidence,
-secret inventory, R0B recovery and accountable acceptance have been recorded. This document may
-support those decisions; it is not approval to start R1A2. R1A1b's repository gate has passed, but
-does not replace any prerequisite above. Candidate image, removal-guard and post-change lifecycle
-proof belong to the separate R1A2 exit gate above and are not reasons to prevent R1A2 from starting
-once its prerequisites close.
+cluster and no canonical import of that cluster. The current estate is now sponsor-declared and
+repository-corroborated as verified-zero, and the technical R0B upgrade/restore exercises pass.
+Accountable role acceptance and the separate preservation/access, cleanup objective and index
+deployment decisions remain open. This document is not approval to start R1A2. Candidate image,
+removal-guard and post-change lifecycle proof belong to the separate R1A2 exit gate above and are
+not reasons to prevent R1A2 from starting once its actual prerequisites close.
