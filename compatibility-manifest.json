@@ -36,14 +36,14 @@
   },
   "database": {
     "engine": "postgresql",
-    "schemaVersion": "0019_r1a1b_bounded_retention",
-    "migrationHead": "0019_r1a1b_bounded_retention",
-    "migrationCount": 19,
+    "schemaVersion": "0020_r1b_legacy_schema_cleanup",
+    "migrationHead": "0020_r1b_legacy_schema_cleanup",
+    "migrationCount": 20,
     "journalFormatVersion": "7",
     "journalPath": "drizzle/meta/_journal.json",
-    "historyDigest": "sha256:a0e8074e9345166df2e9e1859af4c46dfff80bab1255b32d1ba8eaa0fb79ccbf",
+    "historyDigest": "sha256:704ff7f4fa527575111b9f8635e5964efd6963c832c2316cf39861fbf11ff602",
     "upgradePolicy": "forward-only",
-    "state": "pre-trim"
+    "state": "legacy-cleaned"
   },
   "contracts": [
     {

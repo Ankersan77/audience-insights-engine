@@ -2,7 +2,7 @@
 
 Updated: 2026-10-18
 Blueprint: 2.1.0
-Status: **R0 complete; R1A2 passed; R1B decision-gated**
+Status: **R0 complete; R1A2 passed; R1B candidate verification pending**
 
 R0 now has machine-readable product governance:
 
@@ -20,8 +20,8 @@ R0 now has machine-readable product governance:
 
 - The current Blueprint, Roadmap, compatibility manifest and capability register agree on version
   2.1.0. The frozen pre-trim baseline/tag remains unchanged and does not claim to evidence R1A1b.
-- The database migration head is `0019_r1a1b_bounded_retention`; Drizzle journal format `7` is not
-  presented as the database version.
+- The candidate database migration head is `0020_r1b_legacy_schema_cleanup`; Drizzle journal format
+  `7` is not presented as the database version. R0 evidence remains anchored to its historical head.
 - Existing deterministic verification is green, including the empty-database migration and
   authenticated PostgreSQL integration suite. R1A1b's repository implementation passed GitHub
   Actions run `39109678811`, including migration, bounded continuation, concurrency, revocation/use
@@ -51,9 +51,10 @@ R0B and therefore R0. The primary host and OAuth reference flow are later R3 ent
 were not decided by this acceptance.
 
 R0A passed in remote CI run `39021713019`, including a fresh checkout of the annotated pre-trim tag.
-Read-only R1A1 discovery and the neutral worker-runtime extraction may now run to produce R0B
-evidence. The repository now contains the neutral runtime, isolated canonical maintenance and the
-read-only inventory command documented in [the R1A1 legacy inventory runbook](r1a1-legacy-inventory.md).
+Read-only R1A1 discovery and the neutral worker-runtime extraction produced the R0B evidence. The
+historical inventory procedure is documented in
+[the R1A1 legacy inventory runbook](r1a1-legacy-inventory.md), but the contracted release no longer
+ships that pre-R1B command.
 The repository portion of the separate dependency review is recorded in
 [the R1A1 dependency audit](r1a1-dependency-audit.md); its live database,
 queue/schedule, deployment, external-consumer, traffic and secret-inventory checks are not
@@ -63,11 +64,10 @@ R1A2. These repository artifacts do not complete R1A1 for real installations. Th
 R1A1b bounded-maintenance contract is approved in [its decision record](r1a1b-bounded-maintenance-decision.md),
 and its additive migration and repository-verifiable runtime exit gate are implemented and green in
 CI run `39109678811`. The separate preservation/access, cleanup-objective and zero-estate index-
-deployment decisions are accepted, so R1A2 implementation may begin. Destructive schema
-work in R1B additionally requires the `legacy-data-disposition` decision and installation-specific
-migration recovery controls. R3 separately requires the `primary-host` and
-`oauth-reference-flow` decisions. A later R1B test must prove the new contraction migration from
-`0019`.
+deployment decisions are accepted and R1A2 has passed. Martin approved the verified-zero
+`legacy-data-disposition` in `docs/r1b-data-disposition.md`; R1B is implemented as candidate
+migration `0020` and remains open until its immutable CI, recovery and forward-fix evidence passes.
+R3 separately requires the `primary-host` and `oauth-reference-flow` decisions.
 
 The current repository-visible discovery is recorded in
 [the R0B installation evidence record](r0b-installation-evidence.md). The assessed checkout had no
@@ -85,9 +85,10 @@ monitoring schedule, standalone canonical worker lifecycle, graceful drain and r
 The read-only inventory's foreign-key and view catalog is intentionally not treated as complete
 dependency evidence.
 
-R1B has not started. Its schema/data contraction is destructive and remains blocked by the explicit
-`legacy-data-disposition` decision, followed by the Roadmap's migration recovery and go/no-go
-controls. R1A2 approval does not authorize that work.
+R1B has started under the explicit verified-zero `legacy-data-disposition`. Its candidate removes
+only the 12 approved legacy tables and three enums in dependency order without `CASCADE`. It is not
+passed until fresh/upgrade, fail-closed dependency, native restore/forward-again and canonical
+regression evidence is green. Contrary estate discovery reopens installation-specific approval.
 
 ## Safe R1 boundary already identified
 

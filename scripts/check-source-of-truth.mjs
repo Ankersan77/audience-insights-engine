@@ -12,6 +12,7 @@ const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
 const agentRules = readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8");
 const compatibilityManifest = readFileSync(new URL("../compatibility-manifest.json", import.meta.url), "utf8");
 const capabilityRegister = readFileSync(new URL("../product-capabilities.json", import.meta.url), "utf8");
+const packageManifest = readFileSync(new URL("../package.json", import.meta.url), "utf8");
 
 const failures = [];
 for (const failure of validateRemovedRuntime(fileURLToPath(new URL("../", import.meta.url)))) failures.push(failure);
@@ -33,6 +34,9 @@ for (const [label, contents, phrases] of [
 
 if (agentRules.includes("Preserve the pinned `vendor/last30days` submodule")) {
   failures.push("AGENTS.md must not require preservation of the retired last30days dependency.");
+}
+if (packageManifest.includes('"legacy:inventory"')) {
+  failures.push("package.json must not expose the retired pre-R1B legacy inventory command.");
 }
 
 for (const [label, contents] of [
@@ -78,6 +82,9 @@ for (const path of [
   "../app/api/brands",
   "../app/api/runs",
   "../app/api/insights",
+  "../scripts/legacy-inventory.ts",
+  "../scripts/legacy-inventory.test.ts",
+  "../integration/legacy-inventory-cases.ts",
 ]) {
   if (existsSync(new URL(path, import.meta.url))) {
     failures.push(`${path.replace("../", "")} is a retired active integration surface.`);

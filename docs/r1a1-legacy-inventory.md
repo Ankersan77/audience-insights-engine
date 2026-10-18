@@ -1,5 +1,10 @@
 # R1A1 legacy inventory operator runbook
 
+> Historical pre-R1B procedure. Migration `0020_r1b_legacy_schema_cleanup` removes the referenced
+> relations and the active release no longer ships the inventory command. Do not execute these
+> instructions against the contracted schema. Use annotated tag `pre-r1b-v2.1.0` only inside an
+> approved, isolated recovery/preflight process if contrary estate evidence is discovered.
+
 This runbook produces one read-only, aggregate legacy inventory artifact for one known
 single-tenant installation. It does **not** complete R0B, approve either the preservation/access
 disposition needed before R1A2 or the destructive disposition reserved for R1B, or authorize R1A2.

@@ -447,6 +447,37 @@ Never point a restore test at production or reuse production connector credentia
 
 ## Failure handling
 
+### R1B legacy-schema contraction
+
+Migration `0020_r1b_legacy_schema_cleanup` is destructive and forward-only. It removes only the 12
+tables and three enums approved in `docs/r1b-data-disposition.md`. Every drop is explicit and uses
+neither `CASCADE` nor `IF EXISTS`, so an unknown dependency or unexpected schema state aborts the
+transaction.
+
+The current repository estate is verified-zero. Its pre-migration recovery point is annotated tag
+`pre-r1b-v2.1.0` at revision `85f52b0d21a13d9ad9dbc46283d53eefd47810e6`. Before applying `0020`
+to any discovered or future installation:
+
+1. Stop and reopen the R1B decision; the zero-estate approval is not transferable.
+2. Inventory its exact migration head, legacy rows/client distribution, unknown database objects,
+   `research-run` queue states, consumers and retained backups/exports using the tagged pre-R1B
+   tooling in an isolated, least-privilege process.
+3. Require zero active/retry legacy jobs and a recorded write-quiesce/read-only window or reviewed
+   WAL/PITR reconciliation plan. Close/archive a legacy queue only through supported pg-boss APIs.
+4. Record a PostgreSQL-native backup identifier, time, checksum, protected location and expiry;
+   restore it into isolation and verify representative canonical and legacy records.
+5. Set migration-specific RPO/RTO, confirm the signed/tagged application artifact, and obtain an
+   explicit data-owner and operations-owner go/no-go.
+6. Apply the migration before the new web/worker release. Verify head `0020`, absence of every
+   approved legacy relation/type and `author_handle`, canonical authenticated reads and worker
+   lifecycle before ending the maintenance window.
+
+There is no down migration. If the contracted database is correct, never attach old code to it. If
+data integrity requires recovery, restore/PITR the pre-migration database and deploy the exact
+pre-R1B artifact as one matched recovery unit; otherwise disable affected paths and issue a reviewed
+append-only forward fix. Repository CI supplies only a timed synthetic drill, not a production
+RPO/RTO claim.
+
 ### Canonical maintenance kill switch
 
 Set `CANONICAL_MAINTENANCE_DISABLED=true` in the worker's deployment-owned environment and restart

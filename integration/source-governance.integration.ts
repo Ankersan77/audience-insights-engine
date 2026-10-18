@@ -18,7 +18,6 @@ import { runSynthesisBudgetCases } from "./synthesis-budget-cases";
 import { runSynthesisProviderCases } from "./synthesis-provider-cases";
 import { runBudgetAdministrationCases } from "./budget-administration-cases";
 import { runCompanyContextCases } from "./company-context-cases";
-import { runLegacyInventoryCases } from "./legacy-inventory-cases";
 import { runCanonicalWorkerRuntimeCases } from "./canonical-worker-runtime-cases";
 import { runBoundedRetentionCases } from "./retention-bounded-cases";
 
@@ -51,6 +50,33 @@ const policy: SourceConnectionPolicy = {
   permissions: ["read:reports"], dataClassifications: ["public"], permittedPurposes: ["market-research"],
   markets: ["DK"], languages: ["da"], cadence: "manual", lookbackDays: 30, quota: 5, costLimit: 0,
 };
+
+const CONTRACTED_LEGACY_RELATIONS = [
+  "ability_manifest", "market", "brand", "brand_market", "research_instruction", "channel",
+  "insight_route", "research_run", "evidence", "insight", "insight_evidence", "audit_log",
+] as const;
+const CONTRACTED_LEGACY_TYPES = ["channel_type", "insight_delivery_status", "research_run_status"] as const;
+
+async function assertR1bContractedSchema() {
+  const { rows: [head] } = await probe.query<{ migration_count: number }>(
+    "select count(*)::int migration_count from drizzle.__drizzle_migrations",
+  );
+  assert.equal(head.migration_count, 20, "canonical integration must run at the R1B migration head");
+  for (const relation of CONTRACTED_LEGACY_RELATIONS) {
+    assert.equal(await probe.query("select to_regclass($1)::text relation", [`public.${relation}`]).then((result) => result.rows[0].relation), null,
+      `${relation} must not exist in the active R1B schema`);
+  }
+  for (const type of CONTRACTED_LEGACY_TYPES) {
+    assert.equal(await probe.query("select to_regtype($1)::text type", [`public.${type}`]).then((result) => result.rows[0].type), null,
+      `${type} must not exist in the active R1B schema`);
+  }
+  assert.equal(await probe.query(`
+    select exists (
+      select 1 from information_schema.columns
+       where table_schema='public' and column_name='author_handle'
+    ) present
+  `).then((result) => result.rows[0].present), false, "active schema must not retain author_handle");
+}
 
 async function fixture(existingTenant?: typeof client.$inferSelect) {
   const key = randomUUID();
@@ -94,7 +120,7 @@ async function waitForBlocked(count: number) {
 test("PostgreSQL source governance, migrations and concurrent transitions", async (t) => {
   try {
     await migrate(db, { migrationsFolder: "drizzle" });
-    await runLegacyInventoryCases(t, probe, url);
+    await t.test("fresh schema is contracted at the R1B head", assertR1bContractedSchema);
     await runCanonicalWorkerRuntimeCases(t, db, probe, url, fixture);
     await runBoundedRetentionCases(t, db, probe, fixture);
     await runSynthesisBudgetCases(t, db, probe);

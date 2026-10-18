@@ -15,8 +15,12 @@ type Journal = {
   entries: { idx: number; version: string; when: number; tag: string; breakpoints: boolean }[];
 };
 
-const CURRENT_HEAD = "0019_r1a1b_bounded_retention";
-const PRE_UPGRADE_HEAD = "0017_acquisition_budget_version";
+const CURRENT_HEAD = "0020_r1b_legacy_schema_cleanup";
+const PRE_UPGRADE_HEAD = "0019_r1a1b_bounded_retention";
+const LEGACY_TABLES = [
+  "ability_manifest", "market", "brand", "brand_market", "research_instruction", "channel",
+  "insight_route", "research_run", "evidence", "insight", "insight_evidence", "audit_log",
+] as const;
 const SNAPSHOT_TABLES = [
   "app_user", "client", "ability_manifest", "market", "brand", "brand_market",
   "research_instruction", "channel", "insight_route", "research_run", "evidence",
@@ -156,7 +160,7 @@ async function insertRepresentativeLegacyRows(pool: Pool) {
   }
 }
 
-test("representative pre-0018 legacy rows survive immutable migration history through the current head", async () => {
+test("R1B removes representative legacy rows from the 0019 head and fails closed on unknown dependencies", async () => {
   const repositoryMigrationFolder = resolve(process.cwd(), "drizzle");
   const journal = JSON.parse(await readFile(join(repositoryMigrationFolder, "meta", "_journal.json"), "utf8")) as Journal;
   const fullMigrations = readMigrationFiles({ migrationsFolder: repositoryMigrationFolder });
@@ -187,15 +191,54 @@ test("representative pre-0018 legacy rows survive immutable migration history th
     const preUpgradeHistory = await migrationHistory(fixture);
     assert.deepEqual(preUpgradeHistory, fullMigrations.slice(0, preUpgradeCount).map((entry) => ({ hash: entry.hash, createdAt: entry.folderMillis })));
     assert.equal(journal.entries[preUpgradeCount - 1]?.tag, PRE_UPGRADE_HEAD);
-    assert.equal(await fixture.query("select to_regclass('public.company_context_revision')::text relation").then((result) => result.rows[0].relation), null);
+    assert.equal(await fixture.query("select to_regclass('public.company_context_revision')::text relation").then((result) => result.rows[0].relation), "company_context_revision");
+    assert.equal(await fixture.query("select to_regclass('public.canonical_retention_work')::text relation").then((result) => result.rows[0].relation), "canonical_retention_work");
 
     await insertRepresentativeLegacyRows(fixture);
     const before = await legacySnapshot(fixture);
-    for (const table of SNAPSHOT_TABLES) assert.ok(before[table].length > 0, `${table} must contain representative pre-0018 rows`);
+    for (const table of SNAPSHOT_TABLES) assert.ok(before[table].length > 0, `${table} must contain representative pre-R1B rows`);
+
+    await fixture.query(`
+      create table public.r1b_external_dependency (
+        id integer primary key,
+        legacy_evidence_id integer references public.evidence(id),
+        legacy_status public.research_run_status
+      )
+    `);
+    await assert.rejects(migrate(database, { migrationsFolder: repositoryMigrationFolder }));
+    assert.equal((await migrationHistory(fixture)).length, preUpgradeCount,
+      "a foreign-key dependency must roll back the complete contraction migration");
+    for (const table of LEGACY_TABLES) {
+      assert.equal(await fixture.query("select to_regclass($1)::text relation", [`public.${table}`]).then((result) => result.rows[0].relation), table,
+        `${table} must survive the rejected foreign-key dependency migration`);
+    }
+
+    await fixture.query("alter table public.r1b_external_dependency drop column legacy_evidence_id");
+    await assert.rejects(migrate(database, { migrationsFolder: repositoryMigrationFolder }));
+    assert.equal((await migrationHistory(fixture)).length, preUpgradeCount,
+      "an enum dependency must roll back the complete contraction migration");
+    for (const table of LEGACY_TABLES) {
+      assert.equal(await fixture.query("select to_regclass($1)::text relation", [`public.${table}`]).then((result) => result.rows[0].relation), table,
+        `${table} must survive the rejected enum dependency migration`);
+    }
+    await fixture.query("drop table public.r1b_external_dependency");
 
     await migrate(database, { migrationsFolder: repositoryMigrationFolder });
-    const after = await legacySnapshot(fixture);
-    assert.deepEqual(after, before, "forward migrations must preserve every representative legacy row and field");
+    for (const table of LEGACY_TABLES) {
+      assert.equal(await fixture.query("select to_regclass($1)::text relation", [`public.${table}`]).then((result) => result.rows[0].relation), null,
+        `${table} must be absent after the approved R1B migration`);
+    }
+    for (const type of ["channel_type", "insight_delivery_status", "research_run_status"]) {
+      assert.equal(await fixture.query("select to_regtype($1)::text type", [`public.${type}`]).then((result) => result.rows[0].type), null,
+        `${type} must be absent after the approved R1B migration`);
+    }
+    for (const table of ["app_user", "client"] as const) {
+      const result = await fixture.query<{ payload: unknown }>(
+        `select to_jsonb(source_row) payload from public.${table} source_row order by to_jsonb(source_row)::text`,
+      );
+      const preservedRows: unknown[] = result.rows.map((row: { payload: unknown }) => row.payload);
+      assert.deepEqual(preservedRows, before[table], `${table} must remain unchanged`);
+    }
 
     const applied = await migrationHistory(fixture);
     assert.deepEqual(applied, fullMigrations.map((entry) => ({ hash: entry.hash, createdAt: entry.folderMillis })));

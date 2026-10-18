@@ -1,42 +1,29 @@
-# People-blind evidence and preserved legacy-data procedure
+# People-blind evidence and data-subject procedure
 
 The target product does not need identifiable consumer records. It retains trends, themes,
 statistics, source-level provenance, and the minimum public excerpts needed to support a claim.
 It must not create consumer profiles or cross-platform identity graphs.
 
-The preserved legacy schema still contains `evidence.author_handle`. Its application routes and
-workers were removed in R1A2. This is migration debt, not a
-target-product requirement. Until Phase 2 replaces the evidence model, use the procedure below for
-any verified erasure or objection request involving legacy data.
+Migration `0020_r1b_legacy_schema_cleanup` removes the former `evidence.author_handle` field and all
+legacy identity-bearing storage. The active product has no handle lookup, consumer profile or
+person-level activation surface.
 
-## Locate affected legacy evidence
+For a verified erasure or objection request, authenticate the requester through the approved case
+process, identify the installation/client and named source connection, and record the decision and
+legal-hold status outside application logs. Do not search for a person by expanding the product's
+data model. Review current canonical evidence only through authorized source/evidence references;
+revoke the source when rights no longer permit use and allow bounded canonical maintenance to
+redact or expire dependent artifacts. Verify the fail-closed projection while cleanup is pending.
 
-```sql
-SELECT id, run_id, source, external_id, url, author_handle, published_at, retrieved_at
-FROM evidence
-WHERE author_handle = '<verified_handle>'
-   OR url ILIKE '%<verified_handle>%'
-   OR text_snippet ILIKE '%<verified_handle>%';
-```
+Any request concerning a database or backup held at migration `0019` or earlier is contrary estate
+evidence. Stop ordinary handling, isolate the copy, and reopen the R1B disposition and recovery
+gate. The historical SQL procedure is available only from annotated tag `pre-r1b-v2.1.0`; never
+attach current application code to that restored pre-R1B database or paste identity-bearing query
+results into tickets, chat or logs.
 
-Before changing data, record who approved the request and the exact evidence IDs in the case
-record. Free-text matching can produce false positives and must be reviewed manually.
+## Release gate
 
-## Remove confirmed records
-
-```sql
-DELETE FROM evidence
-WHERE id IN (<reviewed_evidence_ids>);
-```
-
-Deletion cascades to `insight_evidence` links but not to the insight text itself. Review any linked
-insight and redact or supersede its title and summary when they contain the affected material.
-Historical audit records and backups follow the configured retention and legal-hold policy.
-
-## Phase 2 release gate
-
-Production ingestion must not launch on the legacy identity-bearing evidence contract. Phase 2
-must prove that:
+Production ingestion must continue to prove that:
 
 - retained evidence has no consumer identity field;
 - public excerpts are minimized and redacted before persistence;

@@ -612,8 +612,8 @@ compatibility update.
 
 `last30days`, the identity-bearing legacy evidence path, research-run UI/queue and related provider-
 shaped schema are not part of the target product. R1A2 removed the executable code and packaging;
-the preserved schema remains migration debt and may be removed only through the R1B disposition,
-recovery and forward-migration gates.
+R1B removed the separately approved obsolete schema through its recovery and forward-migration
+gates. The definitions remain only in immutable historical migrations and evidence.
 
 Historical migrations are not rewritten. A forward cleanup migration removes obsolete runtime
 structures after the data decision and rollback plan are reviewed. Historical ADRs may remain marked
@@ -685,8 +685,8 @@ This proof does not require campaign lifecycle, Brand Lift or real-time monitori
 11. No automatic cross-client learning from client content occurs.
 12. Client specialization belongs in configuration, policy and evidence, not code forks.
 13. Material recommendations and Market Twin updates require declared human review.
-14. The `last30days` runtime is removed; its preserved legacy data path remains scheduled for safe
-    R1B removal.
+14. The `last30days` runtime and its approved legacy data path are removed through the R1A2/R1B
+    gates; historical migrations remain immutable.
 15. Campaign lifecycle, Brand Lift, broad monitoring and additional abilities are deferred until the
     first credible proof passes and product evidence justifies them.
 16. Canonical maintenance follows the bounded R1A1b resource, artifact-projection and O(1)

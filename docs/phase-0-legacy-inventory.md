@@ -1,7 +1,8 @@
 # Phase 0 legacy integration inventory
 
 > Historical inventory. Roadmap R1A2 removed the retained runtime and application surfaces; the
-> identity-bearing legacy schema remains unchanged pending the separate R1B disposition.
+> separately approved R1B forward migration subsequently removes the identity-bearing legacy
+> schema. This file describes the pre-removal state only.
 
 Date: 2026-10-16
 Blueprint at time of inventory: pre-2.0 reset

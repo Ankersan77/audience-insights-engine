@@ -1,5 +1,8 @@
 # R1A1 dependency audit
 
+> Historical R1A1/R1A2 evidence. The R1B forward migration subsequently removed the approved
+> legacy schema; current R1B evidence is recorded in `docs/r1b-removal-evidence.md`.
+
 Status: **R1A2 passed with immutable CI exit evidence**
 
 Reviewed: 2026-10-18

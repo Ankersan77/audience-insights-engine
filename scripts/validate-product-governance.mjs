@@ -188,6 +188,7 @@ const migrationHead = migrationTags.at(-1);
 if (compatibility.database?.migrationHead !== migrationHead || compatibility.database?.schemaVersion !== migrationHead) fail("Compatibility database version must equal the current final migration tag.");
 if (compatibility.database?.migrationCount !== migrationTags.length) fail("Database migration count does not match the journal.");
 if (compatibility.database?.journalFormatVersion !== journal.version) fail("Drizzle journal format version drifted.");
+if (!["pre-trim", "legacy-cleaned"].includes(compatibility.database?.state)) fail("Compatibility database state is unknown.");
 const history = createHash("sha256");
 for (const tag of migrationTags) {
   history.update(tag);
@@ -196,6 +197,38 @@ for (const tag of migrationTags) {
   history.update("\0");
 }
 if (compatibility.database?.historyDigest !== `sha256:${history.digest("hex")}`) fail("Migration history digest changed; never edit applied migration history.");
+
+const r1bMigrationPath = join(root, "drizzle", "0020_r1b_legacy_schema_cleanup.sql");
+if (existsSync(r1bMigrationPath)) {
+  const r1bMigration = readFileSync(r1bMigrationPath, "utf8");
+  const expectedStatements = [
+    'DROP TABLE "insight_evidence"',
+    'DROP TABLE "insight_route"',
+    'DROP TABLE "evidence"',
+    'DROP TABLE "insight"',
+    'DROP TABLE "research_run"',
+    'DROP TABLE "research_instruction"',
+    'DROP TABLE "brand_market"',
+    'DROP TABLE "channel"',
+    'DROP TABLE "brand"',
+    'DROP TABLE "market"',
+    'DROP TABLE "audit_log"',
+    'DROP TABLE "ability_manifest"',
+    'DROP TYPE "public"."channel_type"',
+    'DROP TYPE "public"."insight_delivery_status"',
+    'DROP TYPE "public"."research_run_status"',
+  ];
+  const statements = r1bMigration.split("--> statement-breakpoint").map((statement) => statement.trim().replace(/;$/, "")).filter(Boolean);
+  if (JSON.stringify(statements) !== JSON.stringify(expectedStatements)) {
+    fail("R1B migration must contain only the approved child-first table/type drops in exact order.");
+  }
+  if (/\b(?:CASCADE|IF\s+EXISTS)\b/i.test(r1bMigration)) fail("R1B migration must fail closed without CASCADE or IF EXISTS.");
+  const activeSchema = readFileSync(join(root, "src/db/schema.ts"), "utf8");
+  for (const name of ["ability_manifest", "market", "brand", "brand_market", "research_instruction", "channel", "insight_route", "research_run", "evidence", "insight", "insight_evidence", "audit_log", "channel_type", "insight_delivery_status", "research_run_status"]) {
+    if (new RegExp(`pg(?:Table|Enum)\\(\"${name}\"`).test(activeSchema)) fail(`Active Drizzle schema retains approved R1B object ${name}.`);
+  }
+  if (activeSchema.includes('"author_handle"')) fail("Active Drizzle schema retains the legacy author_handle field.");
+}
 
 const contracts = compatibility.contracts ?? [];
 const contractIds = contracts.map((item) => item.wireId);
@@ -428,6 +461,16 @@ for (const [index, decision] of decisionItems.entries()) {
   if (decision.status === "decided") {
     if (!decision.decisionEvidence) fail(`${decision.id} decided status requires durable evidence.`);
     else verifyDurableEvidence(`${decision.id}.decisionEvidence`, decision.decisionEvidence);
+  }
+}
+if (existsSync(r1bMigrationPath)) {
+  const disposition = decisionItems.find((item) => item.id === "legacy-data-disposition");
+  if (disposition?.status !== "decided") fail("R1B migration requires an approved legacy-data-disposition decision.");
+  for (const id of ["legacy-last30days-runtime", "legacy-brand-run-insight", "legacy-external-delivery", "database-ability-manifests"]) {
+    if (capabilityById.get(id)?.releaseState !== "removed") fail(`${id} must be removed when the R1B migration exists.`);
+    if (!(capabilityById.get(id)?.evidenceReferences ?? []).some((item) => item.ref === "docs/r1b-removal-evidence.md")) {
+      fail(`${id} must reference the R1B removal evidence.`);
+    }
   }
 }
 

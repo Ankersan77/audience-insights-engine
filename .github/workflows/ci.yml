@@ -69,6 +69,13 @@ jobs:
           TEST_HTTP: "1"
           TEST_NATIVE_BACKUP_RESTORE: "1"
 
+      - name: Upload immutable R1B migration evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1b-migration-evidence-${{ github.sha }}
+          path: artifacts/r1b-recovery-evidence.json
+          if-no-files-found: error
+
       - name: Build production web and worker images
         run: |
           docker build --target web-runtime --build-arg APPLICATION_VERSION="$GITHUB_SHA" --tag "market-research-web:$GITHUB_SHA" .

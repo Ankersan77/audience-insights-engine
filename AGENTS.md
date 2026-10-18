@@ -32,7 +32,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   initial MCP tools (six maximum), Denmark, and `decision-brief@2`.
 - The application listens on port 3000 and exposes `GET /healthz` for container health checks.
 - Never commit credentials. Read secrets from environment variables and document required variable names in `.env.example`.
-- The retired ingestion/runtime path must remain absent. Historical schema and inventory tooling stay
-  read-only until the separately approved R1B forward migration; never edit applied migrations.
+- The retired ingestion/runtime and pre-R1B inventory paths must remain absent. Migration `0020`
+  contracts the approved legacy schema; never edit applied migrations or reintroduce those objects.
 - Before changing Next.js behavior, read the matching guide in `node_modules/next/dist/docs/`.
 - Run lint, type-checks, tests, and a production build before shipping changes that can affect runtime behavior.

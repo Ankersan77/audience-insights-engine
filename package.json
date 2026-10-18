@@ -20,7 +20,6 @@
     "synthesis:check": "tsx scripts/synthesis-config.ts",
     "deployment:check": "tsx scripts/check-client-owned-deployment.ts",
     "deployment:bootstrap": "tsx scripts/bootstrap-client-owned.ts",
-    "legacy:inventory": "tsx scripts/legacy-inventory.ts",
     "test": "node scripts/run-tests.mjs",
     "test:integration": "tsx --test integration/*.integration.ts",
     "check:governance": "node scripts/validate-product-governance.mjs",

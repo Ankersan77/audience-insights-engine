@@ -22,6 +22,7 @@ function fixture(t: TestContext) {
 
 for (const [name, path, contents, expected] of [
   ["removed path", "src/workers/runQueue.ts", "", "Removed legacy surface"],
+  ["retired inventory command", "scripts/legacy-inventory.ts", "", "Removed legacy surface"],
   ["worker registration", "src/workers/index.ts", "startRunWorker();", "removed marker"],
   ["Python image", "Dockerfile", "RUN apk add python3", "must not install Python"],
   ["submodule checkout", ".github/workflows/ci.yml", "submodules: true", "must not fetch"],

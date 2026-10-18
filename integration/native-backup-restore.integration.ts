@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -65,6 +65,21 @@ function fixtureUrl(database: string) {
   return `postgresql://${CI_DATABASE.user}:${CI_DATABASE.password}@${CI_DATABASE.host}:${CI_DATABASE.port}/${database}`;
 }
 
+async function createPreR1bMigrationFolder(parent: string): Promise<string> {
+  const source = resolve(process.cwd(), "drizzle");
+  const journal = JSON.parse(await readFile(join(source, "meta", "_journal.json"), "utf8")) as {
+    entries: { tag: string }[];
+  };
+  const boundary = journal.entries.findIndex((entry) => entry.tag === "0019_r1a1b_bounded_retention");
+  assert.notEqual(boundary, -1, "the recoverable pre-R1B migration boundary must exist");
+  const entries = journal.entries.slice(0, boundary + 1);
+  const folder = join(parent, "pre-r1b-migrations");
+  await mkdir(join(folder, "meta"), { recursive: true });
+  await writeFile(join(folder, "meta", "_journal.json"), `${JSON.stringify({ ...journal, entries }, null, 2)}\n`, "utf8");
+  for (const entry of entries) await cp(join(source, `${entry.tag}.sql`), join(folder, `${entry.tag}.sql`));
+  return folder;
+}
+
 test("PostgreSQL-native backup restores data and supports an authenticated release read", { skip: !enabled }, async (t) => {
   assert.ok(baseUrl, "TEST_DATABASE_URL is required when TEST_NATIVE_BACKUP_RESTORE=1");
   const parsedBaseUrl = new URL(baseUrl);
@@ -96,10 +111,11 @@ test("PostgreSQL-native backup restores data and supports an authenticated relea
 
   await admin.connect();
   try {
+    const preR1bMigrations = await createPreR1bMigrationFolder(temporaryFolder);
     await admin.query(`create database ${quotedFixtureDatabase(sourceName)} template template0 encoding 'UTF8'`);
     createdDatabases.push(sourceName);
     source = new Pool({ ...connectionConfig(sourceName, "native-backup-source"), max: 2 });
-    await migrate(drizzle(source), { migrationsFolder: resolve(process.cwd(), "drizzle") });
+    await migrate(drizzle(source), { migrationsFolder: preR1bMigrations });
 
     const { rows: [tenant] } = await source.query<{ id: number }>(
       "insert into client (slug, name) values ($1, $2) returning id",
@@ -123,13 +139,43 @@ test("PostgreSQL-native backup restores data and supports an authenticated relea
        values ($1, $2, $3, 'recovery-proof', 'competitor-intelligence', '1.0.0', 'accepted', 1, $4::jsonb, $5)`,
       [tenant.id, project.id, `restore-proof-${suffix}`, JSON.stringify({ marker: suffix, peopleBlind: true }), user.id],
     );
+    const { rows: [legacyMarket] } = await source.query<{ id: number }>(
+      "insert into market (code, name, processing_enabled) values ($1, 'R1B recovery fixture', true) returning id",
+      [`RECOVERY-${suffix}`],
+    );
+    const { rows: [legacyBrand] } = await source.query<{ id: number }>(
+      `insert into brand (client_id, name, slug, status, created_by, updated_by)
+       values ($1, 'R1B recovery fixture', $2, 'inactive', $3, $3) returning id`,
+      [tenant.id, `recovery-${suffix}`, user.id],
+    );
+    const { rows: [legacyRun] } = await source.query<{ id: number }>(
+      `insert into research_run
+        (client_id, brand_id, market_id, research_instruction_version, triggered_by, status)
+       values ($1, $2, $3, 1, $4, 'succeeded') returning id`,
+      [tenant.id, legacyBrand.id, legacyMarket.id, user.id],
+    );
+    const legacyHandle = `legacy-recovery-${suffix}`;
+    await source.query(
+      `insert into evidence (run_id, source, external_id, author_handle, text_snippet)
+       values ($1, 'recovery-fixture', $2, $3, 'Identity-bearing pre-R1B recovery canary')`,
+      [legacyRun.id, `recovery-${suffix}`, legacyHandle],
+    );
+    await source.query(
+      `insert into audit_log (user_id, action, entity_type, entity_id, before_json)
+       values ($1, 'r1b-recovery-fixture', 'evidence', $2, $3::jsonb)`,
+      [user.id, legacyRun.id, JSON.stringify({ legacyHandle })],
+    );
     const expected = (await source.query(
       `select
          (select count(*)::int from client) client_count,
          (select count(*)::int from research_project) project_count,
          (select count(*)::int from research_artifact) artifact_count,
+         (select count(*)::int from evidence where author_handle=$1) legacy_identity_count,
          (select count(*)::int from drizzle.__drizzle_migrations) migration_count`,
+      [legacyHandle],
     )).rows[0];
+    assert.equal(expected.migration_count, 19, "backup must be captured at the pre-R1B head");
+    assert.equal(expected.legacy_identity_count, 1, "backup must contain the representative identity-bearing legacy row");
 
     const dockerEnvironment = { ...process.env, PGPASSWORD: CI_DATABASE.password };
     const connectionArgs = [
@@ -177,6 +223,19 @@ test("PostgreSQL-native backup restores data and supports an authenticated relea
     const restoreCommandDurationMs = Date.now() - restoreCommandStartedAt;
 
     restored = new Pool({ ...connectionConfig(restoreName, "native-backup-restored"), max: 2 });
+    const restoredPreR1b = (await restored.query(
+      `select
+         (select count(*)::int from client) client_count,
+         (select count(*)::int from research_project) project_count,
+         (select count(*)::int from research_artifact) artifact_count,
+         (select count(*)::int from evidence where author_handle=$1) legacy_identity_count,
+         (select count(*)::int from drizzle.__drizzle_migrations) migration_count`,
+      [legacyHandle],
+    )).rows[0];
+    assert.deepEqual(restoredPreR1b, expected, "canonical and legacy records at the 0019 boundary must survive native restore");
+    const forwardStartedAt = Date.now();
+    await migrate(drizzle(restored), { migrationsFolder: resolve(process.cwd(), "drizzle") });
+    const forwardMigrationDurationMs = Date.now() - forwardStartedAt;
     const actual = (await restored.query(
       `select
          (select count(*)::int from client) client_count,
@@ -184,7 +243,15 @@ test("PostgreSQL-native backup restores data and supports an authenticated relea
          (select count(*)::int from research_artifact) artifact_count,
          (select count(*)::int from drizzle.__drizzle_migrations) migration_count`,
     )).rows[0];
-    assert.deepEqual(actual, expected, "tenant, project, artifact and migration counts must survive native restore");
+    assert.deepEqual(actual, {
+      client_count: expected.client_count,
+      project_count: expected.project_count,
+      artifact_count: expected.artifact_count,
+      migration_count: 20,
+    }, "restored canonical records must survive the R1B forward migration");
+    for (const relation of ["ability_manifest", "market", "brand", "brand_market", "research_instruction", "channel", "insight_route", "research_run", "evidence", "insight", "insight_evidence", "audit_log"]) {
+      assert.equal(await restored.query("select to_regclass($1)::text relation", [`public.${relation}`]).then((result) => result.rows[0].relation), null);
+    }
     const { rows: [artifact] } = await restored.query<{ payload_json: { marker: string; peopleBlind: boolean } }>(
       "select payload_json from research_artifact where artifact_key=$1",
       [`restore-proof-${suffix}`],
@@ -208,21 +275,38 @@ test("PostgreSQL-native backup restores data and supports an authenticated relea
       "the current release must complete an authenticated database-backed read after restore");
     const syntheticRecoveryDurationMs = Date.now() - recoveryStartedAt;
 
-    t.diagnostic(JSON.stringify({
-      evidence: "native-backup-restore",
+    const compatibility = JSON.parse(await readFile(resolve(process.cwd(), "compatibility-manifest.json"), "utf8")) as {
+      database: { migrationHead: string; historyDigest: string };
+    };
+    const evidenceReport = {
+      schemaVersion: 1,
+      evidence: "r1b-native-backup-restore-forward-again",
+      revision: process.env.GITHUB_SHA ?? null,
       engine: "postgresql-16",
       method: "pg_dump-custom/pg_restore",
+      backupId: `synthetic:${sourceName}:${recoveryPoint}`,
       recoveryPoint,
       timingScope: "synthetic-ci-fixture-not-service-slo",
       backupDurationMs,
       restoreCommandDurationMs,
       syntheticRecoveryDurationMs,
+      forwardMigrationDurationMs,
       backupBytes,
       backupSha256: `sha256:${backupSha256}`,
+      preR1bMigrationCount: restoredPreR1b.migration_count,
       ...actual,
       restoredRecordCountsMatch: true,
+      r1bForwardMigration: "ok",
+      migrationHead: compatibility.database.migrationHead,
+      migrationHistoryDigest: compatibility.database.historyDigest,
+      contractedLegacyRelations: 12,
+      contractedLegacyTypes: 3,
       authenticatedReleaseRead: "ok",
-    }));
+    };
+    const artifactFolder = resolve(process.cwd(), "artifacts");
+    await mkdir(artifactFolder, { recursive: true });
+    await writeFile(join(artifactFolder, "r1b-recovery-evidence.json"), `${JSON.stringify(evidenceReport, null, 2)}\n`, "utf8");
+    t.diagnostic(JSON.stringify(evidenceReport));
   } finally {
     const cleanupErrors: unknown[] = [];
     if (http) {

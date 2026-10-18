@@ -8,6 +8,7 @@ export const REMOVED_LEGACY_PATHS = [
   "src/lib/featureFlags.ts", "src/lib/parseCompactReport.ts",
   "src/db/queries/brands.ts", "src/db/queries/research_instructions.ts",
   "src/db/queries/research_runs.ts", "src/db/queries/evidence.ts", "src/db/queries/insights.ts",
+  "scripts/legacy-inventory.ts", "scripts/legacy-inventory.test.ts", "integration/legacy-inventory-cases.ts",
   "app/brands", "app/runs", "app/insights", "app/api/brands", "app/api/runs", "app/api/insights",
 ];
 

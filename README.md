@@ -69,8 +69,9 @@ The repository predates Blueprint 2.0.0 and still contains implemented campaign,
 monitoring surfaces. They must not be treated as active v1 product claims.
 
 Roadmap R1A2 removed the `last30days` runtime, Python dependency, submodule, routes and legacy
-application workflow. Historical schema remains unchanged and readable through the controlled
-inventory procedure until the separately approved R1B forward migration.
+application workflow. R1B migration `0020_r1b_legacy_schema_cleanup` removes the separately
+approved legacy tables and identity-bearing fields without changing historical migrations. The
+pre-migration boundary is recoverable at annotated tag `pre-r1b-v2.1.0`.
 
 The canonical production source registry is empty until live adapters pass source-rights,
 people-blind, cost, failure and provider acceptance. Synthetic adapters and fixtures prove contracts,
