@@ -3,6 +3,7 @@ import { db } from "@/src/db/client";
 import { governanceAudit, intelligenceRecord, intelligenceRelationship, researchArtifact } from "@/src/db/schema";
 import { campaignResultBasisDigest } from "@/src/campaigns/results";
 import { researchSnapshotDigest } from "@/src/abilities/snapshot";
+import { assertResearchArtifactBounds, boundedResearchArtifactValues } from "@/src/research-artifacts/persistenceBounds";
 import { assertCurrentCampaignResult, type CampaignTransaction } from "./campaign_results";
 import { toIntelligence } from "./workspace_intelligence";
 
@@ -21,6 +22,7 @@ export async function createInterpretedLearning(input: { clientId: number; campa
     const key = `campaign:${input.campaignId}:learning-candidate:${input.assessmentId}`;
     const [existing] = await tx.select().from(researchArtifact).where(and(eq(researchArtifact.clientId, input.clientId), eq(researchArtifact.artifactKey, key)));
     if (existing) {
+      assertResearchArtifactBounds(existing.payloadJson, existing.evidenceIds);
       const payload = existing.payloadJson as { method?: string; intelligenceRecordId?: number };
       if (payload.method !== "interpreted-learning@1") throw new Error("legacy-learning-requires-reassessment");
       const [record] = await tx.select().from(intelligenceRecord).where(and(eq(intelligenceRecord.clientId, input.clientId), eq(intelligenceRecord.id, Number(payload.intelligenceRecordId))));
@@ -35,8 +37,10 @@ export async function createInterpretedLearning(input: { clientId: number; campa
       statement: checked.assessment.candidateLearning!.statement, lifecycle: "candidate", reviewState: "pending", evidenceIds: checked.artifact.evidenceIds,
       contradictionIds: contradictions.map(Number), dependencyIds: review.intelligenceIds.map(Number), applicabilityJson: { markets: [basis.market!], languages: [basis.language!], categories: [], audiences: [], campaigns: [String(input.campaignId)] },
       confidence: review.confidence, uncertainty: [...checked.assessment.candidateLearning!.conditions, ...checked.assessment.watchouts], synthesisBy: "human", createdAt: new Date() }).returning();
-    await tx.insert(researchArtifact).values({ clientId: input.clientId, artifactKey: key, artifactType: "candidate_learning", abilityKey: "post-campaign-learning", abilityVersion: "1.0.0", status: "pending", version: 1,
-      payloadJson: { method: "interpreted-learning@1", campaignId: input.campaignId, assessmentId: input.assessmentId, intelligenceRecordId: created.id, assessmentBasisDigest: campaignResultBasisDigest(checked.assessment), candidateDigest: candidateDigest(created) }, evidenceIds: checked.artifact.evidenceIds, createdBy: input.actorUserId });
+    const payload = { method: "interpreted-learning@1", campaignId: input.campaignId, assessmentId: input.assessmentId, intelligenceRecordId: created.id,
+      assessmentBasisDigest: campaignResultBasisDigest(checked.assessment), candidateDigest: candidateDigest(created) };
+    await tx.insert(researchArtifact).values(boundedResearchArtifactValues({ clientId: input.clientId, artifactKey: key, artifactType: "candidate_learning", abilityKey: "post-campaign-learning", abilityVersion: "1.0.0", status: "pending", version: 1,
+      payloadJson: payload, evidenceIds: checked.artifact.evidenceIds, createdBy: input.actorUserId }));
     await tx.insert(governanceAudit).values({ clientId: input.clientId, actorUserId: input.actorUserId, action: "create", entityType: "candidate_learning", entityId: String(created.id), redactedAfterJson: { campaignId: input.campaignId, assessmentId: input.assessmentId } });
     checked.recheck();
     return toIntelligence(created);
@@ -47,6 +51,7 @@ export async function promoteInterpretedLearning(input: { clientId: number; sour
   return db.transaction(async (tx) => {
     const [lineage] = await tx.select().from(researchArtifact).where(and(eq(researchArtifact.clientId, input.clientId), eq(researchArtifact.artifactType, "candidate_learning"),
       sql`${researchArtifact.payloadJson}->>'intelligenceRecordId' = ${String(input.sourceId)}`));
+    if (lineage) assertResearchArtifactBounds(lineage.payloadJson, lineage.evidenceIds);
     const link = lineage?.payloadJson as { method?: string; campaignId?: number; assessmentId?: number; candidateDigest?: string; assessmentBasisDigest?: string } | undefined;
     if (link?.method !== "interpreted-learning@1" || !Number.isInteger(link.campaignId) || !Number.isInteger(link.assessmentId)) throw new Error("interpreted-learning-provenance-required");
     await lockCampaign(tx, link.campaignId!);

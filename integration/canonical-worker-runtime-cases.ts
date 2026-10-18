@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { TestContext } from "node:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { PgBoss, type JobWithMetadata } from "pg-boss";
 import type { Pool } from "pg";
 import type { AdapterRunResult } from "../src/evidence/sdk";
@@ -82,21 +82,21 @@ export async function runCanonicalWorkerRuntimeCases(
       ssoSubjectId: randomUUID(),
     }).returning();
     await db.insert(clientMembership).values({ clientId: f.tenant.id, userId: user.id, role: "viewer" });
-    const expiredSessionHash = `canonical-runtime-${randomUUID()}`;
-    await db.insert(authSession).values({
-      tokenHash: expiredSessionHash,
+    const expiredSessionHashes = Array.from({ length: 501 }, () => `canonical-runtime-${randomUUID()}`);
+    await db.insert(authSession).values(expiredSessionHashes.map((tokenHash) => ({
+      tokenHash,
       clientId: f.tenant.id,
       userId: user.id,
       createdAt: new Date(Date.now() - 120_000),
       expiresAt: new Date(Date.now() - 60_000),
-    });
+    })));
 
     const runtimeErrors: string[] = [];
     const runtime = createWorkerRuntimeManager({
       connectionString,
-      createBoss(value) {
+      createBoss(value, databaseOptions) {
         assert.equal(value, connectionString);
-        return new PgBoss({ connectionString: value, schedule: false, supervise: false });
+        return new PgBoss({ connectionString: value, options: databaseOptions, schedule: false, supervise: false });
       },
       onRuntimeError(code) { runtimeErrors.push(code); },
     });
@@ -147,21 +147,37 @@ export async function runCanonicalWorkerRuntimeCases(
       const maintenanceJob = await waitForTerminalJob<null>(boss, CANONICAL_MAINTENANCE_QUEUE, maintenanceQueueJobId);
       const maintenanceOutput = maintenanceJob.output as unknown as {
         expiredSessionsRemoved: number;
-        retention: { evidenceExpired: number; collectionsExpired: number };
+        retention: { evidenceExpired: number; collectionsExpired: number; batchFull: boolean };
         staleAcquisitions: number;
         dispatched: number;
+        progress: { sessions: { removed: number; batchFull: boolean }; batchFull: boolean };
       };
-      assert.equal(maintenanceOutput.expiredSessionsRemoved, 1);
+      assert.equal(maintenanceOutput.expiredSessionsRemoved, 500);
       assert.equal(maintenanceOutput.retention.evidenceExpired, 1);
       assert.equal(maintenanceOutput.retention.collectionsExpired, 1);
       assert.equal(maintenanceOutput.staleAcquisitions, 0);
       assert.equal(maintenanceOutput.dispatched, 0);
-      assert.equal((await db.select().from(authSession).where(eq(authSession.tokenHash, expiredSessionHash))).length, 0);
+      assert.deepEqual(maintenanceOutput.progress.sessions, { removed: 500, batchFull: true });
+      assert.equal(maintenanceOutput.progress.batchFull, true);
+      assert.equal((await db.select().from(authSession).where(inArray(authSession.tokenHash, expiredSessionHashes))).length, 1);
       const [expiredEvidence] = await db.select().from(canonicalEvidence).where(eq(canonicalEvidence.id, evidence.id));
       const [expiredCollection] = await db.select().from(evidenceCollection).where(eq(evidenceCollection.id, collection.id));
       assert.equal(expiredEvidence.lifecycle, "expired");
       assert.equal(expiredEvidence.sourceContent, "[expired: retained evidence content removed]");
       assert.equal(expiredCollection.lifecycle, "expired");
+
+      const continuationQueueJobId = await boss.send(CANONICAL_MAINTENANCE_QUEUE, null);
+      assert.ok(continuationQueueJobId);
+      queueJobIds.push({ queue: CANONICAL_MAINTENANCE_QUEUE, id: continuationQueueJobId });
+      const continuationJob = await waitForTerminalJob<null>(boss, CANONICAL_MAINTENANCE_QUEUE, continuationQueueJobId);
+      const continuationOutput = continuationJob.output as unknown as {
+        expiredSessionsRemoved: number;
+        progress: { sessions: { removed: number; batchFull: boolean }; batchFull: boolean };
+      };
+      assert.equal(continuationOutput.expiredSessionsRemoved, 1);
+      assert.deepEqual(continuationOutput.progress.sessions, { removed: 1, batchFull: false });
+      assert.equal(continuationOutput.progress.batchFull, false);
+      assert.equal((await db.select().from(authSession).where(inArray(authSession.tokenHash, expiredSessionHashes))).length, 0);
 
       const synthesisQueueJobId = await boss.send(SYNTHESIS_MAINTENANCE_QUEUE, null);
       assert.ok(synthesisQueueJobId);

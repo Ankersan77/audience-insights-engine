@@ -7,10 +7,59 @@ import { readSourceConnectionPolicy, sourceClassification, sourcePolicyFailure }
 import { CONTEXT_EVIDENCE_REQUIREMENTS } from "@/src/abilities/context";
 import { resolveEvidence } from "@/src/market-twin/resolver";
 import { buildPeriodicBriefing, briefingKey, dueBriefingWindows, type PeriodicBriefing } from "@/src/monitoring/briefings";
+import { assertResearchArtifactBounds, boundedResearchArtifactValues } from "@/src/research-artifacts/persistenceBounds";
+import {
+  ARTIFACT_BASIS_UNAVAILABLE_GAP,
+  projectTenantResearchArtifacts,
+} from "@/src/research-artifacts/readProjection";
 import { canonicalEvidenceItem } from "./canonical_evidence";
+import { assertCurrentEvidenceUse } from "./evidence_use";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
-export type PeriodicBriefingRow = { id: number; status: string; briefing: PeriodicBriefing; currentEvidenceAvailable: boolean };
+export type PeriodicBriefingRow = {
+  id: number;
+  status: string;
+  briefing: PeriodicBriefing;
+  currentEvidenceAvailable: boolean;
+  basisStatus: "current" | "stale";
+  unavailableEvidenceIds: readonly number[];
+  quarantined: boolean;
+};
+
+function quarantinedPeriodicBriefing(row: typeof researchArtifact.$inferSelect): PeriodicBriefing {
+  const key = row.artifactKey.split(":");
+  const cadence = (["weekly", "monthly", "quarterly"] as const).find((candidate) => candidate === key[2]) ?? "weekly";
+  const timestamp = row.createdAt.toISOString();
+  return {
+    contract: "periodic-briefing@1",
+    clientId: String(row.clientId),
+    solutionProfileId: key[1] || "unavailable",
+    solutionVersion: 0,
+    cadence,
+    window: { start: timestamp, end: timestamp },
+    generatedAt: timestamp,
+    scope: "unavailable",
+    summary: "Historical briefing content is unavailable under the current retention and resource policy.",
+    outcome: "needs_context",
+    coverage: [],
+    monitoring: [],
+    references: [],
+    contradictions: [],
+    evidenceIds: [],
+    gaps: [ARTIFACT_BASIS_UNAVAILABLE_GAP],
+    limitations: ["No substantive content from the quarantined artifact is returned."],
+    nextDecision: "Decide whether to re-run this review with current permitted evidence.",
+  };
+}
+
+function isPeriodicBriefing(value: unknown): value is PeriodicBriefing {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<PeriodicBriefing>;
+  return item.contract === "periodic-briefing@1" && typeof item.solutionProfileId === "string"
+    && ["weekly", "monthly", "quarterly"].includes(String(item.cadence))
+    && Boolean(item.window && typeof item.window.start === "string" && typeof item.window.end === "string")
+    && Array.isArray(item.gaps) && Array.isArray(item.evidenceIds);
+}
 
 function usableSource(row: typeof sourceConnection.$inferSelect, profile: SolutionProfile, now: Date): boolean {
   const policy = readSourceConnectionPolicy(row.configurationJson);
@@ -61,9 +110,10 @@ export async function generateDueBriefings(now = new Date(), clientId?: number):
       const usableEvidenceIds = new Set(evidence.filter((item) => (!item.applicability.markets.length || item.applicability.markets.some((market) => profile.markets.includes(market))) && (!item.applicability.languages.length || item.applicability.languages.some((language) => profile.languages.includes(language)))).map((item) => Number(item.id)));
       let created = 0;
       for (const cadence of profile.briefingCadences) {
-        const [checkpoint] = await tx.select({ payload: researchArtifact.payloadJson }).from(researchArtifact).where(and(eq(researchArtifact.clientId, row.clientId), eq(researchArtifact.artifactType, "periodic_briefing"),
+        const [checkpoint] = await tx.select({ payload: researchArtifact.payloadJson, evidenceIds: researchArtifact.evidenceIds }).from(researchArtifact).where(and(eq(researchArtifact.clientId, row.clientId), eq(researchArtifact.artifactType, "periodic_briefing"),
           sql`${researchArtifact.payloadJson}->>'solutionProfileId' = ${profile.id}`, sql`${researchArtifact.payloadJson}->>'cadence' = ${cadence}`,
         )).orderBy(desc(sql`${researchArtifact.payloadJson}->'window'->>'end'`)).limit(1);
+        if (checkpoint) assertResearchArtifactBounds(checkpoint.payload, checkpoint.evidenceIds);
         const since = checkpoint ? (checkpoint.payload as PeriodicBriefing).window.end : profile.createdAt;
         for (const window of dueBriefingWindows(cadence, since, now.toISOString())) {
           const receipts = await tx.select({ receipt: sourceAcquisitionReceipt, sourceId: sourceAcquisitionJob.sourceConnectionId }).from(sourceAcquisitionReceipt)
@@ -74,6 +124,7 @@ export async function generateDueBriefings(now = new Date(), clientId?: number):
             .innerJoin(sourceAcquisitionJob, and(eq(sourceAcquisitionJob.monitoringRunId, monitoringRun.id), eq(sourceAcquisitionJob.clientId, monitoringRun.clientId)))
             .where(and(eq(monitoringRun.clientId, row.clientId), eq(monitoringRun.sensingProfileId, sensing.id), gte(sourceAcquisitionJob.requestedAt, new Date(window.start)), lt(sourceAcquisitionJob.requestedAt, new Date(window.end))));
           const briefs = await tx.select().from(researchArtifact).where(and(eq(researchArtifact.clientId, row.clientId), eq(researchArtifact.artifactType, "decision_brief"), gte(researchArtifact.createdAt, new Date(window.start)), lt(researchArtifact.createdAt, new Date(window.end))));
+          for (const artifact of briefs) assertResearchArtifactBounds(artifact.payloadJson, artifact.evidenceIds);
           const records = await tx.select().from(intelligenceRecord).where(and(eq(intelligenceRecord.clientId, row.clientId), lt(intelligenceRecord.createdAt, new Date(window.end))));
           const campaigns = cadence === "weekly" ? [] : await tx.select({ id: campaign.id, clientId: campaign.clientId, state: campaign.state }).from(campaign).where(and(eq(campaign.clientId, row.clientId), lt(campaign.createdAt, new Date(window.end))));
           const briefing = buildPeriodicBriefing({ profile, cadence, window, now: now.toISOString(), sourceIds: required.map((source) => source.id), unavailableSourceCount: unresolved + required.filter((source) => !availableIds.has(source.id)).length,
@@ -84,7 +135,8 @@ export async function generateDueBriefings(now = new Date(), clientId?: number):
             records: records.map((record) => ({ id: record.id, clientId: String(record.clientId), kind: record.kind, reviewState: record.reviewState, lifecycle: record.lifecycle, evidenceIds: record.evidenceIds, contradictionIds: record.contradictionIds, decayAt: record.decayAt?.toISOString(), createdAt: record.createdAt.toISOString(), applicability: record.applicabilityJson as Applicability })),
             campaigns: campaigns.map((item) => ({ ...item, clientId: String(item.clientId) })), usableEvidenceIds,
           });
-          const [artifact] = await tx.insert(researchArtifact).values({ clientId: row.clientId, artifactKey: briefingKey(profile.id, cadence, window), artifactType: "periodic_briefing", abilityKey: "continuous-sensing", abilityVersion: "1.0.0", status: "pending_review", version: 1, payloadJson: briefing, evidenceIds: briefing.evidenceIds, createdAt: now })
+          await assertCurrentEvidenceUse(tx, { clientId: row.clientId, evidenceIds: briefing.evidenceIds, now });
+          const [artifact] = await tx.insert(researchArtifact).values(boundedResearchArtifactValues({ clientId: row.clientId, artifactKey: briefingKey(profile.id, cadence, window), artifactType: "periodic_briefing", abilityKey: "continuous-sensing", abilityVersion: "1.0.0", status: "pending_review", version: 1, payloadJson: briefing, evidenceIds: briefing.evidenceIds, createdAt: now }))
             .onConflictDoNothing({ target: [researchArtifact.clientId, researchArtifact.artifactKey, researchArtifact.version] }).returning({ id: researchArtifact.id });
           if (artifact) {
             await tx.insert(governanceAudit).values({ clientId: row.clientId, action: "briefing_generated", entityType: "research_artifact", entityId: String(artifact.id), redactedAfterJson: { cadence, window, outcome: briefing.outcome, solutionVersion: profile.version }, createdAt: now });
@@ -119,11 +171,25 @@ function evidenceAvailable(row: typeof researchArtifact.$inferSelect, current: C
 
 export async function listPeriodicBriefings(clientId: number, now = new Date()): Promise<PeriodicBriefingRow[]> {
   const rows = await db.select().from(researchArtifact).where(and(eq(researchArtifact.clientId, clientId), eq(researchArtifact.artifactType, "periodic_briefing"))).orderBy(desc(researchArtifact.id)).limit(100);
+  const projections = await projectTenantResearchArtifacts(clientId, rows, now);
   const cache = new Map<string, Promise<CurrentEvidence>>();
-  return Promise.all(rows.map(async (row) => {
-    const briefing = row.payloadJson as PeriodicBriefing;
+  return Promise.all(rows.map(async (row, index): Promise<PeriodicBriefingRow> => {
+    const projection = projections[index];
+    if (projection.quarantined) return { id: row.id, status: "needs_context", briefing: quarantinedPeriodicBriefing(row), currentEvidenceAvailable: false,
+      basisStatus: "stale", unavailableEvidenceIds: [], quarantined: true };
+    if (!isPeriodicBriefing(projection.payload)) return { id: row.id, status: "needs_context", briefing: quarantinedPeriodicBriefing(row), currentEvidenceAvailable: false,
+      basisStatus: "stale", unavailableEvidenceIds: [], quarantined: true };
+    const projected = projection.payload;
+    const briefing: PeriodicBriefing = projection.basisStatus === "stale" ? {
+      ...projected,
+      outcome: "needs_context",
+      summary: "This briefing is unavailable because supporting evidence is no longer usable under the current source policy.",
+      gaps: [...new Set([...projected.gaps, ARTIFACT_BASIS_UNAVAILABLE_GAP])],
+    } : projected;
     if (!cache.has(briefing.solutionProfileId)) cache.set(briefing.solutionProfileId, currentEvidence(db, clientId, briefing.solutionProfileId, now));
-    return { id: row.id, status: row.status, briefing, currentEvidenceAvailable: evidenceAvailable(row, await cache.get(briefing.solutionProfileId)!) };
+    const currentEvidenceAvailable = projection.basisStatus === "current" && evidenceAvailable(row, await cache.get(briefing.solutionProfileId)!);
+    return { id: row.id, status: currentEvidenceAvailable ? row.status : "needs_context", briefing, currentEvidenceAvailable,
+      basisStatus: projection.basisStatus, unavailableEvidenceIds: projection.unavailableEvidenceIds, quarantined: false };
   }));
 }
 
@@ -133,10 +199,16 @@ export async function reviewPeriodicBriefing(input: { clientId: number; id: numb
     await tx.select({ id: sourceConnection.id }).from(sourceConnection).where(eq(sourceConnection.clientId, input.clientId)).orderBy(asc(sourceConnection.id)).for("share");
     const [row] = await tx.select().from(researchArtifact).where(and(eq(researchArtifact.id, input.id), eq(researchArtifact.clientId, input.clientId), eq(researchArtifact.artifactType, "periodic_briefing"), eq(researchArtifact.status, "pending_review"))).limit(1).for("update");
     if (!row) return false;
+    assertResearchArtifactBounds(row.payloadJson, row.evidenceIds);
     const briefing = row.payloadJson as PeriodicBriefing;
-    if (input.decision === "accepted" && (briefing.outcome === "needs_context" || !evidenceAvailable(row, await currentEvidence(tx, row.clientId, briefing.solutionProfileId, input.now)))) throw new Error("briefing-evidence-incomplete-or-expired");
+    if (input.decision === "accepted") {
+      if (briefing.outcome === "needs_context" || !evidenceAvailable(row, await currentEvidence(tx, row.clientId, briefing.solutionProfileId, input.now))) throw new Error("briefing-evidence-incomplete-or-expired");
+      await assertCurrentEvidenceUse(tx, { clientId: row.clientId, evidenceIds: row.evidenceIds, now: input.now });
+    }
     const review = { decision: input.decision, reviewerUserId: input.reviewerUserId, reviewedAt: input.now.toISOString() };
-    await tx.update(researchArtifact).set({ status: input.decision, payloadJson: { ...briefing, review } }).where(eq(researchArtifact.id, row.id));
+    const reviewedBriefing = { ...briefing, review };
+    assertResearchArtifactBounds(reviewedBriefing, row.evidenceIds);
+    await tx.update(researchArtifact).set({ status: input.decision, payloadJson: reviewedBriefing }).where(eq(researchArtifact.id, row.id));
     await tx.insert(governanceAudit).values({ clientId: input.clientId, actorUserId: input.reviewerUserId, action: "briefing_reviewed", entityType: "research_artifact", entityId: String(row.id), redactedBeforeJson: { status: row.status }, redactedAfterJson: review, createdAt: input.now });
     return true;
   });

@@ -36,12 +36,12 @@
   },
   "database": {
     "engine": "postgresql",
-    "schemaVersion": "0018_large_nick_fury",
-    "migrationHead": "0018_large_nick_fury",
-    "migrationCount": 18,
+    "schemaVersion": "0019_r1a1b_bounded_retention",
+    "migrationHead": "0019_r1a1b_bounded_retention",
+    "migrationCount": 19,
     "journalFormatVersion": "7",
     "journalPath": "drizzle/meta/_journal.json",
-    "historyDigest": "sha256:d91b4784281a37de28c1319fa3ff9454666718cc19638c7d326c314f35bfd5fa",
+    "historyDigest": "sha256:a0e8074e9345166df2e9e1859af4c46dfff80bab1255b32d1ba8eaa0fb79ccbf",
     "upgradePolicy": "forward-only",
     "state": "pre-trim"
   },

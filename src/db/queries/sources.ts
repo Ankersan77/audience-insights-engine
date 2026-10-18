@@ -1,8 +1,9 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/src/db/client";
-import { canonicalEvidence, evidenceCollection, sourceAcquisitionJob, sourceAcquisitionReceipt, sourceConnection } from "@/src/db/schema";
+import { governanceAudit, sourceConnection } from "@/src/db/schema";
 import type { RightsDeclaration, SourceClass, SourceConnectionPolicy } from "@/src/core/contracts";
 import { readSourceConnectionPolicy } from "@/src/connectors/sourcePolicy";
+import { redactIdentifiers } from "@/src/evidence/textSafety";
 
 export type SourceConnectionListRow = {
   id: number;
@@ -84,32 +85,52 @@ export async function createSourceConnection(input: {
   return created;
 }
 
-/** Revokes future collection immediately and makes retained source material due for tombstoning. */
-export async function revokeSourceConnection(input: { clientId: number; id: number; now: Date }) {
+/**
+ * Revokes authority in one source-row transition. Dependent cleanup is deliberately
+ * asynchronous and bounded by canonical maintenance; every use/persistence path
+ * must treat this timestamp (and unavailable health) as immediately fail-closed.
+ */
+export async function revokeSourceConnection(input: {
+  clientId: number;
+  id: number;
+  now: Date;
+  audit?: { actorUserId?: number; reason?: string };
+}) {
+  if (!Number.isFinite(input.now.getTime())) throw new Error("invalid-source-revocation-time");
+  const reason = input.audit?.reason
+    ? redactIdentifiers(input.audit.reason.slice(0, 500)).content
+    : "programmatic-source-revocation";
   return db.transaction(async (tx) => {
-    const [source] = await tx.update(sourceConnection).set({ health: "unavailable" }).where(and(
-      eq(sourceConnection.id, input.id), eq(sourceConnection.clientId, input.clientId),
-    )).returning({ id: sourceConnection.id });
-    if (!source) return null;
-    const cancelledJobs = await tx.update(sourceAcquisitionJob).set({ status: "cancelled", cancelledAt: input.now, finishedAt: input.now }).where(and(
-      eq(sourceAcquisitionJob.clientId, input.clientId), eq(sourceAcquisitionJob.sourceConnectionId, input.id),
-      inArray(sourceAcquisitionJob.status, ["queued", "running"]),
-    )).returning({ id: sourceAcquisitionJob.id });
-    if (cancelledJobs.length > 0) {
-      await tx.insert(sourceAcquisitionReceipt).values(cancelledJobs.map((job) => ({
-        clientId: input.clientId, jobId: job.id, status: "cancelled" as const, acquiredCount: 0, rejectedCount: 0,
-        safeArtifactRefs: [], errorCode: "source-revoked", completedAt: input.now,
-      }))).onConflictDoNothing({ target: sourceAcquisitionReceipt.jobId });
+    const [revoked] = await tx.update(sourceConnection).set({
+      health: "unavailable",
+      revokedAt: input.now,
+    }).where(and(
+      eq(sourceConnection.id, input.id),
+      eq(sourceConnection.clientId, input.clientId),
+      isNull(sourceConnection.revokedAt),
+    )).returning({ id: sourceConnection.id, revokedAt: sourceConnection.revokedAt });
+    if (revoked) {
+      await tx.insert(governanceAudit).values({
+        clientId: input.clientId,
+        actorUserId: input.audit?.actorUserId,
+        action: "revoke",
+        entityType: "source_connection",
+        entityId: String(input.id),
+        redactedAfterJson: {
+          status: "unavailable",
+          revokedAt: revoked.revokedAt!.toISOString(),
+          cleanupPending: true,
+          reason,
+        },
+        createdAt: input.now,
+      });
+      return { revokedAt: revoked.revokedAt!, cleanupPending: true as const };
     }
-    const expiringEvidence = await tx.update(canonicalEvidence).set({ expiresAt: input.now }).where(and(
-      eq(canonicalEvidence.clientId, input.clientId), eq(canonicalEvidence.sourceConnectionId, input.id),
-      inArray(canonicalEvidence.lifecycle, ["candidate", "live", "quarantined"]),
-    )).returning({ id: canonicalEvidence.id });
-    const expiringCollections = await tx.update(evidenceCollection).set({ expiresAt: input.now }).where(and(
-      eq(evidenceCollection.clientId, input.clientId), eq(evidenceCollection.sourceConnectionId, input.id),
-      inArray(evidenceCollection.lifecycle, ["candidate", "live", "quarantined"]),
-    )).returning({ id: evidenceCollection.id });
-    return { cancelledJobs: cancelledJobs.length, evidenceDueForExpiry: expiringEvidence.length, collectionsDueForExpiry: expiringCollections.length };
+    const [existing] = await tx.select({ revokedAt: sourceConnection.revokedAt }).from(sourceConnection).where(and(
+      eq(sourceConnection.id, input.id), eq(sourceConnection.clientId, input.clientId),
+    )).limit(1);
+    if (!existing) return null;
+    return { revokedAt: existing.revokedAt!, cleanupPending: true as const };
   });
 }
 

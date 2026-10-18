@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import type { RightsDeclaration, SourceClass, SourceConnection, SourceConnectionPolicy } from "@/src/core/contracts";
 import { validateSourceConnection } from "@/src/core/validation";
 import { createSourceConnection, listSourceConnections, revokeSourceConnection } from "@/src/db/queries/sources";
-import { enforceCanonicalRetention } from "@/src/db/queries/retention";
 import { recordGovernanceAudit } from "@/src/lib/audit";
 import { getSession } from "@/src/lib/auth";
 import { assertAdmin, PermissionDeniedError } from "@/src/lib/roles";
@@ -166,13 +165,23 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "A source id and a revocation reason of 8–500 characters are required." }, { status: 400 });
   }
   const now = new Date();
-  const revoked = await revokeSourceConnection({ clientId: session.clientId, id, now });
-  if (!revoked) return NextResponse.json({ error: "source-not-found" }, { status: 404 });
-  const retention = await enforceCanonicalRetention(now, session.clientId);
-  await recordGovernanceAudit({
-    clientId: session.clientId, actorUserId: session.id, action: "revoke", entityType: "source_connection", entityId: String(id),
-    after: { reason, status: "unavailable", ...revoked, retention },
+  const revoked = await revokeSourceConnection({
+    clientId: session.clientId,
+    id,
+    now,
+    audit: { actorUserId: session.id, reason },
   });
-  return NextResponse.json({ revoked, retention });
+  if (!revoked) return NextResponse.json({ error: "source-not-found" }, { status: 404 });
+  return NextResponse.json({
+    revoked: {
+      cancelledJobs: null,
+      evidenceDueForExpiry: null,
+      collectionsDueForExpiry: null,
+      revokedAt: revoked.revokedAt,
+      cleanupPending: true,
+    },
+    retention: null,
+    cleanupPending: true,
+  });
 }
 

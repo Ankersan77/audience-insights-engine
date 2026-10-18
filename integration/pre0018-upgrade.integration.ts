@@ -15,7 +15,7 @@ type Journal = {
   entries: { idx: number; version: string; when: number; tag: string; breakpoints: boolean }[];
 };
 
-const CURRENT_HEAD = "0018_large_nick_fury";
+const CURRENT_HEAD = "0019_r1a1b_bounded_retention";
 const PRE_UPGRADE_HEAD = "0017_acquisition_budget_version";
 const SNAPSHOT_TABLES = [
   "app_user", "client", "ability_manifest", "market", "brand", "brand_market",
@@ -36,7 +36,9 @@ function quotedFixtureDatabase(name: string): string {
 
 async function createPreUpgradeMigrationFolder(sourceFolder: string, journal: Journal): Promise<string> {
   assert.equal(journal.entries.at(-1)?.tag, CURRENT_HEAD, "fixture must track the repository migration head");
-  const preUpgradeEntries = journal.entries.slice(0, -1);
+  const preUpgradeIndex = journal.entries.findIndex((entry) => entry.tag === PRE_UPGRADE_HEAD);
+  assert.notEqual(preUpgradeIndex, -1, "pre-upgrade migration head must exist");
+  const preUpgradeEntries = journal.entries.slice(0, preUpgradeIndex + 1);
   assert.equal(preUpgradeEntries.at(-1)?.tag, PRE_UPGRADE_HEAD, "fixture must start immediately before 0018");
   const folder = await mkdtemp(join(tmpdir(), "market-research-pre0018-"));
   await mkdir(join(folder, "meta"));
@@ -154,11 +156,13 @@ async function insertRepresentativeLegacyRows(pool: Pool) {
   }
 }
 
-test("representative pre-0018 legacy rows survive immutable migration history through 0018", async () => {
+test("representative pre-0018 legacy rows survive immutable migration history through the current head", async () => {
   const repositoryMigrationFolder = resolve(process.cwd(), "drizzle");
   const journal = JSON.parse(await readFile(join(repositoryMigrationFolder, "meta", "_journal.json"), "utf8")) as Journal;
   const fullMigrations = readMigrationFiles({ migrationsFolder: repositoryMigrationFolder });
   assert.equal(fullMigrations.length, journal.entries.length);
+  const preUpgradeCount = journal.entries.findIndex((entry) => entry.tag === PRE_UPGRADE_HEAD) + 1;
+  assert.ok(preUpgradeCount > 0, "pre-upgrade migration head must exist");
 
   const databaseName = `market_research_upgrade_${randomUUID().replaceAll("-", "").slice(0, 16)}_test`;
   const quotedDatabase = quotedFixtureDatabase(databaseName);
@@ -181,8 +185,8 @@ test("representative pre-0018 legacy rows survive immutable migration history th
 
     await migrate(database, { migrationsFolder: migrationFolder });
     const preUpgradeHistory = await migrationHistory(fixture);
-    assert.deepEqual(preUpgradeHistory, fullMigrations.slice(0, -1).map((entry) => ({ hash: entry.hash, createdAt: entry.folderMillis })));
-    assert.equal(journal.entries.at(-2)?.tag, PRE_UPGRADE_HEAD);
+    assert.deepEqual(preUpgradeHistory, fullMigrations.slice(0, preUpgradeCount).map((entry) => ({ hash: entry.hash, createdAt: entry.folderMillis })));
+    assert.equal(journal.entries[preUpgradeCount - 1]?.tag, PRE_UPGRADE_HEAD);
     assert.equal(await fixture.query("select to_regclass('public.company_context_revision')::text relation").then((result) => result.rows[0].relation), null);
 
     await insertRepresentativeLegacyRows(fixture);
@@ -191,13 +195,30 @@ test("representative pre-0018 legacy rows survive immutable migration history th
 
     await migrate(database, { migrationsFolder: repositoryMigrationFolder });
     const after = await legacySnapshot(fixture);
-    assert.deepEqual(after, before, "0018 must preserve every representative legacy row and field");
+    assert.deepEqual(after, before, "forward migrations must preserve every representative legacy row and field");
 
     const applied = await migrationHistory(fixture);
     assert.deepEqual(applied, fullMigrations.map((entry) => ({ hash: entry.hash, createdAt: entry.folderMillis })));
     assert.equal(applied.length, journal.entries.length);
     assert.equal(journal.entries.at(-1)?.tag, CURRENT_HEAD);
     assert.equal(await fixture.query("select to_regclass('public.company_context_revision')::text relation").then((result) => result.rows[0].relation), "company_context_revision");
+    assert.equal(await fixture.query("select to_regclass('public.canonical_retention_work')::text relation").then((result) => result.rows[0].relation), "canonical_retention_work");
+    assert.equal(await fixture.query("select exists(select 1 from information_schema.columns where table_schema='public' and table_name='source_connection' and column_name='revoked_at') present").then((result) => result.rows[0].present), true);
+    assert.equal(await fixture.query("select exists(select 1 from information_schema.columns where table_schema='public' and table_name='source_acquisition_job' and column_name='dispatch_lease_until') present").then((result) => result.rows[0].present), true);
+    const indexes = new Set((await fixture.query<{ indexname: string }>(
+      "select indexname from pg_indexes where schemaname='public'",
+    )).rows.map((row) => row.indexname));
+    for (const required of [
+      "canonical_retention_work_fairness_idx",
+      "canonical_evidence_retention_due_idx",
+      "canonical_evidence_revoked_source_cleanup_idx",
+      "evidence_collection_retention_due_idx",
+      "evidence_collection_revoked_source_cleanup_idx",
+      "qualitative_theme_evidence_ids_gin_idx",
+      "research_artifact_evidence_ids_gin_idx",
+      "source_acquisition_job_revoked_source_cleanup_idx",
+      "source_connection_revoked_idx",
+    ]) assert.ok(indexes.has(required), `missing R1A1b index: ${required}`);
   } finally {
     const cleanupErrors: unknown[] = [];
     if (fixture) {

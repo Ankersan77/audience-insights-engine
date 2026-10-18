@@ -127,6 +127,13 @@
       "when": 1792222912970,
       "tag": "0018_large_nick_fury",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792307111843,
+      "tag": "0019_r1a1b_bounded_retention",
+      "breakpoints": true
     }
   ]
 }

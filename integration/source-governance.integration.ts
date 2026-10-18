@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { Pool } from "pg";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { acquisitionAuthorization, appUser, authSession, client, clientMembership, canonicalEvidence, citation, researchArtifact, researchProject, intelligenceRecord, monitoringRun, sensingProfile, solutionProfile, sourceConnection, sourceAcquisitionJob, sourceAcquisitionReceipt, governanceAudit, quantitativeObservation } from "../src/db/schema";
 import { AcquisitionAdapterRegistry } from "../src/evidence/registry";
 import { AggregateMetricEvidenceAdapter, PublicWebEvidenceAdapter } from "../src/evidence/adapters";
@@ -20,6 +20,7 @@ import { runBudgetAdministrationCases } from "./budget-administration-cases";
 import { runCompanyContextCases } from "./company-context-cases";
 import { runLegacyInventoryCases } from "./legacy-inventory-cases";
 import { runCanonicalWorkerRuntimeCases } from "./canonical-worker-runtime-cases";
+import { runBoundedRetentionCases } from "./retention-bounded-cases";
 
 // Refuse accidental execution against the application's database. No tables are
 // truncated: each test creates uniquely named, synthetic tenant/source fixtures.
@@ -30,18 +31,18 @@ if (process.env.NODE_ENV === "production") throw new Error("Integration tests mu
 
 const { db } = await import("../src/db/client");
 const { createSourceConnection, listSourceConnections, revokeSourceConnection } = await import("../src/db/queries/sources");
-const { persistAcquisition, completeExistingAcquisition, failExistingAcquisition } = await import("../src/db/queries/canonical_evidence");
-const { claimAcquisitionJob, cancelAcquisitionJob } = await import("../src/db/queries/acquisition_execution");
+const { persistAcquisition, completeExistingAcquisition, failExistingAcquisition, listCanonicalEvidence } = await import("../src/db/queries/canonical_evidence");
+const { ACQUISITION_DISPATCH_LEASE_MS, claimAcquisitionJob, cancelAcquisitionJob } = await import("../src/db/queries/acquisition_execution");
 const { loadResearchContextSources } = await import("../src/db/queries/research_context");
 const { createActiveSolutionProfile } = await import("../src/db/queries/solution_profiles");
-const { saveDecisionBrief, createCampaignLearningCandidate, promoteCampaignLearning, reviewIntelligenceRecord } = await import("../src/db/queries/workspace_intelligence");
+const { listDecisionBriefs, saveDecisionBrief, createCampaignLearningCandidate, createIntelligenceCandidate, promoteCampaignLearning, reviewIntelligenceRecord } = await import("../src/db/queries/workspace_intelligence");
 const { runContextualResearch } = await import("../src/abilities/synthesis");
 const { createActiveSensingProfile } = await import("../src/db/queries/monitoring");
 const { generateDueBriefings, listPeriodicBriefings, reviewPeriodicBriefing } = await import("../src/db/queries/briefings");
 const { createAuthSession, resolveAuthSession, revokeAuthSession, purgeAuthSessions, resolveProvisionedIdentity } = await import("../src/db/queries/auth_sessions");
 const { setClientAccess } = await import("../src/db/queries/client_access");
 const { setAcquisitionBudget, inspectAcquisitionBudget, authorizeAcquisitionAttempt } = await import("../src/db/queries/acquisition_budget");
-const { processAcquisitionJob, reconcileStaleAcquisitions } = await import("../src/workers/acquisitionQueue");
+const { dispatchQueuedAcquisitions, processAcquisitionJob, reconcileStaleAcquisitions } = await import("../src/workers/acquisitionQueue");
 const { enforceCanonicalRetention } = await import("../src/db/queries/retention");
 const { createCampaignRecord, createMeasurementPlanRecord, reviewMeasurementPlan, createCampaignAssessmentRecord, transitionCampaignRecord, listCampaignWorkspace, reviseCampaignScopes } = await import("../src/db/queries/campaign_workspace");
 const probe = new Pool({ connectionString: url });
@@ -95,6 +96,7 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
     await migrate(db, { migrationsFolder: "drizzle" });
     await runLegacyInventoryCases(t, probe, url);
     await runCanonicalWorkerRuntimeCases(t, db, probe, url, fixture);
+    await runBoundedRetentionCases(t, db, probe, fixture);
     await runSynthesisBudgetCases(t, db, probe);
     await runSynthesisProviderCases(t, db, probe, async () => { const first = await fixture(); return { first, second: await fixture(first.tenant) }; });
     await runBudgetAdministrationCases(t, db, probe);
@@ -121,6 +123,115 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       assert.equal(source.health, "unavailable");
     });
 
+    await t.test("revocation immediately hides evidence and blocks intelligence creation and acceptance", async () => {
+      const f = await fixture();
+      const retained = await persistAcquisition(f.input);
+      assert.deepEqual((await listCanonicalEvidence(f.tenant.id)).map((item) => item.id), [...retained.evidenceIds]);
+      const candidateInput = {
+        clientId: f.tenant.id,
+        kind: "fact" as const,
+        title: "Synthetic candidate",
+        statement: "A bounded synthetic observation.",
+        evidenceIds: retained.evidenceIds,
+        contradictionIds: [],
+        dependencyIds: [],
+        applicability: f.input.applicability,
+        confidence: 0.7,
+        uncertainty: ["Synthetic integration evidence."],
+        now: new Date(),
+      };
+      const candidate = await createIntelligenceCandidate(candidateInput);
+      const [reviewer] = await db.insert(appUser).values({ email: `evidence-reviewer-${randomUUID()}@example.invalid`, name: "Synthetic reviewer", role: "reviewer", ssoSubjectId: randomUUID() }).returning();
+      await revokeSourceConnection({ clientId: f.tenant.id, id: f.source.id, now: new Date() });
+      assert.deepEqual(await listCanonicalEvidence(f.tenant.id), []);
+      await assert.rejects(createIntelligenceCandidate({ ...candidateInput, title: "Rejected after revocation" }), /evidence-use-denied:source-(revoked|unavailable)/);
+      await assert.rejects(reviewIntelligenceRecord({ clientId: f.tenant.id, id: Number(candidate.id), reviewerUserId: reviewer.id, decision: "accepted", now: new Date() }), /evidence-use-denied:source-(revoked|unavailable)/);
+      const [stored] = await db.select().from(intelligenceRecord).where(eq(intelligenceRecord.id, Number(candidate.id)));
+      assert.equal(stored.reviewState, "pending");
+    });
+
+    await t.test("evidence use rechecks database time after a lock wait crosses expiry", async () => {
+      const f = await fixture();
+      const retained = await persistAcquisition(f.input);
+      await db.update(canonicalEvidence).set({ expiresAt: sql`clock_timestamp() + interval '1500 milliseconds'` })
+        .where(eq(canonicalEvidence.id, retained.evidenceIds[0]));
+      const blocker = await probe.connect();
+      try {
+        await blocker.query("begin");
+        await blocker.query("select id from source_connection where id = $1 for update", [f.source.id]);
+        const rejected = assert.rejects(createIntelligenceCandidate({
+          clientId: f.tenant.id,
+          kind: "fact",
+          title: "Must expire while blocked",
+          statement: "This candidate must not cross the evidence expiry boundary.",
+          evidenceIds: retained.evidenceIds,
+          contradictionIds: [],
+          dependencyIds: [],
+          applicability: f.input.applicability,
+          confidence: 0.7,
+          uncertainty: ["Synthetic integration evidence."],
+          now: new Date(),
+        }), /evidence-use-denied:expired/);
+        await waitForBlocked(1);
+        await new Promise((resolve) => setTimeout(resolve, 1_600));
+        await blocker.query("commit");
+        await rejected;
+        const stored = await db.select().from(intelligenceRecord).where(and(
+          eq(intelligenceRecord.clientId, f.tenant.id),
+          eq(intelligenceRecord.title, "Must expire while blocked"),
+        ));
+        assert.equal(stored.length, 0);
+      } finally {
+        await blocker.query("rollback");
+        blocker.release();
+      }
+    });
+
+    await t.test("source revocation and its redacted audit are atomic and idempotent", async () => {
+      const f = await fixture();
+      const [actor] = await db.insert(appUser).values({
+        email: `revocation-auditor-${randomUUID()}@example.invalid`,
+        name: "Synthetic revocation auditor",
+        role: "admin",
+        ssoSubjectId: randomUUID(),
+      }).returning();
+      const now = new Date();
+      const revoked = await revokeSourceConnection({
+        clientId: f.tenant.id,
+        id: f.source.id,
+        now,
+        audit: { actorUserId: actor.id, reason: "Requested by person@example.invalid after rights review." },
+      });
+      assert.equal(revoked?.cleanupPending, true);
+      const audits = await db.select().from(governanceAudit).where(and(
+        eq(governanceAudit.clientId, f.tenant.id),
+        eq(governanceAudit.entityType, "source_connection"),
+        eq(governanceAudit.entityId, String(f.source.id)),
+        eq(governanceAudit.action, "revoke"),
+      ));
+      assert.equal(audits.length, 1);
+      assert.equal(audits[0].actorUserId, actor.id);
+      assert.equal((audits[0].redactedAfterJson as { reason: string }).reason.includes("person@example.invalid"), false);
+      assert.match((audits[0].redactedAfterJson as { reason: string }).reason, /redacted-email/);
+      await revokeSourceConnection({ clientId: f.tenant.id, id: f.source.id, now: new Date(now.getTime() + 1_000), audit: { actorUserId: actor.id, reason: "retry" } });
+      assert.equal((await db.select().from(governanceAudit).where(and(
+        eq(governanceAudit.clientId, f.tenant.id), eq(governanceAudit.entityId, String(f.source.id)), eq(governanceAudit.action, "revoke"),
+      ))).length, 1, "idempotent retry does not duplicate the audit event");
+
+      const rollback = await fixture();
+      await assert.rejects(revokeSourceConnection({
+        clientId: rollback.tenant.id,
+        id: rollback.source.id,
+        now,
+        audit: { actorUserId: 2_147_483_647, reason: "synthetic audit failure" },
+      }), (error: unknown) => error instanceof Error
+        && /governance_audit/.test(error.message)
+        && /foreign key|violates/i.test(String(error.cause)));
+      const [unchanged] = await db.select().from(sourceConnection).where(eq(sourceConnection.id, rollback.source.id));
+      assert.equal(unchanged.revokedAt, null);
+      assert.equal(unchanged.health, "configured");
+    });
+
     await t.test("revocation winning the source lock rejects a concurrent worker completion", async () => {
       const f = await fixture();
       const job = await queued(f);
@@ -134,9 +245,13 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
         const rejected = assert.rejects(completion, /running-acquisition-job-not-found|source-unavailable/);
         await waitForBlocked(2);
         await barrier.query("commit");
-        await revoked;
+        const revocation = await revoked;
+        assert.equal(revocation?.cleanupPending, true);
         await rejected;
         assert.equal((await db.select().from(canonicalEvidence).where(eq(canonicalEvidence.sourceConnectionId, f.source.id))).length, 0);
+        assert.equal((await db.select().from(sourceAcquisitionReceipt).where(eq(sourceAcquisitionReceipt.jobId, job.id))).length, 0, "revocation does not synchronously fan out");
+        const cleanup = await reconcileStaleAcquisitions(new Date());
+        assert.equal(cleanup.revokedCancelled, 1);
         const [receipt] = await db.select().from(sourceAcquisitionReceipt).where(eq(sourceAcquisitionReceipt.jobId, job.id));
         assert.equal(receipt.status, "cancelled");
       } finally { await barrier.query("rollback"); barrier.release(); }
@@ -155,12 +270,19 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
         await waitForBlocked(2);
         await barrier.query("commit");
         await completion;
-        await revoked;
+        const revocation = await revoked;
+        assert.equal(revocation?.cleanupPending, true);
         const [source] = await db.select().from(sourceConnection).where(eq(sourceConnection.id, f.source.id));
         assert.equal(source.health, "unavailable");
+        assert.ok(source.revokedAt);
         const evidence = await db.select().from(canonicalEvidence).where(eq(canonicalEvidence.sourceConnectionId, f.source.id));
         assert.equal(evidence.length, 1);
-        assert.ok(evidence.every((item) => item.expiresAt <= new Date()));
+        assert.ok(evidence.every((item) => item.expiresAt > new Date()), "revocation remains an O(1) source transition");
+        let retention;
+        do { retention = await enforceCanonicalRetention(new Date(), f.tenant.id); }
+        while (retention.batchFull);
+        const retained = await db.select().from(canonicalEvidence).where(eq(canonicalEvidence.sourceConnectionId, f.source.id));
+        assert.ok(retained.every((item) => item.lifecycle === "expired"));
       } finally { await barrier.query("rollback"); barrier.release(); }
     });
 
@@ -265,13 +387,21 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       }
 
       // Hold the insert after snapshot validation. Expiry while waiting must roll back both
-      // artifact and citations; retention must wait for evidence locks before scanning copies.
+      // artifact and citations; retention must skip the evidence lock, report
+      // continuation, and resume after the concurrent writer releases it.
       const expiresAt = new Date(Date.now() + 1500);
       await db.update(canonicalEvidence).set({ expiresAt }).where(eq(canonicalEvidence.id, originalEvidence.id));
       const expiringSources = await loadResearchContextSources({ clientId: first.tenant.id, projectId: project.id });
       const expiringBrief = await runContextualResearch({ clientId: String(first.tenant.id), abilityId: brief.abilityId, question: project.decision, projectId: String(project.id), now: new Date().toISOString(), sources: expiringSources,
         analysis: { pointOfView: brief.pointOfView, clientRelevance: brief.clientRelevance, recommendation: brief.recommendation, nextDecision: brief.nextDecision, claimMode: "descriptive", evidenceIds: brief.evidenceIds, contradictions: [], uncertainty: [] } });
       assert.equal(expiringBrief.status, "ready");
+      const projected = await listDecisionBriefs(first.tenant.id, project.id, new Date(expiresAt.getTime() + 1));
+      const stale = projected.find((item) => item.id === saved.id);
+      assert.equal(stale?.basisStatus, "stale");
+      assert.equal(stale?.quarantined, true);
+      assert.equal(stale?.brief.status, "needs_context");
+      assert.deepEqual(stale?.brief.citations, []);
+      assert.ok(!JSON.stringify(stale?.brief).includes("The category merits a bounded study."));
       const barrier = await probe.connect();
       try {
         await barrier.query("begin");
@@ -279,12 +409,15 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
         const blockedSave = assert.rejects(saveDecisionBrief({ ...input, brief: { ...expiringBrief, id: randomUUID() } }), /research-context-changed/);
         await waitForBlocked(1);
         await new Promise((resolve) => setTimeout(resolve, Math.max(0, expiresAt.getTime() - Date.now()) + 30));
-        const retained = enforceCanonicalRetention(new Date(), first.tenant.id);
-        await waitForBlocked(2);
+        const deferredRetention = await enforceCanonicalRetention(new Date(), first.tenant.id);
+        assert.equal(deferredRetention.evidenceExpired, 0);
+        assert.equal(deferredRetention.batchFull, true, "locked due evidence remains visible as continuation work");
         await barrier.query("commit");
         await blockedSave;
-        await retained;
       } finally { await barrier.query("rollback"); barrier.release(); }
+      let retention;
+      do { retention = await enforceCanonicalRetention(new Date(), first.tenant.id); }
+      while (retention.batchFull);
       assert.equal((await db.select().from(researchArtifact).where(eq(researchArtifact.clientId, first.tenant.id))).length, 1);
       const [redactedCitation] = await db.select().from(citation).where(and(eq(citation.artifactId, saved.id), eq(citation.evidenceId, originalEvidence.id)));
       assert.equal(redactedCitation.safeReference, "[expired evidence]");
@@ -431,6 +564,50 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       await purgeAuthSessions(new Date(Date.now() + (SESSION_MAX_AGE_SECONDS + 120) * 1000));
       assert.equal((await db.select().from(authSession).where(eq(authSession.userId, userId))).length, 0);
     });
+    await t.test("session cleanup is bounded, concurrent-safe and preserves non-due sessions", async () => {
+      const f = await fixture();
+      const now = new Date();
+      const [user] = await db.insert(appUser).values({
+        email: `session-batch-${randomUUID()}@example.invalid`,
+        name: "Synthetic session batch user",
+        role: "viewer",
+        ssoSubjectId: randomUUID(),
+      }).returning();
+      await db.insert(clientMembership).values({ clientId: f.tenant.id, userId: user.id, role: "viewer" });
+      const prefix = randomUUID();
+      const expired = Array.from({ length: 501 }, (_, index) => ({
+        tokenHash: `${prefix}-expired-${index}`,
+        clientId: f.tenant.id,
+        userId: user.id,
+        createdAt: new Date(now.getTime() - 20_000),
+        expiresAt: new Date(now.getTime() - 10_000),
+      }));
+      const revoked = Array.from({ length: 501 }, (_, index) => ({
+        tokenHash: `${prefix}-revoked-${index}`,
+        clientId: f.tenant.id,
+        userId: user.id,
+        createdAt: new Date(now.getTime() - 20_000),
+        expiresAt: new Date(now.getTime() + 60_000),
+        revokedAt: new Date(now.getTime() - 5_000),
+      }));
+      const activeHash = `${prefix}-active`;
+      await db.insert(authSession).values([...expired, ...revoked, {
+        tokenHash: activeHash,
+        clientId: f.tenant.id,
+        userId: user.id,
+        createdAt: now,
+        expiresAt: new Date(now.getTime() + 60_000),
+      }]);
+
+      const concurrent = await Promise.all([
+        purgeAuthSessions(now, { limit: 500 }),
+        purgeAuthSessions(now, { limit: 500 }),
+      ]);
+      assert.equal(concurrent.reduce((sum, item) => sum + item.removed, 0), 1000);
+      assert.ok(concurrent.every((item) => item.batchFull));
+      assert.deepEqual(await purgeAuthSessions(now, { limit: 500 }), { removed: 2, batchFull: false });
+      assert.equal((await db.select().from(authSession).where(eq(authSession.tokenHash, activeHash))).length, 1);
+    });
     await t.test("pre-acquisition authorizations serialize across sources, isolate clients and survive configuration edits", async () => {
       const f = await fixture();
       const second = await fixture(f.tenant);
@@ -538,6 +715,164 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       await revokeSourceConnection({ clientId: stale.tenant.id, id: stale.source.id, now: new Date() });
       await assert.rejects(authorizeAcquisitionAttempt({ clientId: stale.tenant.id, jobId: revoked.id, attempt: 1, plan }), /cancelled|source-unavailable/);
       assert.equal((await db.select().from(acquisitionAuthorization).where(eq(acquisitionAuthorization.clientId, stale.tenant.id))).length, 1);
+    });
+    await t.test("revoked acquisition cleanup and dispatch are bounded, concurrent and idempotent", async () => {
+      // Canonical maintenance is global, so drain abandoned work from earlier
+      // scenarios before asserting the exact 201-item boundary below.
+      let prior;
+      do { prior = await reconcileStaleAcquisitions(new Date()); }
+      while (prior.batchFull);
+      const f = await fixture();
+      const jobs = await db.insert(sourceAcquisitionJob).values(Array.from({ length: 201 }, () => ({
+        clientId: f.tenant.id,
+        sourceConnectionId: f.source.id,
+        operation: f.input.operation,
+        requestJson: f.input.request,
+        idempotencyKey: randomUUID(),
+      }))).returning({ id: sourceAcquisitionJob.id });
+      const revocation = await revokeSourceConnection({ clientId: f.tenant.id, id: f.source.id, now: new Date() });
+      assert.equal(revocation?.cleanupPending, true);
+
+      let sends = 0;
+      const dispatch = await dispatchQueuedAcquisitions({
+        async send() { sends += 1; return "unexpected"; },
+      } as unknown as Parameters<typeof dispatchQueuedAcquisitions>[0]);
+      assert.deepEqual(dispatch, { attempted: 0, dispatched: 0, batchFull: false });
+      assert.equal(sends, 0);
+
+      const concurrent = await Promise.all([
+        reconcileStaleAcquisitions(new Date(), { limit: 100 }),
+        reconcileStaleAcquisitions(new Date(), { limit: 100 }),
+      ]);
+      assert.equal(concurrent.reduce((sum, item) => sum + (item.revokedCancelled ?? 0), 0), 200);
+      assert.ok(concurrent.some((item) => item.batchFull));
+      const final = await reconcileStaleAcquisitions(new Date(), { limit: 100 });
+      assert.equal(final.revokedCancelled, 1);
+      assert.equal(final.batchFull, false);
+      const cancelled = await db.select().from(sourceAcquisitionJob).where(inArray(sourceAcquisitionJob.id, jobs.map((job) => job.id)));
+      const receipts = await db.select().from(sourceAcquisitionReceipt).where(inArray(sourceAcquisitionReceipt.jobId, jobs.map((job) => job.id)));
+      assert.equal(cancelled.length, 201);
+      assert.ok(cancelled.every((job) => job.status === "cancelled"));
+      assert.equal(receipts.length, 201);
+      assert.ok(receipts.every((receipt) => receipt.status === "cancelled" && receipt.errorCode === "source-revoked"));
+    });
+    await t.test("dispatch leases split concurrent backlogs fairly and recover after expiry", async () => {
+      const f = await fixture();
+      const requestedAt = new Date("2000-01-01T00:00:00.000Z");
+      const jobs = await db.insert(sourceAcquisitionJob).values(Array.from({ length: 201 }, (_, index) => ({
+        clientId: f.tenant.id,
+        sourceConnectionId: f.source.id,
+        operation: f.input.operation,
+        requestJson: f.input.request,
+        idempotencyKey: randomUUID(),
+        requestedAt: new Date(requestedAt.getTime() + index),
+      }))).returning({ id: sourceAcquisitionJob.id });
+      const now = Date.now();
+      const dispatchedIds: number[] = [];
+      const boss = {
+        async send(_queue: string, payload: { databaseJobId: number }) {
+          dispatchedIds.push(payload.databaseJobId);
+          return randomUUID();
+        },
+      } as unknown as Parameters<typeof dispatchQueuedAcquisitions>[0];
+
+      const firstTwo = await Promise.all([
+        dispatchQueuedAcquisitions(boss, { clock: () => now }),
+        dispatchQueuedAcquisitions(boss, { clock: () => now }),
+      ]);
+      assert.equal(firstTwo.reduce((sum, result) => sum + result.attempted, 0), 200);
+      assert.equal(new Set(dispatchedIds).size, 200, "concurrent leases never spend attempts on the same job");
+      assert.ok(dispatchedIds.every((id) => jobs.some((job) => job.id === id)));
+      const last = await dispatchQueuedAcquisitions(boss, { clock: () => now });
+      assert.deepEqual(last, { attempted: 1, dispatched: 1, batchFull: false });
+      assert.equal(new Set(dispatchedIds).size, 201);
+      await db.update(sourceAcquisitionJob).set({ status: "cancelled", cancelledAt: new Date(), finishedAt: new Date() })
+        .where(inArray(sourceAcquisitionJob.id, jobs.map((job) => job.id)));
+
+      const leased = await db.insert(sourceAcquisitionJob).values({
+        clientId: f.tenant.id,
+        sourceConnectionId: f.source.id,
+        operation: f.input.operation,
+        requestJson: f.input.request,
+        idempotencyKey: randomUUID(),
+        requestedAt: new Date("1999-01-01T00:00:00.000Z"),
+      }).returning({ id: sourceAcquisitionJob.id });
+      const once = await dispatchQueuedAcquisitions(boss, { clock: () => now });
+      assert.equal(once.attempted, 1);
+      const beforeExpiry = await dispatchQueuedAcquisitions(boss, { clock: () => now + ACQUISITION_DISPATCH_LEASE_MS - 1 });
+      assert.equal(beforeExpiry.attempted, 0);
+      const afterExpiry = await dispatchQueuedAcquisitions(boss, { clock: () => now + ACQUISITION_DISPATCH_LEASE_MS + 1 });
+      assert.equal(afterExpiry.attempted, 1);
+      assert.equal(dispatchedIds.filter((id) => id === leased[0].id).length, 2);
+
+      await db.update(sourceAcquisitionJob).set({ status: "cancelled", cancelledAt: new Date(), finishedAt: new Date() })
+        .where(eq(sourceAcquisitionJob.id, leased[0].id));
+    });
+    await t.test("stale acquisition reconciliation is atomic and database-timeout bounded", async () => {
+      const f = await fixture();
+      const job = await queued(f);
+      const maintenanceNow = new Date(Date.now() + 21 * 60_000);
+      const blocker = await probe.connect();
+      try {
+        await blocker.query("begin");
+        await blocker.query("select id from source_connection where id = $1 for update", [f.source.id]);
+        await assert.rejects(
+          reconcileStaleAcquisitions(maintenanceNow, { deadline: new Date(Date.now() + 5_000) }),
+          (error: unknown) => {
+            let current: unknown = error;
+            for (let depth = 0; depth < 4 && current && typeof current === "object"; depth += 1) {
+              if ("code" in current && current.code === "55P03") return true;
+              current = "cause" in current ? current.cause : undefined;
+            }
+            return false;
+          },
+        );
+        const [unchanged] = await db.select().from(sourceAcquisitionJob).where(eq(sourceAcquisitionJob.id, job.id));
+        assert.equal(unchanged.status, "running");
+        assert.equal((await db.select().from(sourceAcquisitionReceipt).where(eq(sourceAcquisitionReceipt.jobId, job.id))).length, 0);
+      } finally {
+        await blocker.query("rollback");
+        blocker.release();
+      }
+      const resumed = await reconcileStaleAcquisitions(maintenanceNow);
+      assert.equal(resumed.staleProcessed, 1);
+      const [failed] = await db.select().from(sourceAcquisitionJob).where(eq(sourceAcquisitionJob.id, job.id));
+      assert.equal(failed.status, "failed");
+      const [receipt] = await db.select().from(sourceAcquisitionReceipt).where(eq(sourceAcquisitionReceipt.jobId, job.id));
+      assert.equal(receipt.errorCode, "worker-lease-expired");
+    });
+    await t.test("concurrent stale-job batches drain one over two limits without starvation", async () => {
+      const first = await fixture();
+      const second = await fixture();
+      const startedAt = new Date("2000-01-01T00:00:00.000Z");
+      const insertJobs = (f: Awaited<ReturnType<typeof fixture>>, count: number, offset: number) =>
+        db.insert(sourceAcquisitionJob).values(Array.from({ length: count }, (_, index) => ({
+          clientId: f.tenant.id,
+          sourceConnectionId: f.source.id,
+          status: "running" as const,
+          operation: f.input.operation,
+          requestJson: f.input.request,
+          idempotencyKey: randomUUID(),
+          requestedAt: new Date(startedAt.getTime() + offset + index),
+          startedAt: new Date(startedAt.getTime() + offset + index),
+        }))).returning({ id: sourceAcquisitionJob.id });
+      const jobs = [...await insertJobs(first, 100, 0), ...await insertJobs(second, 101, 100)];
+
+      const concurrent = await Promise.all([
+        reconcileStaleAcquisitions(new Date(), { limit: 100 }),
+        reconcileStaleAcquisitions(new Date(), { limit: 100 }),
+      ]);
+      assert.equal(concurrent.reduce((sum, result) => sum + (result.staleProcessed ?? 0), 0), 200);
+      assert.ok(concurrent.some((result) => result.batchFull));
+      const final = await reconcileStaleAcquisitions(new Date(), { limit: 100 });
+      assert.equal(final.staleProcessed, 1);
+      assert.equal(final.batchFull, false);
+      const completed = await db.select().from(sourceAcquisitionJob).where(inArray(sourceAcquisitionJob.id, jobs.map((job) => job.id)));
+      const receipts = await db.select().from(sourceAcquisitionReceipt).where(inArray(sourceAcquisitionReceipt.jobId, jobs.map((job) => job.id)));
+      assert.equal(completed.length, 201);
+      assert.ok(completed.every((job) => job.status === "failed"));
+      assert.equal(receipts.length, 201);
+      assert.ok(receipts.every((receipt) => receipt.errorCode === "worker-lease-expired"));
     });
     await t.test("multi-market campaigns require latest current reviews for every declared pair", async () => {
       const f = await fixture(), sw = await fixture(f.tenant), other = await fixture();

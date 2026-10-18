@@ -17,6 +17,8 @@ import { monitoringScheduleKey, planMonitoringAcquisitions } from "@/src/monitor
 import { validateIntelligenceRecord, validateSensingProfile } from "@/src/core/validation";
 import { buildQuantitativeSignalCandidates, type MonitoringObservation } from "@/src/monitoring/candidates";
 import { qualifySignals } from "@/src/monitoring/engine";
+import { boundedResearchArtifactValues } from "@/src/research-artifacts/persistenceBounds";
+import { assertCurrentEvidenceUse } from "./evidence_use";
 
 export type MonitoringScheduleSummary = {
   scheduled: number;
@@ -314,6 +316,10 @@ export async function qualifyPendingMonitoringRuns(now = new Date(), clientId?: 
       const result = qualifySignals({ profile, candidates, now: now.toISOString(), sourceHealthOk: true });
       const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
       const signalIds: number[] = [];
+      const evidenceIds = [...new Set(candidates.flatMap((candidate) => candidate.evidenceIds.map(Number)))];
+      // Recheck under source-first locks in the persistence transaction so revocation
+      // or evidence finalization cannot race a derived signal/artifact write.
+      await assertCurrentEvidenceUse(tx, { clientId: run.clientId, evidenceIds, now });
 
       for (const qualification of result.qualifications.filter((item) => item.qualified)) {
         const candidate = byId.get(qualification.signalId);
@@ -359,8 +365,29 @@ export async function qualifyPendingMonitoringRuns(now = new Date(), clientId?: 
         signalIds.push(created.id);
       }
 
-      const evidenceIds = [...new Set(candidates.flatMap((candidate) => candidate.evidenceIds.map(Number)))];
-      await tx.insert(researchArtifact).values({
+      const payload = {
+        monitoringRunId: run.id,
+        profileId: run.sensingProfileId,
+        evaluatedAt: now.toISOString(),
+        outcome: result.outcome,
+        message: result.message,
+        briefingType: result.briefingType,
+        candidates: candidates.map((candidate) => ({
+          id: candidate.id,
+          theme: candidate.theme,
+          metricKey: candidate.metricKey,
+          unit: candidate.unit,
+          currentValue: candidate.currentValue,
+          baselineValue: candidate.baselineValue,
+          confidence: candidate.confidence,
+          observedAt: candidate.observedAt,
+          sourceIds: candidate.sourceIds,
+          sampleSize: candidate.sampleSize,
+          evidenceIds: candidate.evidenceIds,
+        })),
+        qualifications: result.qualifications,
+      };
+      await tx.insert(researchArtifact).values(boundedResearchArtifactValues({
         clientId: run.clientId,
         artifactKey: `monitoring-run:${run.id}:qualification`,
         artifactType: "monitoring_qualification",
@@ -368,30 +395,9 @@ export async function qualifyPendingMonitoringRuns(now = new Date(), clientId?: 
         abilityVersion: "1.0.0",
         status: result.outcome,
         version: 1,
-        payloadJson: {
-          monitoringRunId: run.id,
-          profileId: run.sensingProfileId,
-          evaluatedAt: now.toISOString(),
-          outcome: result.outcome,
-          message: result.message,
-          briefingType: result.briefingType,
-          candidates: candidates.map((candidate) => ({
-            id: candidate.id,
-            theme: candidate.theme,
-            metricKey: candidate.metricKey,
-            unit: candidate.unit,
-            currentValue: candidate.currentValue,
-            baselineValue: candidate.baselineValue,
-            confidence: candidate.confidence,
-            observedAt: candidate.observedAt,
-            sourceIds: candidate.sourceIds,
-            sampleSize: candidate.sampleSize,
-            evidenceIds: candidate.evidenceIds,
-          })),
-          qualifications: result.qualifications,
-        },
+        payloadJson: payload,
         evidenceIds,
-      });
+      }));
       await tx.update(monitoringRun).set({
         outcome: result.outcome,
         qualifiedSignalIds: signalIds,

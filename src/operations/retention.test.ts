@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { redactExpiredCitationCopies, tombstoneEvidence } from "./retention.ts";
+import { CANONICAL_RETENTION_LIMITS, redactExpiredCitationCopies, tombstoneEvidence } from "./retention.ts";
+
+test("canonical retention limits match the approved R1A1b resource envelope", () => {
+  assert.deepEqual(CANONICAL_RETENTION_LIMITS, {
+    discovery: 100,
+    chunks: 20,
+    dependentRows: 100,
+    artifacts: 10,
+    collections: 250,
+    intelligence: 250,
+    statementTimeoutMs: 10_000,
+    lockTimeoutMs: 1_000,
+    artifactJsonBytes: 256 * 1024,
+    artifactEvidenceReferences: 100,
+  });
+});
 
 test("expired evidence becomes a non-reversible lineage tombstone", () => {
   const result = tombstoneEvidence({

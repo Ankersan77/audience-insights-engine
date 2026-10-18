@@ -1,4 +1,21 @@
 import { createHash } from "node:crypto";
+import {
+  MAX_RESEARCH_ARTIFACT_EVIDENCE_REFERENCES,
+  MAX_RESEARCH_ARTIFACT_PAYLOAD_BYTES,
+} from "../research-artifacts/persistenceBounds.ts";
+
+export const CANONICAL_RETENTION_LIMITS = Object.freeze({
+  discovery: 100,
+  chunks: 20,
+  dependentRows: 100,
+  artifacts: 10,
+  collections: 250,
+  intelligence: 250,
+  statementTimeoutMs: 10_000,
+  lockTimeoutMs: 1_000,
+  artifactJsonBytes: MAX_RESEARCH_ARTIFACT_PAYLOAD_BYTES,
+  artifactEvidenceReferences: MAX_RESEARCH_ARTIFACT_EVIDENCE_REFERENCES,
+});
 
 export type EvidenceRetentionMaterial = {
   id: number;

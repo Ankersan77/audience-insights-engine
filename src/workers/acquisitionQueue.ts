@@ -1,6 +1,16 @@
 import { PgBoss, type Job } from "pg-boss";
 import type { AdapterRuntimeContext } from "@/src/connectors/contracts";
-import { claimAcquisitionJob, cancelAcquisitionJob, isAcquisitionCancelled, listQueuedAcquisitionJobIds, listStaleRunningAcquisitions, type ClaimedAcquisition } from "@/src/db/queries/acquisition_execution";
+import {
+  ACQUISITION_MAINTENANCE_MAX_BATCH_SIZE,
+  ACQUISITION_DISPATCH_LEASE_MS,
+  claimAcquisitionJob,
+  claimQueuedAcquisitionJobIds,
+  cancelAcquisitionJob,
+  cleanupRevokedSourceAcquisitions,
+  cleanupStaleRunningAcquisitions,
+  isAcquisitionCancelled,
+  type ClaimedAcquisition,
+} from "@/src/db/queries/acquisition_execution";
 import { completeExistingAcquisition, failExistingAcquisition } from "@/src/db/queries/canonical_evidence";
 import { AcquisitionAdapterRegistry } from "@/src/evidence/registry";
 import { authorizeAcquisitionAttempt } from "@/src/db/queries/acquisition_budget";
@@ -12,6 +22,15 @@ import { retryDelay, shouldRetry, type RetryPolicy } from "@/src/operations/resi
 
 export const ACQUISITION_QUEUE_NAME = "market-research-source-acquisition";
 export type AcquisitionQueuePayload = { databaseJobId: number };
+export type AcquisitionMaintenanceOptions = { limit?: number; deadline?: Date; clock?: () => number };
+export type AcquisitionDispatchProgress = { attempted: number; dispatched: number; batchFull: boolean };
+export type AcquisitionReconciliationProgress = {
+  processed: number;
+  batchFull: boolean;
+  staleProcessed?: number;
+  revokedCancelled?: number;
+  unavailableFailed?: number;
+};
 
 const RETRY_POLICY: RetryPolicy = { maximumAttempts: 3, baseDelayMs: 1_000, maximumDelayMs: 5_000, retryableCodes: ["rate-limit", "timeout", "transient"] };
 
@@ -111,24 +130,101 @@ export async function processAcquisitionJob(input: {
   return "failed";
 }
 
-export async function dispatchQueuedAcquisitions(boss: Pick<PgBoss, "send">, limit = 100): Promise<number> {
-  const ids = await listQueuedAcquisitionJobIds(limit);
+export async function dispatchQueuedAcquisitions(
+  boss: Pick<PgBoss, "send">,
+  options: AcquisitionMaintenanceOptions = {},
+): Promise<AcquisitionDispatchProgress> {
+  const now = options.clock ?? Date.now;
+  const batch = await claimQueuedAcquisitionJobIds(new Date(now()), options.limit, options.deadline);
+  let attempted = 0;
   let dispatched = 0;
-  for (const databaseJobId of ids) {
-    const queued = await boss.send(ACQUISITION_QUEUE_NAME, { databaseJobId }, { singletonKey: `db-job-${databaseJobId}`, singletonSeconds: 86_400 });
+  let deferredByDeadline = false;
+  for (const databaseJobId of batch.items) {
+    if (options.deadline && now() >= options.deadline.getTime()) {
+      deferredByDeadline = true;
+      break;
+    }
+    attempted += 1;
+    const send = boss.send(ACQUISITION_QUEUE_NAME, { databaseJobId }, {
+      singletonKey: `db-job-${databaseJobId}`,
+      singletonSeconds: ACQUISITION_DISPATCH_LEASE_MS / 1_000,
+    });
+    let queued: string | null;
+    if (!options.deadline) queued = await send;
+    else {
+      const remainingMs = options.deadline.getTime() - now();
+      if (remainingMs <= 0) {
+        deferredByDeadline = true;
+        break;
+      }
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        queued = await Promise.race([
+          send,
+          new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => reject(new Error("maintenance-stage-deadline-exceeded")), remainingMs);
+          }),
+        ]);
+      } catch (error) {
+        if (error instanceof Error && error.message === "maintenance-stage-deadline-exceeded") {
+          deferredByDeadline = true;
+          break;
+        }
+        throw error;
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    }
     if (queued) dispatched += 1;
   }
-  return dispatched;
+  return { attempted, dispatched, batchFull: batch.batchFull || deferredByDeadline || attempted < batch.items.length };
 }
 
-export async function reconcileStaleAcquisitions(now = new Date()): Promise<number> {
-  const stale = await listStaleRunningAcquisitions(new Date(now.getTime() - 20 * 60_000));
-  let failed = 0;
-  for (const job of stale) {
-    if (await failExistingAcquisition({ ...job, jobId: job.id, errorCode: "worker-lease-expired", now })) failed += 1;
+export async function reconcileStaleAcquisitions(
+  now = new Date(),
+  options: AcquisitionMaintenanceOptions = {},
+): Promise<AcquisitionReconciliationProgress> {
+  const clock = options.clock ?? Date.now;
+  const limit = options.limit === undefined || !Number.isFinite(options.limit)
+    ? ACQUISITION_MAINTENANCE_MAX_BATCH_SIZE
+    : Math.min(Math.max(Math.trunc(options.limit), 1), ACQUISITION_MAINTENANCE_MAX_BATCH_SIZE);
+  if (options.deadline && clock() >= options.deadline.getTime()) {
+    return { processed: 0, staleProcessed: 0, revokedCancelled: 0, unavailableFailed: 0, batchFull: true };
   }
-  if (failed > 0) logEvent("canonical-acquisition-stale-reconciled", { failed });
-  return failed;
+  const sourceBlocked = await cleanupRevokedSourceAcquisitions(now, limit, options.deadline);
+  const remaining = Math.max(0, limit - sourceBlocked.processed);
+  if (sourceBlocked.batchFull || remaining === 0 || (options.deadline && clock() >= options.deadline.getTime())) {
+    return {
+      processed: sourceBlocked.processed,
+      staleProcessed: 0,
+      revokedCancelled: sourceBlocked.revokedCancelled,
+      unavailableFailed: sourceBlocked.unavailableFailed,
+      batchFull: true,
+    };
+  }
+  const stale = await cleanupStaleRunningAcquisitions(
+    new Date(now.getTime() - 20 * 60_000),
+    now,
+    remaining,
+    options.deadline,
+  );
+  const staleProcessed = stale.processed;
+  const batchFull = stale.batchFull;
+  const processed = sourceBlocked.processed + staleProcessed;
+  if (processed > 0) logEvent("canonical-acquisition-reconciled", {
+    processed,
+    staleProcessed,
+    revokedCancelled: sourceBlocked.revokedCancelled,
+    unavailableFailed: sourceBlocked.unavailableFailed,
+    batchFull,
+  });
+  return {
+    processed,
+    staleProcessed,
+    revokedCancelled: sourceBlocked.revokedCancelled,
+    unavailableFailed: sourceBlocked.unavailableFailed,
+    batchFull,
+  };
 }
 
 export async function startAcquisitionWorker(boss: PgBoss, dependencies?: { registry?: AcquisitionAdapterRegistry; runtime?: AdapterRuntimeContext }): Promise<void> {

@@ -1,10 +1,11 @@
 import { PgBoss } from "pg-boss";
 
 export type WorkerBoss = PgBoss;
+export const WORKER_DATABASE_OPTIONS = "-c statement_timeout=10000 -c lock_timeout=1000";
 
 type RuntimeOptions = {
   connectionString?: string;
-  createBoss?: (connectionString: string | undefined) => PgBoss;
+  createBoss?: (connectionString: string | undefined, databaseOptions: string) => PgBoss;
   onRuntimeError?: (code: "pg-boss-runtime-error") => void;
 };
 
@@ -14,8 +15,8 @@ export function createWorkerRuntimeManager(options: RuntimeOptions = {}) {
     get(): Promise<PgBoss> {
       if (!runtime) {
         runtime = (async () => {
-          const createBoss = options.createBoss ?? ((connectionString) => new PgBoss({ connectionString }));
-          const boss = createBoss(options.connectionString ?? process.env.DATABASE_URL);
+          const createBoss = options.createBoss ?? ((connectionString, databaseOptions) => new PgBoss({ connectionString, options: databaseOptions }));
+          const boss = createBoss(options.connectionString ?? process.env.DATABASE_URL, WORKER_DATABASE_OPTIONS);
           boss.on("error", () => (options.onRuntimeError ?? ((code) => console.error(`[worker] ${code}`)))("pg-boss-runtime-error"));
           try {
             await boss.start();

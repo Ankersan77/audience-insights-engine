@@ -13,7 +13,21 @@ import { resolveEvidence } from "@/src/market-twin/resolver";
 import { canonicalEvidenceItem } from "./canonical_evidence";
 import { researchProjectDomain } from "./projects";
 import { canonicalProfile } from "./monitoring";
+import { assertCurrentEvidenceUse } from "./evidence_use";
 import { readSourceConnectionPolicy, sourceClassification, sourcePolicyFailure } from "@/src/connectors/sourcePolicy";
+import { assertResearchArtifactBounds, boundedResearchArtifactValues } from "@/src/research-artifacts/persistenceBounds";
+import {
+  ARTIFACT_BASIS_UNAVAILABLE_GAP,
+  MAX_RESEARCH_ARTIFACTS_PER_PROJECTION,
+  projectResearchArtifactPayload,
+  projectTenantResearchArtifacts,
+} from "@/src/research-artifacts/readProjection";
+export {
+  assertResearchArtifactBounds,
+  MAX_RESEARCH_ARTIFACT_EVIDENCE_REFERENCES,
+  MAX_RESEARCH_ARTIFACT_PAYLOAD_BYTES,
+  researchArtifactPayloadBytes,
+} from "@/src/research-artifacts/persistenceBounds";
 
 export type IntelligenceListRow = IntelligenceRecord & { reviewerUserId?: string };
 
@@ -81,10 +95,7 @@ export async function createIntelligenceCandidate(input: {
   uncertainty: readonly string[];
   now: Date;
 }): Promise<IntelligenceListRow> {
-  await Promise.all([
-    assertOwnedEvidence(input.clientId, input.evidenceIds),
-    assertOwnedIntelligence(input.clientId, [...input.contradictionIds, ...input.dependencyIds]),
-  ]);
+  await assertOwnedIntelligence(input.clientId, [...input.contradictionIds, ...input.dependencyIds]);
   const candidate: IntelligenceRecord = {
     id: "pending",
     clientId: String(input.clientId),
@@ -104,23 +115,26 @@ export async function createIntelligenceCandidate(input: {
   };
   const validation = validateIntelligenceRecord(candidate);
   if (!validation.valid) throw new Error(`invalid-intelligence:${validation.errors.join(";")}`);
-  const [created] = await db.insert(intelligenceRecord).values({
-    clientId: input.clientId,
-    kind: input.kind,
-    title: input.title,
-    statement: input.statement,
-    lifecycle: "candidate",
-    reviewState: "pending",
-    evidenceIds: [...input.evidenceIds],
-    contradictionIds: [...input.contradictionIds],
-    dependencyIds: [...input.dependencyIds],
-    applicabilityJson: input.applicability,
-    confidence: input.confidence,
-    uncertainty: [...input.uncertainty],
-    synthesisBy: "human",
-    createdAt: input.now,
-  }).returning();
-  return toIntelligence(created);
+  return db.transaction(async (tx) => {
+    await assertCurrentEvidenceUse(tx, { clientId: input.clientId, evidenceIds: input.evidenceIds, now: input.now });
+    const [created] = await tx.insert(intelligenceRecord).values({
+      clientId: input.clientId,
+      kind: input.kind,
+      title: input.title,
+      statement: input.statement,
+      lifecycle: "candidate",
+      reviewState: "pending",
+      evidenceIds: [...input.evidenceIds],
+      contradictionIds: [...input.contradictionIds],
+      dependencyIds: [...input.dependencyIds],
+      applicabilityJson: input.applicability,
+      confidence: input.confidence,
+      uncertainty: [...input.uncertainty],
+      synthesisBy: "human",
+      createdAt: input.now,
+    }).returning();
+    return toIntelligence(created);
+  });
 }
 
 export async function reviewIntelligenceRecord(input: {
@@ -130,22 +144,29 @@ export async function reviewIntelligenceRecord(input: {
   decision: Extract<ReviewState, "accepted" | "rejected" | "revision_requested">;
   now: Date;
 }): Promise<IntelligenceListRow | null> {
-  const [updated] = await db
-    .update(intelligenceRecord)
-    .set({
+  return db.transaction(async (tx) => {
+    const [candidate] = await tx.select().from(intelligenceRecord).where(and(
+      eq(intelligenceRecord.id, input.id),
+      eq(intelligenceRecord.clientId, input.clientId),
+      inArray(intelligenceRecord.reviewState, ["pending", "revision_requested"]),
+    )).limit(1);
+    if (!candidate || (input.decision === "accepted" && candidate.kind === "decision")) return null;
+    if (input.decision === "accepted") {
+      await assertCurrentEvidenceUse(tx, { clientId: input.clientId, evidenceIds: candidate.evidenceIds, now: input.now });
+    }
+    const [updated] = await tx.update(intelligenceRecord).set({
       reviewState: input.decision,
       lifecycle: input.decision === "accepted" ? "live" : input.decision === "rejected" ? "superseded" : "candidate",
       reviewedBy: input.reviewerUserId,
       reviewedAt: input.now,
-    })
-    .where(and(
-      eq(intelligenceRecord.id, input.id),
+    }).where(and(
+      eq(intelligenceRecord.id, candidate.id),
       eq(intelligenceRecord.clientId, input.clientId),
       inArray(intelligenceRecord.reviewState, ["pending", "revision_requested"]),
       input.decision === "accepted" ? ne(intelligenceRecord.kind, "decision") : undefined,
-    ))
-    .returning();
-  return updated ? toIntelligence(updated) : null;
+    )).returning();
+    return updated ? toIntelligence(updated) : null;
+  });
 }
 
 export const createCampaignLearningCandidate = createInterpretedLearning;
@@ -159,23 +180,87 @@ export type DecisionBriefArtifact = {
   brief: DecisionBrief;
   createdAt: Date;
   projectId: number | null;
+  basisStatus: "current" | "stale";
+  unavailableEvidenceIds: readonly string[];
+  quarantined: boolean;
 };
 
-export async function listDecisionBriefs(clientId: number, projectId?: number): Promise<DecisionBriefArtifact[]> {
+export function projectDecisionBriefForRead(
+  brief: DecisionBrief,
+  unavailableEvidenceIds: ReadonlySet<string>,
+): DecisionBrief {
+  if (unavailableEvidenceIds.size === 0) return brief;
+  projectResearchArtifactPayload(brief, [...unavailableEvidenceIds].map(Number).filter(Number.isSafeInteger));
+  return {
+    id: brief.id,
+    clientId: brief.clientId,
+    abilityId: brief.abilityId,
+    abilityVersion: brief.abilityVersion,
+    question: "Historical artifact content is unavailable under the current evidence-use policy.",
+    pointOfView: "No substantive claim is available from this artifact.",
+    clientRelevance: "Re-run the research with current permitted evidence before using this artifact.",
+    evidenceIds: [],
+    citations: [],
+    contradictions: [],
+    recommendation: "Do not use the historical artifact as current evidence.",
+    nextDecision: "Decide whether to re-run the research with current permitted evidence.",
+    createdAt: brief.createdAt,
+    status: "needs_context",
+    researchGaps: [ARTIFACT_BASIS_UNAVAILABLE_GAP],
+    uncertainty: [ARTIFACT_BASIS_UNAVAILABLE_GAP],
+  };
+}
+
+function quarantinedDecisionBrief(row: typeof researchArtifact.$inferSelect): DecisionBrief {
+  return {
+    id: row.artifactKey,
+    clientId: String(row.clientId),
+    abilityId: row.abilityKey ?? "unavailable",
+    abilityVersion: row.abilityVersion ?? "unavailable",
+    question: "Historical artifact content is unavailable under the current retention and resource policy.",
+    pointOfView: "No substantive claim is available from this artifact.",
+    clientRelevance: "Re-run the research with current permitted evidence before using this artifact.",
+    evidenceIds: [],
+    citations: [],
+    contradictions: [],
+    uncertainty: [ARTIFACT_BASIS_UNAVAILABLE_GAP],
+    recommendation: "Do not use the historical artifact as current evidence.",
+    researchGaps: [ARTIFACT_BASIS_UNAVAILABLE_GAP],
+    nextDecision: "Decide whether to re-run the research with current permitted evidence.",
+    status: "needs_context",
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export async function listDecisionBriefs(clientId: number, projectId?: number, now = new Date()): Promise<DecisionBriefArtifact[]> {
   const rows = await db
     .select()
     .from(researchArtifact)
     .where(and(eq(researchArtifact.clientId, clientId), eq(researchArtifact.artifactType, "decision_brief"), projectId ? eq(researchArtifact.projectId, projectId) : undefined))
-    .orderBy(desc(researchArtifact.id));
-  return rows.map((row) => ({
-    id: row.id,
-    artifactKey: row.artifactKey,
-    version: row.version,
-    status: row.status,
-    brief: row.payloadJson as DecisionBrief,
-    createdAt: row.createdAt,
-    projectId: row.projectId,
-  }));
+    .orderBy(desc(researchArtifact.id))
+    .limit(MAX_RESEARCH_ARTIFACTS_PER_PROJECTION);
+  const projections = await projectTenantResearchArtifacts(clientId, rows, now);
+  return rows.map((row, index) => {
+    const projection = projections[index];
+    const unavailableEvidenceIds = projection.unavailableEvidenceIds.map(String);
+    const projectedBrief = projection.payload as DecisionBrief;
+    const quarantined = projection.quarantined || !validateDecisionBrief(projectedBrief).valid;
+    const brief = quarantined
+      ? quarantinedDecisionBrief(row)
+      : projectDecisionBriefForRead(projectedBrief, new Set(unavailableEvidenceIds));
+    return {
+      id: row.id,
+      artifactKey: row.artifactKey,
+      version: row.version,
+      status: projection.basisStatus === "current" && !quarantined ? row.status : "needs_context",
+      brief,
+      createdAt: row.createdAt,
+      projectId: row.projectId,
+      basisStatus: quarantined ? "stale" : projection.basisStatus,
+      unavailableEvidenceIds,
+      quarantined,
+    };
+  });
 }
 
 export async function saveDecisionBrief(input: {
@@ -184,6 +269,7 @@ export async function saveDecisionBrief(input: {
   createdBy: number;
   projectId?: number;
 }): Promise<DecisionBriefArtifact> {
+  assertResearchArtifactBounds(input.brief, input.brief.evidenceIds);
   const validation = validateDecisionBrief(input.brief);
   if (!validation.valid) throw new Error(`invalid-decision-brief:${validation.errors.join(";")}`);
   if (input.brief.clientId !== String(input.clientId)) throw new Error("decision-brief-client-mismatch");
@@ -237,7 +323,7 @@ export async function saveDecisionBrief(input: {
       const now = new Date().toISOString();
       const sourceMap = new Map(sources.map((source) => [source.id, source]));
       const aliases = new Set(Object.values(solution.providerBindings));
-      if (sources.some((source) => !aliases.has(source.connectorId) || sourcePolicyFailure({ health: source.health, rights: source.rightsJson as RightsDeclaration,
+      if (sources.some((source) => source.revokedAt || !aliases.has(source.connectorId) || sourcePolicyFailure({ health: source.health, rights: source.rightsJson as RightsDeclaration,
         policy: readSourceConnectionPolicy(source.configurationJson), dataClassification: sourceClassification(source.sourceClass as SourceClass),
         request: { operation: "research", filters: { markets: [basis.market], languages: [basis.language], purpose: "market-research" } }, now }))) throw new Error("research-context-changed");
       if (rows.length !== new Set(evidenceIds).size || records.length !== recordIds.length || rows.some((row) => !sourceMap.has(row.sourceConnectionId))) throw new Error("research-context-changed");
@@ -269,7 +355,7 @@ export async function saveDecisionBrief(input: {
           || (input.brief.status === "ready" && !primary?.sufficient)) throw new Error("research-context-changed");
       };
     }
-    const [created] = await tx.insert(researchArtifact).values({
+    const [created] = await tx.insert(researchArtifact).values(boundedResearchArtifactValues({
       clientId: input.clientId,
       projectId: input.projectId,
       artifactKey: input.brief.id,
@@ -281,7 +367,7 @@ export async function saveDecisionBrief(input: {
       payloadJson: input.brief,
       evidenceIds,
       createdBy: input.createdBy,
-    }).onConflictDoNothing({
+    })).onConflictDoNothing({
       target: [researchArtifact.clientId, researchArtifact.artifactKey, researchArtifact.version],
     }).returning();
     const row = created ?? (await tx
@@ -308,7 +394,19 @@ export async function saveDecisionBrief(input: {
     }
     // Inserts may have waited on another transaction; expiry is a clock boundary, not a row lock.
     assertNotExpired();
-    return { id: row.id, artifactKey: row.artifactKey, version: row.version, status: row.status, brief: row.payloadJson as DecisionBrief, createdAt: row.createdAt, projectId: row.projectId };
+    assertResearchArtifactBounds(row.payloadJson, row.evidenceIds);
+    return {
+      id: row.id,
+      artifactKey: row.artifactKey,
+      version: row.version,
+      status: row.status,
+      brief: row.payloadJson as DecisionBrief,
+      createdAt: row.createdAt,
+      projectId: row.projectId,
+      basisStatus: "current",
+      unavailableEvidenceIds: [],
+      quarantined: false,
+    };
   });
 }
 

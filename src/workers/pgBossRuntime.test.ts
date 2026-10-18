@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PgBoss } from "pg-boss";
-import { createWorkerRuntimeManager, installWorkerShutdown, runWorkerStartup } from "./pgBossRuntime.ts";
+import { createWorkerRuntimeManager, installWorkerShutdown, runWorkerStartup, WORKER_DATABASE_OPTIONS } from "./pgBossRuntime.ts";
 
 test("neutral runtime starts once concurrently and wires bounded errors before start", async () => {
   const calls: unknown[] = [];
@@ -13,7 +13,7 @@ test("neutral runtime starts once concurrently and wires bounded errors before s
   const errors: string[] = [];
   const manager = createWorkerRuntimeManager({
     connectionString: "postgres://runtime-test",
-    createBoss(connectionString) { calls.push(["create", connectionString]); return fake; },
+    createBoss(connectionString, databaseOptions) { calls.push(["create", connectionString, databaseOptions]); return fake; },
     onRuntimeError(code) { errors.push(code); },
   });
 
@@ -22,7 +22,7 @@ test("neutral runtime starts once concurrently and wires bounded errors before s
 
   assert.equal(first, fake);
   assert.equal(second, fake);
-  assert.deepEqual(calls, [["create", "postgres://runtime-test"], ["on", "error"], ["start"]]);
+  assert.deepEqual(calls, [["create", "postgres://runtime-test", WORKER_DATABASE_OPTIONS], ["on", "error"], ["start"]]);
   assert.deepEqual(errors, ["pg-boss-runtime-error"]);
 });
 

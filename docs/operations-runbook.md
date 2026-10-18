@@ -448,6 +448,65 @@ bounded `canonical-maintenance-disabled` event and the absent PgBoss schedule. T
 the variable (or set it to `false`), restart the worker and verify that the UTC schedule is present.
 Do not use ad-hoc deletion in PgBoss tables.
 
+### R1A1b bounded-maintenance deployment
+
+Migration `0019_r1a1b_bounded_retention` is additive. It adds the durable
+`canonical_retention_work` continuation table, nullable `source_connection.revoked_at`, nullable
+`source_acquisition_job.dispatch_lease_until` and the indexes used by bounded oldest-first
+selectors. It does not activate a source or ability, remove a legacy table, or create MCP behavior.
+
+Before applying it to an installation:
+
+1. Keep `CANONICAL_MAINTENANCE_DISABLED=true` and verify that the canonical-maintenance schedule is
+   absent.
+2. Run the read-only dependency and legacy inventory from
+   `docs/r1a1-dependency-audit.md`, including the artifact-size/reference queries. Record any
+   artifact above 262,144 serialized UTF-8 bytes or 100 evidence references; this release adds no
+   validated database check that could reject those existing rows.
+3. Record a PostgreSQL-native backup and a tested restore target. Confirm the preceding application
+   release is available as the rollback artifact.
+4. Size the new indexes on that installation. The repository migration uses normal partial/GIN
+   index builds, not `CREATE INDEX CONCURRENTLY`; this release therefore supports only a recorded
+   maintenance window sized for those builds. Do not pre-create the indexes, mark the migration as
+   applied, or improvise a different schema history in production. A concurrent rollout requires a
+   separately reviewed forward migration and is outside this release.
+5. Apply the migration before deploying application code that reads `revoked_at` or
+   `dispatch_lease_until`, then run the
+   migration/compatibility checks and a representative authenticated read while maintenance remains
+   disabled.
+6. Deploy the worker and web release, remove the kill switch, and verify the single UTC
+   `market-research-canonical-maintenance` schedule. Monitor only bounded counters and
+   `batchFull`/`deferredStages`; do not calculate or log an unbounded exact backlog.
+
+One invocation has a 240-second wall budget. Its database work uses a 10-second statement timeout
+and 1-second lock timeout. The hard maxima are 500 sessions, 100 newly discovered evidence work
+items, 20 retention chunks, 100 lightweight dependants or 10 artifacts per applicable chunk, 250
+collections, 250 intelligence records, 100 stale acquisitions and 100 dispatch attempts. A
+`batchFull` result is successful continuation: leave the durable marker in place and allow the next
+scheduled invocation to resume it. Repeated non-progress, unexpected stage failure, or a growing
+deferred-stage pattern is an operational incident, not permission to raise limits ad hoc.
+
+Queued acquisition dispatch uses a five-minute database lease and a matching PgBoss singleton
+window. Concurrent maintenance invocations therefore lease disjoint oldest-first pages without
+holding a transaction open across enqueue. An ambiguous send keeps its lease and is eligible again
+after expiry; the worker's atomic queued-to-running claim remains the external-work safety fence.
+
+Source revocation is intentionally constant-time. A successful response records the unavailable,
+revoked source and `cleanupPending: true`; new dispatch, evidence use and result persistence are
+blocked immediately. Existing jobs, evidence and collections are cleaned by bounded maintenance.
+Web artifact reads apply the fail-closed projection before durable cleanup finishes.
+
+For rollback, set the kill switch and let an already-running invocation finish or explicitly record
+that its continuation rows are being preserved. The preceding application release is safe to
+redeploy only before the first `0019`-aware maintenance invocation is enabled: that is the explicit
+writer/read compatibility cutoff. Once maintenance can replace an oversized artifact payload with
+the `retention-redacted-artifact@1` envelope, the preceding readers are not compatible with the new
+durable representation. After that cutoff, keep maintenance and affected artifact paths disabled
+and ship a forward fix, or restore under the recorded restore procedure. Leave the additive table,
+columns and indexes inert; do not run a down migration during an incident.
+The cleanup service objective and installation-specific index method remain owner decisions and are
+not satisfied by repository CI.
+
 - Acquisition uses bounded retry only for classified transient failures; permission and policy
   failures are not retried.
 - Idempotency keys prevent duplicate external work and duplicate canonical retention.

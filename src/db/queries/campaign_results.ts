@@ -13,6 +13,7 @@ import { resolveEvidence } from "@/src/market-twin/resolver";
 import { canonicalEvidenceItem } from "./canonical_evidence";
 import { readSourceConnectionPolicy, sourceClassification, sourcePolicyFailure } from "@/src/connectors/sourcePolicy";
 import { redactExpiredCitationCopies } from "@/src/operations/retention";
+import { assertResearchArtifactBounds, boundedResearchArtifactValues } from "@/src/research-artifacts/persistenceBounds";
 
 /** Read-time suppression also covers the interval before the retention worker tombstones copies. */
 export async function projectAvailableCampaignResults(clientId: number, assessment: CampaignAssessment): Promise<CampaignAssessment> {
@@ -84,6 +85,7 @@ export async function evaluateLockedCampaignResults(tx: CampaignTransaction, inp
 export async function assertCurrentCampaignResult(tx: CampaignTransaction, input: { clientId: number; campaignId: number; actorUserId: number; assessmentId: number }) {
   const [artifact] = await tx.select().from(researchArtifact).where(and(eq(researchArtifact.clientId, input.clientId),
     eq(researchArtifact.artifactKey, `campaign:${input.campaignId}:post`), eq(researchArtifact.artifactType, "campaign_assessment"))).orderBy(desc(researchArtifact.version)).limit(1);
+  if (artifact) assertResearchArtifactBounds(artifact.payloadJson, artifact.evidenceIds);
   const saved = (artifact?.payloadJson as { assessment?: CampaignResultAssessment } | undefined)?.assessment;
   if (!artifact || artifact.id !== input.assessmentId || saved?.method !== "source-backed-readback@1" || saved.status !== "ready" || !saved.candidateLearning || !saved.interpretation || !saved.contextBasis) throw new Error("current-interpreted-post-assessment-required");
   const metricSelections = saved.comparisons.map((item) => ({ metricKey: item.metricKey, baselineObservationId: item.baselineObservationId, resultObservationId: item.resultObservationId }));
@@ -107,13 +109,16 @@ export async function createCampaignResultAssessment(input: CampaignResultInput)
     const key = `campaign:${input.campaignId}:${input.stage}`;
     const [previous] = await tx.select({ version: max(researchArtifact.version) }).from(researchArtifact).where(and(eq(researchArtifact.clientId, input.clientId), eq(researchArtifact.artifactKey, key)));
     const version = Number(previous.version ?? 0) + 1;
-    const [created] = await tx.insert(researchArtifact).values({ clientId: input.clientId, artifactKey: key, artifactType: "campaign_assessment",
+    const payload = { campaignId: row.id, campaignRevision: row.currentRevision, assessment: result.assessment };
+    const evidenceIds = result.evidenceIds.map(Number);
+    const [created] = await tx.insert(researchArtifact).values(boundedResearchArtifactValues({ clientId: input.clientId, artifactKey: key, artifactType: "campaign_assessment",
       abilityKey: input.stage === "live" ? "live-campaign-intelligence" : "post-campaign-learning", abilityVersion: "1.0.0", status: result.assessment.status, version,
-      payloadJson: { campaignId: row.id, campaignRevision: row.currentRevision, assessment: result.assessment }, evidenceIds: result.evidenceIds.map(Number), createdBy: input.actorUserId }).returning();
+      payloadJson: payload, evidenceIds, createdBy: input.actorUserId })).returning();
     await tx.insert(governanceAudit).values({ clientId: input.clientId, actorUserId: input.actorUserId, action: "assess", entityType: "campaign", entityId: String(row.id),
       redactedAfterJson: { stage: input.stage, method: result.assessment.method, artifactId: created.id, version, status: result.assessment.status } });
     const rechecked = evaluate().assessment;
     if (result.assessment.comparisons.length !== rechecked.comparisons.length || (result.assessment.status === "ready" && rechecked.status !== "ready")) throw new Error("campaign-context-changed");
-    return { id: created.id, campaignId: row.id, version, assessment: result.assessment, evidenceIds: created.evidenceIds, createdAt: created.createdAt };
+    return { id: created.id, campaignId: row.id, version, assessment: result.assessment, evidenceIds: created.evidenceIds, createdAt: created.createdAt,
+      basisStatus: "current", unavailableEvidenceIds: [], quarantined: false };
   });
 }

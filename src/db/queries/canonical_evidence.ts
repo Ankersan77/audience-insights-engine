@@ -14,6 +14,7 @@ import {
 import type { AdapterRunResult } from "@/src/evidence/sdk";
 import type { SourceAcquisitionRequest } from "@/src/connectors/contracts";
 import { acquisitionLimitFailure, readSourceConnectionPolicy, sourceClassification, sourcePolicyFailure, SourcePolicyError } from "@/src/connectors/sourcePolicy";
+import { currentEvidenceUseFailure } from "@/src/evidence/usePolicy";
 
 export type CanonicalEvidenceListRow = {
   id: number;
@@ -34,26 +35,11 @@ export type CanonicalEvidenceListRow = {
   expiresAt: Date;
 };
 
-export async function listCanonicalEvidence(clientId: number, limit = 50): Promise<CanonicalEvidenceListRow[]> {
-  return db
-    .select({
-      id: canonicalEvidence.id,
-      sourceConnectionId: canonicalEvidence.sourceConnectionId,
-      connectorId: sourceConnection.connectorId,
-      sourceClass: sourceConnection.sourceClass,
-      externalReference: canonicalEvidence.externalReference,
-      sourceContent: canonicalEvidence.sourceContent,
-      synthesis: canonicalEvidence.synthesis,
-      citationLevel: canonicalEvidence.citationLevel,
-      lifecycle: canonicalEvidence.lifecycle,
-      grade: canonicalEvidence.grade,
-      confidence: canonicalEvidence.confidence,
-      sensitive: canonicalEvidence.sensitive,
-      identityRisk: canonicalEvidence.identityRisk,
-      redactions: canonicalEvidence.redactions,
-      ingestedAt: canonicalEvidence.ingestedAt,
-      expiresAt: canonicalEvidence.expiresAt,
-    })
+export async function listCanonicalEvidence(clientId: number, limit = 50, now = new Date()): Promise<CanonicalEvidenceListRow[]> {
+  if (!Number.isFinite(now.getTime())) throw new Error("invalid-evidence-read-time");
+  const boundedLimit = Math.min(Math.max(limit, 1), 200);
+  const rows = await db
+    .select({ evidence: canonicalEvidence, source: sourceConnection })
     .from(canonicalEvidence)
     .innerJoin(
       sourceConnection,
@@ -64,17 +50,40 @@ export async function listCanonicalEvidence(clientId: number, limit = 50): Promi
     )
     .where(eq(canonicalEvidence.clientId, clientId))
     .orderBy(desc(canonicalEvidence.id))
-    .limit(Math.min(Math.max(limit, 1), 200)) as Promise<CanonicalEvidenceListRow[]>;
+    .limit(200);
+  return rows.flatMap(({ evidence, source }) => {
+    const domain = canonicalEvidenceItem({ evidence, sourceClass: source.sourceClass });
+    if (currentEvidenceUseFailure({ clientId, evidence: domain, source, now })) return [];
+    return [{
+      id: evidence.id,
+      sourceConnectionId: evidence.sourceConnectionId,
+      connectorId: source.connectorId,
+      sourceClass: source.sourceClass as SourceClass,
+      externalReference: evidence.externalReference,
+      sourceContent: evidence.sourceContent,
+      synthesis: evidence.synthesis,
+      citationLevel: evidence.citationLevel,
+      lifecycle: evidence.lifecycle,
+      grade: evidence.grade,
+      confidence: evidence.confidence,
+      sensitive: evidence.sensitive,
+      identityRisk: evidence.identityRisk,
+      redactions: evidence.redactions,
+      ingestedAt: evidence.ingestedAt,
+      expiresAt: evidence.expiresAt,
+    }];
+  }).slice(0, boundedLimit);
 }
 
-export async function loadEvidenceItems(clientId: number, evidenceIds?: readonly number[]): Promise<EvidenceItem[]> {
+export async function loadEvidenceItems(clientId: number, evidenceIds?: readonly number[], now = new Date()): Promise<EvidenceItem[]> {
+  if (!Number.isFinite(now.getTime())) throw new Error("invalid-evidence-read-time");
   const conditions = [eq(canonicalEvidence.clientId, clientId)];
   if (evidenceIds) {
     if (evidenceIds.length === 0) return [];
     conditions.push(inArray(canonicalEvidence.id, [...evidenceIds]));
   }
   const rows = await db
-    .select({ evidence: canonicalEvidence, sourceClass: sourceConnection.sourceClass })
+    .select({ evidence: canonicalEvidence, source: sourceConnection })
     .from(canonicalEvidence)
     .innerJoin(
       sourceConnection,
@@ -84,7 +93,10 @@ export async function loadEvidenceItems(clientId: number, evidenceIds?: readonly
       ),
     )
     .where(and(...conditions));
-  return rows.map(canonicalEvidenceItem);
+  return rows.flatMap(({ evidence, source }) => {
+    const item = canonicalEvidenceItem({ evidence, sourceClass: source.sourceClass });
+    return currentEvidenceUseFailure({ clientId, evidence: item, source, now }) ? [] : [item];
+  });
 }
 
 export function canonicalEvidenceItem({ evidence: row, sourceClass }: { evidence: typeof canonicalEvidence.$inferSelect; sourceClass: string }): EvidenceItem {

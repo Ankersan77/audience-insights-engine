@@ -14,6 +14,12 @@ import { assertCurrentPreflight, createContextualPreflight, lockedContext } from
 import { prepareResearchContext } from "@/src/abilities/context";
 import type { Applicability } from "@/src/core/contracts";
 import { createCampaignResultAssessment, projectAvailableCampaignResults } from "./campaign_results";
+import {
+  ARTIFACT_BASIS_UNAVAILABLE_GAP,
+  MAX_RESEARCH_ARTIFACTS_PER_PROJECTION,
+  projectTenantResearchArtifacts,
+  type ResearchArtifactReadProjection,
+} from "@/src/research-artifacts/readProjection";
 
 export type CampaignRevisionPayload = {
   campaign: Campaign;
@@ -45,24 +51,82 @@ export type CampaignAssessmentArtifact = {
   assessment: CampaignAssessment;
   evidenceIds: readonly number[];
   createdAt: Date;
+  basisStatus: "current" | "stale";
+  unavailableEvidenceIds: readonly number[];
+  quarantined: boolean;
 };
+
+function quarantinedAssessment(stage: CampaignAssessment["stage"]): CampaignAssessment {
+  return {
+    stage,
+    status: "needs_context",
+    pointOfView: "Historical assessment content is unavailable under the current retention and resource policy.",
+    watchouts: [],
+    requiredDecisions: ["Re-run the assessment with current permitted evidence before making a decision."],
+    researchGaps: [ARTIFACT_BASIS_UNAVAILABLE_GAP],
+  };
+}
+
+function campaignAssessmentFrom(value: unknown): CampaignAssessment | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const assessment = value as Partial<CampaignAssessment>;
+  if (!["preflight", "live", "post"].includes(String(assessment.stage))
+    || !["ready", "needs_context", "blocked"].includes(String(assessment.status))
+    || !Array.isArray(assessment.watchouts) || !Array.isArray(assessment.requiredDecisions) || !Array.isArray(assessment.researchGaps)) return undefined;
+  return assessment as CampaignAssessment;
+}
+
+function projectedAssessment(
+  assessment: CampaignAssessment,
+  projection: ResearchArtifactReadProjection<unknown>,
+): CampaignAssessment {
+  if (projection.basisStatus === "current") return assessment;
+  const contextual = assessment as ContextualPreflight;
+  return {
+    ...assessment,
+    ...(contextual.method === "analyst-preflight@1" ? { review: undefined } : {}),
+    status: "needs_context",
+    pointOfView: "Assessment unavailable: supporting evidence is no longer usable under the current source policy.",
+    candidateLearning: undefined,
+    researchGaps: [...new Set([...assessment.researchGaps, ARTIFACT_BASIS_UNAVAILABLE_GAP])],
+  };
+}
 
 async function latestCampaignAssessments(clientId: number, campaignId: number): Promise<CampaignWorkspaceRow["latestAssessments"]> {
   const rows = await db.select().from(researchArtifact).where(and(
     eq(researchArtifact.clientId, clientId),
     eq(researchArtifact.artifactType, "campaign_assessment"),
-  )).orderBy(desc(researchArtifact.id));
+    inArray(researchArtifact.artifactKey, ["preflight", "live", "post"].map((stage) => `campaign:${campaignId}:${stage}`)),
+  )).orderBy(desc(researchArtifact.id)).limit(MAX_RESEARCH_ARTIFACTS_PER_PROJECTION);
+  const projections = await projectTenantResearchArtifacts(clientId, rows);
   const result: CampaignWorkspaceRow["latestAssessments"] = {};
-  for (const row of rows) {
-    const payload = row.payloadJson as { campaignId?: number; assessment?: CampaignAssessment };
-    if (payload.campaignId !== campaignId || !payload.assessment || result[payload.assessment.stage]) continue;
-    result[payload.assessment.stage] = {
+  for (const [index, row] of rows.entries()) {
+    const projection = projections[index];
+    if (projection.quarantined) {
+      const stage = (["preflight", "live", "post"] as const).find((candidate) => row.artifactKey.endsWith(`:${candidate}`));
+      if (stage && !result[stage]) result[stage] = { id: row.id, campaignId, version: row.version, assessment: quarantinedAssessment(stage), evidenceIds: [], createdAt: row.createdAt,
+        basisStatus: "stale", unavailableEvidenceIds: [], quarantined: true };
+      continue;
+    }
+    const payload = projection.payload as { campaignId?: number; assessment?: unknown };
+    const assessment = campaignAssessmentFrom(payload.assessment);
+    if (payload.campaignId !== campaignId || !assessment) {
+      const stage = (["preflight", "live", "post"] as const).find((candidate) => row.artifactKey.endsWith(`:${candidate}`));
+      if (stage && !result[stage]) result[stage] = { id: row.id, campaignId, version: row.version, assessment: quarantinedAssessment(stage), evidenceIds: [], createdAt: row.createdAt,
+        basisStatus: "stale", unavailableEvidenceIds: [], quarantined: true };
+      continue;
+    }
+    if (result[assessment.stage]) continue;
+    result[assessment.stage] = {
       id: row.id,
       campaignId,
       version: row.version,
-      assessment: await projectAvailableCampaignResults(clientId, payload.assessment),
+      assessment: projectedAssessment(await projectAvailableCampaignResults(clientId, assessment), projection),
       evidenceIds: row.evidenceIds,
       createdAt: row.createdAt,
+      basisStatus: projection.basisStatus,
+      unavailableEvidenceIds: projection.unavailableEvidenceIds,
+      quarantined: false,
     };
   }
   return result;
@@ -80,16 +144,30 @@ async function latestMeasurementPlan(clientId: number, campaignId: number) {
 
 async function scopedPreflights(clientId: number, campaignId: number): Promise<CampaignAssessmentArtifact[]> {
   const rows = await db.select().from(researchArtifact).where(and(eq(researchArtifact.clientId, clientId),
-    eq(researchArtifact.artifactType, "campaign_assessment"), eq(researchArtifact.artifactKey, `campaign:${campaignId}:preflight`))).orderBy(desc(researchArtifact.version), desc(researchArtifact.id));
+    eq(researchArtifact.artifactType, "campaign_assessment"), eq(researchArtifact.artifactKey, `campaign:${campaignId}:preflight`))).orderBy(desc(researchArtifact.version), desc(researchArtifact.id)).limit(MAX_RESEARCH_ARTIFACTS_PER_PROJECTION);
+  const projections = await projectTenantResearchArtifacts(clientId, rows);
   const seen = new Set<string>();
-  return rows.flatMap((row) => {
-    const assessment = (row.payloadJson as { assessment?: ContextualPreflight }).assessment;
-    if (!assessment?.targetScope) return [];
+  const artifacts: CampaignAssessmentArtifact[] = [];
+  rows.forEach((row, index) => {
+    const projection = projections[index];
+    if (projection.quarantined) {
+      artifacts.push({ id: row.id, campaignId, version: row.version, assessment: quarantinedAssessment("preflight"), evidenceIds: [], createdAt: row.createdAt,
+        basisStatus: "stale", unavailableEvidenceIds: [], quarantined: true });
+      return;
+    }
+    const assessment = campaignAssessmentFrom((projection.payload as { assessment?: unknown }).assessment) as ContextualPreflight | undefined;
+    if (!assessment?.targetScope) {
+      artifacts.push({ id: row.id, campaignId, version: row.version, assessment: quarantinedAssessment("preflight"), evidenceIds: [], createdAt: row.createdAt,
+        basisStatus: "stale", unavailableEvidenceIds: [], quarantined: true });
+      return;
+    }
     const key = campaignScopeKey(assessment.targetScope);
-    if (seen.has(key)) return [];
+    if (seen.has(key)) return;
     seen.add(key);
-    return [{ id: row.id, campaignId, version: row.version, assessment, evidenceIds: row.evidenceIds, createdAt: row.createdAt }];
+    artifacts.push({ id: row.id, campaignId, version: row.version, assessment: projectedAssessment(assessment, projection), evidenceIds: row.evidenceIds, createdAt: row.createdAt,
+      basisStatus: projection.basisStatus, unavailableEvidenceIds: projection.unavailableEvidenceIds, quarantined: false });
   });
+  return artifacts;
 }
 
 export async function listCampaignWorkspace(clientId: number): Promise<CampaignWorkspaceRow[]> {

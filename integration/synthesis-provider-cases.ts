@@ -41,7 +41,7 @@ export async function runSynthesisProviderCases(t: TestContext, db: typeof impor
     assert.ok(captured);
     const binding: SynthesisDeploymentBinding = { clientId: String(clientId), adapterId: "openai-responses", model: "explicit-test-model", abilityIds: ["market-category-diagnosis"],
       markets: ["DK"], languages: ["da"], allowedSourceClasses: ["official_or_public"], approvalReference: "test:processing", qualityApprovalReference: "test:quality",
-      expiresAt: new Date(Date.now() + 60_000).toISOString(), retention: "standard_api_store_false", maxInputBytes: 100_000, maxOutputTokens: 2000, maxResponseBytes: 100_000, timeoutMs: 10_000,
+      expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(), retention: "standard_api_store_false", maxInputBytes: 100_000, maxOutputTokens: 2000, maxResponseBytes: 100_000, timeoutMs: 10_000,
       sourceConnectionIds: [String(first.source.id), String(second.source.id)], currency: "DKK", maxCostMicros: 50, credentialEnv: `MARKET_RESEARCH_MODEL_KEY_CLIENT_${clientId}_SYNTHETIC` };
     const raw = () => JSON.stringify({ schemaVersion: 1, bindings: [binding] });
     let credentialReads = 0; let calls = 0; let duringCall: (() => Promise<void>) | undefined;
@@ -66,7 +66,7 @@ export async function runSynthesisProviderCases(t: TestContext, db: typeof impor
     const gates = await db.insert(externalValidationGate).values([
       { clientId, gateKey: "live_connectors", evidenceReference: binding.approvalReference },
       { clientId, gateKey: "research_quality", evidenceReference: binding.qualityApprovalReference },
-    ].map((gate) => ({ ...gate, status: "verified", scope: synthesisApprovalScope(binding), owner: "Synthetic reviewer", verifiedBy: user.id, verifiedAt: new Date(), expiresAt: new Date(Date.now() + 60_000) }))).returning();
+    ].map((gate) => ({ ...gate, status: "verified", scope: synthesisApprovalScope(binding), owner: "Synthetic reviewer", verifiedBy: user.id, verifiedAt: new Date(), expiresAt: new Date(Date.now() + 10 * 60_000) }))).returning();
     const ready = await run(provider()); assert.equal(ready.status, "ready", JSON.stringify(ready.researchGaps));
     assert.equal(calls, 1); assert.equal(credentialReads, 1);
     assert.equal((await saveDecisionBrief({ clientId, brief: ready, createdBy: user.id })).brief.status, "ready");

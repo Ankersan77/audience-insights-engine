@@ -36,10 +36,60 @@ export async function revokeAuthSession(token: string | undefined, now = new Dat
   await db.update(authSession).set({ revokedAt: now }).where(and(eq(authSession.tokenHash, hash), isNull(authSession.revokedAt)));
 }
 
+export const AUTH_SESSION_PURGE_MAX_BATCH_SIZE = 500;
+
+export type AuthSessionPurgeProgress = {
+  removed: number;
+  batchFull: boolean;
+};
+
+function boundedPurgeLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit)) return AUTH_SESSION_PURGE_MAX_BATCH_SIZE;
+  return Math.min(Math.max(Math.trunc(limit), 1), AUTH_SESSION_PURGE_MAX_BATCH_SIZE);
+}
+
 /** Authentication records contain no research evidence; expired/revoked tokens need not accumulate. */
-export async function purgeAuthSessions(now = new Date()): Promise<number> {
-  const rows = await db.delete(authSession).where(or(lte(authSession.expiresAt, now), lte(authSession.revokedAt, now))).returning({ id: authSession.tokenHash });
-  return rows.length;
+export async function purgeAuthSessions(
+  now = new Date(),
+  options: { limit?: number; deadline?: Date } = {},
+): Promise<AuthSessionPurgeProgress> {
+  if (!Number.isFinite(now.getTime()) || (options.deadline && !Number.isFinite(options.deadline.getTime()))) {
+    throw new Error("invalid-session-time");
+  }
+  const limit = boundedPurgeLimit(options.limit);
+  const remainingMs = options.deadline ? options.deadline.getTime() - Date.now() : 10_000;
+  if (remainingMs <= 0) throw new Error("maintenance-stage-deadline-exceeded");
+  const statementTimeoutMs = Math.max(1, Math.min(10_000, Math.trunc(remainingMs)));
+
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('lock_timeout', '1000ms', true)`);
+    await tx.execute(sql`select set_config('statement_timeout', ${`${statementTimeoutMs}ms`}, true)`);
+    const result = await tx.execute<{ removed: number | string; batch_full: boolean }>(sql`
+      with candidates as materialized (
+        select ${authSession.tokenHash} as token_hash,
+          least(${authSession.expiresAt}, coalesce(${authSession.revokedAt}, ${authSession.expiresAt})) as due_at
+        from ${authSession}
+        where ${or(lte(authSession.expiresAt, now), lte(authSession.revokedAt, now))}
+        order by due_at asc, ${authSession.tokenHash} asc
+        limit ${limit + 1}
+        for update skip locked
+      ), selected as (
+        select token_hash
+        from candidates
+        order by due_at asc, token_hash asc
+        limit ${limit}
+      ), deleted as (
+        delete from ${authSession}
+        using selected
+        where ${authSession.tokenHash} = selected.token_hash
+        returning 1
+      )
+      select (select count(*) from deleted)::integer as removed,
+        ((select count(*) from candidates) > ${limit}) as batch_full
+    `);
+    const row = result.rows[0];
+    return { removed: Number(row?.removed ?? 0), batchFull: Boolean(row?.batch_full) };
+  });
 }
 
 /** A verified OIDC identity may use only an explicitly provisioned tenant membership. */

@@ -14,6 +14,7 @@ import {
   uniqueIndex,
   index,
   foreignKey,
+  check,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -162,6 +163,8 @@ export const authSession = pgTable("auth_session", {
 }, (table) => [
   foreignKey({ columns: [table.clientId, table.userId], foreignColumns: [clientMembership.clientId, clientMembership.userId] }).onDelete("cascade"),
   index("auth_session_expiry_idx").on(table.expiresAt),
+  index("auth_session_expiry_token_idx").on(table.expiresAt, table.tokenHash),
+  index("auth_session_revoked_token_idx").on(table.revokedAt, table.tokenHash).where(sql`${table.revokedAt} is not null`),
   index("auth_session_membership_idx").on(table.clientId, table.userId),
 ]);
 
@@ -423,9 +426,11 @@ export const sourceConnection = pgTable("source_connection", {
   retentionDays: integer("retention_days").notNull(),
   rawRetentionHours: integer("raw_retention_hours").notNull(),
   lastSuccessfulReceiptAt: timestamp("last_successful_receipt_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   unique("source_connection_client_connector_unique").on(table.clientId, table.connectorId),
+  index("source_connection_revoked_idx").on(table.revokedAt, table.id).where(sql`${table.revokedAt} is not null`),
 ]);
 
 export const sourceAcquisitionJob = pgTable("source_acquisition_job", {
@@ -443,12 +448,16 @@ export const sourceAcquisitionJob = pgTable("source_acquisition_job", {
   requestJson: jsonb("request_json").notNull(),
   idempotencyKey: text("idempotency_key").notNull(),
   requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  dispatchLeaseUntil: timestamp("dispatch_lease_until", { withTimezone: true }),
   startedAt: timestamp("started_at", { withTimezone: true }),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
 }, (table) => [
   unique("source_acquisition_job_client_idempotency_unique").on(table.clientId, table.idempotencyKey),
   unique("source_acquisition_job_client_id_unique").on(table.clientId, table.id),
+  index("source_acquisition_job_queued_idx").on(table.requestedAt, table.id).where(sql`${table.status} = 'queued'`),
+  index("source_acquisition_job_running_started_idx").on(table.startedAt, table.id).where(sql`${table.status} = 'running' and ${table.startedAt} is not null`),
+  index("source_acquisition_job_revoked_source_cleanup_idx").on(table.clientId, table.sourceConnectionId, table.requestedAt, table.id).where(sql`${table.status} in ('queued', 'running')`),
 ]);
 
 export const acquisitionBudget = pgTable("acquisition_budget", {
@@ -558,6 +567,8 @@ export const evidenceCollection = pgTable("evidence_collection", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 }, (table) => [
   index("evidence_collection_client_acquisition_job_idx").on(table.clientId, table.acquisitionJobId),
+  index("evidence_collection_retention_due_idx").on(table.expiresAt, table.id).where(sql`${table.lifecycle} in ('candidate', 'live', 'quarantined')`),
+  index("evidence_collection_revoked_source_cleanup_idx").on(table.clientId, table.sourceConnectionId, table.id).where(sql`${table.lifecycle} in ('candidate', 'live', 'quarantined')`),
 ]);
 
 export const canonicalEvidence = pgTable("canonical_evidence", {
@@ -592,6 +603,20 @@ export const canonicalEvidence = pgTable("canonical_evidence", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 }, (table) => [
   unique("canonical_evidence_client_source_hash_unique").on(table.clientId, table.sourceConnectionId, table.contentHash),
+  index("canonical_evidence_retention_due_idx").on(table.expiresAt, table.id).where(sql`${table.lifecycle} in ('candidate', 'live', 'quarantined')`),
+  index("canonical_evidence_revoked_source_cleanup_idx").on(table.clientId, table.sourceConnectionId, table.id).where(sql`${table.lifecycle} in ('candidate', 'live', 'quarantined')`),
+]);
+
+export const canonicalRetentionWork = pgTable("canonical_retention_work", {
+  evidenceId: integer("evidence_id").primaryKey().references(() => canonicalEvidence.id, { onDelete: "cascade" }),
+  phase: text("phase").notNull().default("observations"),
+  cursorId: integer("cursor_id").notNull().default(0),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  check("canonical_retention_work_phase_check", sql`${table.phase} in ('observations', 'themes', 'citations', 'artifacts', 'finalize')`),
+  check("canonical_retention_work_cursor_check", sql`${table.cursorId} >= 0`),
+  index("canonical_retention_work_fairness_idx").on(table.updatedAt, table.evidenceId),
 ]);
 
 export const quantitativeObservation = pgTable("quantitative_observation", {
@@ -611,6 +636,7 @@ export const quantitativeObservation = pgTable("quantitative_observation", {
   suppressed: boolean("suppressed").notNull().default(false),
 }, (table) => [
   index("quantitative_observation_client_metric_observed_idx").on(table.clientId, table.metricKey, table.observedAt),
+  index("quantitative_observation_evidence_id_idx").on(table.evidenceId, table.id),
 ]);
 
 export const qualitativeTheme = pgTable("qualitative_theme", {
@@ -625,7 +651,9 @@ export const qualitativeTheme = pgTable("qualitative_theme", {
   sourceDiversity: integer("source_diversity").notNull(),
   method: text("method").notNull(),
   suppressed: boolean("suppressed").notNull().default(false),
-});
+}, (table) => [
+  index("qualitative_theme_evidence_ids_gin_idx").using("gin", table.evidenceIds),
+]);
 
 export const citation = pgTable("citation", {
   id: serial("id").primaryKey(),
@@ -644,6 +672,7 @@ export const citation = pgTable("citation", {
   expiresAt: timestamp("expires_at", { withTimezone: true }),
 }, (table) => [
   unique("citation_artifact_evidence_level_unique").on(table.artifactId, table.evidenceId, table.level),
+  index("citation_evidence_id_idx").on(table.evidenceId, table.id),
 ]);
 
 export const intelligenceRecord = pgTable("intelligence_record", {
@@ -668,7 +697,9 @@ export const intelligenceRecord = pgTable("intelligence_record", {
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   supersedesId: integer("supersedes_id"),
   decayAt: timestamp("decay_at", { withTimezone: true }),
-});
+}, (table) => [
+  index("intelligence_record_decay_due_idx").on(table.decayAt, table.id).where(sql`${table.decayAt} is not null and ${table.lifecycle} in ('candidate', 'live')`),
+]);
 
 export const intelligenceRelationship = pgTable("intelligence_relationship", {
   id: serial("id").primaryKey(),
@@ -724,7 +755,10 @@ export const researchArtifact = pgTable("research_artifact", {
   evidenceIds: integer("evidence_ids").array().notNull().default(sql`'{}'::integer[]`),
   createdBy: integer("created_by").references(() => appUser.id, { onDelete: "restrict" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [unique("research_artifact_client_key_version_unique").on(table.clientId, table.artifactKey, table.version)]);
+}, (table) => [
+  unique("research_artifact_client_key_version_unique").on(table.clientId, table.artifactKey, table.version),
+  index("research_artifact_evidence_ids_gin_idx").using("gin", table.evidenceIds),
+]);
 
 export const campaign = pgTable("campaign", {
   id: serial("id").primaryKey(),

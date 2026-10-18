@@ -11,6 +11,7 @@ import { toIntelligence } from "./workspace_intelligence";
 import type { CampaignAssessmentArtifact, CampaignRevisionPayload } from "./campaign_workspace";
 import { campaignScopeKey, parseCampaignScopes, resolveCampaignScope } from "@/src/campaigns/scope";
 import { lockCompanyContext } from "./company_context";
+import { assertResearchArtifactBounds, boundedResearchArtifactValues } from "@/src/research-artifacts/persistenceBounds";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -78,13 +79,15 @@ export async function createContextualPreflight(input: { clientId: number; campa
     const key = `campaign:${input.campaignId}:preflight`;
     const [previous] = await tx.select({ version: max(researchArtifact.version) }).from(researchArtifact).where(and(eq(researchArtifact.clientId, input.clientId), eq(researchArtifact.artifactKey, key)));
     const version = Number(previous.version ?? 0) + 1;
-    const [created] = await tx.insert(researchArtifact).values({ clientId: input.clientId, artifactKey: key, artifactType: "campaign_assessment", abilityKey: "campaign-preflight", abilityVersion: "1.0.0",
-      status: result.assessment.status, version, payloadJson: { campaignId: input.campaignId, campaignRevision: result.assessment.campaignSnapshot.revision, assessment: result.assessment },
-      evidenceIds: result.evidenceIds.map(Number), createdBy: input.actorUserId }).returning();
+    const payload = { campaignId: input.campaignId, campaignRevision: result.assessment.campaignSnapshot.revision, assessment: result.assessment };
+    const evidenceIds = result.evidenceIds.map(Number);
+    const [created] = await tx.insert(researchArtifact).values(boundedResearchArtifactValues({ clientId: input.clientId, artifactKey: key, artifactType: "campaign_assessment", abilityKey: "campaign-preflight", abilityVersion: "1.0.0",
+      status: result.assessment.status, version, payloadJson: payload, evidenceIds, createdBy: input.actorUserId })).returning();
     await tx.insert(governanceAudit).values({ clientId: input.clientId, actorUserId: input.actorUserId, action: "assess", entityType: "campaign", entityId: String(input.campaignId),
       redactedAfterJson: { stage: "preflight", method: result.assessment.method, targetScope: result.assessment.targetScope, artifactId: created.id, version, status: result.assessment.status, evidenceIds: created.evidenceIds } });
     if (result.assessment.status === "ready" && recheck().assessment.status !== "ready") throw new Error("campaign-context-changed");
-    return { id: created.id, campaignId: input.campaignId, version, assessment: result.assessment, evidenceIds: created.evidenceIds, createdAt: created.createdAt };
+    return { id: created.id, campaignId: input.campaignId, version, assessment: result.assessment, evidenceIds: created.evidenceIds, createdAt: created.createdAt,
+      basisStatus: "current", unavailableEvidenceIds: [], quarantined: false };
   });
 }
 
@@ -99,6 +102,7 @@ export async function assertCurrentPreflight(tx: Transaction, input: { clientId:
   for (const scope of scopes) {
     // The newest review for each declared pair wins, even when incomplete. Legacy unscoped reviews cannot authorize approval.
     const artifact = artifacts.find((item) => {
+      assertResearchArtifactBounds(item.payloadJson, item.evidenceIds);
       const assessment = (item.payloadJson as { assessment?: ContextualPreflight }).assessment;
       return assessment?.targetScope && campaignScopeKey(assessment.targetScope) === campaignScopeKey(scope);
     });
