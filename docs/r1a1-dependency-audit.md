@@ -1,6 +1,6 @@
 # R1A1 dependency audit
 
-Status: **R1A2 candidate implemented; immutable CI exit evidence pending**
+Status: **R1A2 passed with immutable CI exit evidence**
 
 Reviewed: 2026-10-18
 
@@ -245,24 +245,25 @@ exist. An unknown installation, consumer or process is a failing state.
 These checks require the changed R1A2 candidate and do not block the start of R1A2 after the
 prerequisite checklist above passes:
 
-- [ ] This audit is rechecked against the immutable R1A2 candidate revision and accepted by the data
+- [x] This audit is rechecked against the immutable R1A2 candidate revision and accepted by the data
       owner acting as migration owner and the operations owner acting as deployment owner.
-- [ ] Every legacy route/page, queue subscriber, legacy purge path and packaging dependency listed
+- [x] Every legacy route/page, queue subscriber, legacy purge path and packaging dependency listed
       above is removed or redirected exactly as the Roadmap requires; legacy routes return 404.
-- [ ] The deferred monitoring schedule is explicitly removed, produces no further jobs and remains
+- [x] The deferred monitoring schedule is explicitly removed, produces no further jobs and remains
       absent after restart, while canonical schedules remain present.
-- [ ] The candidate production image starts and drains the canonical worker, starts only approved
+- [x] The candidate production image starts and drains the canonical worker, starts only approved
       canonical queues, excludes Python and `/app/vendor/last30days`, and has immutable CI image or
       SBOM evidence.
-- [ ] The governance check rejects every active legacy code, route, queue-registration and
+- [x] The governance check rejects every active legacy code, route, queue-registration and
       packaging path while preserving shared canonical audit, telemetry and identity-field defenses.
-- [ ] Canonical lifecycle, build and all non-destructive integration verification remain green, and
+- [x] Canonical lifecycle, build and all non-destructive integration verification remain green, and
       legacy database state remains unchanged and operator-readable pending R1B.
 
 ## R1A2 gate conclusion
 
-**Passed at the prerequisites-to-start gate.** The repository review identifies a bounded removal
-cluster and no canonical import of that cluster. The estate is verified-zero, R0B and R1A1b pass,
-and the preservation/access, cleanup objective, index-deployment and empty-fleet cutover decisions
-are accepted. R1A2 implementation may begin. Candidate image, removal-guard and post-change
-lifecycle proof remain mandatory R1A2 exit evidence and are not pre-claimed here.
+**Passed.** The repository review identifies a bounded removal cluster and no canonical import of
+that cluster. The estate is verified-zero, R0B and R1A1b pass, and the preservation/access, cleanup
+objective, index-deployment and empty-fleet cutover decisions are accepted. Candidate revision
+`5eadfa584ee4791286d4488a3fcf4810f3a65a86` passed the removal guard, production-image inspection
+and post-change lifecycle proof in GitHub Actions run `39126749699`. Detailed immutable identifiers
+and assertions are recorded in `docs/r1a2-removal-evidence.md`.

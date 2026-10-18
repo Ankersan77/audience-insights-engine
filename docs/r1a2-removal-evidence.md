@@ -28,14 +28,34 @@ quiesce. Discovery of any contrary installation reopens the R1A2 cutover gate be
 
 ## Automated release evidence
 
-CI must build both revision-labelled Docker targets and upload
-`r1a2-image-inspection-<commit>` containing immutable image IDs and the worker artifact SHA-256. The
-same job checks all removed legacy and monitoring routes as 404, confirms the neutral cancellation
-route remains permission-gated, confirms the images contain neither Python nor the
-vendored engine, starts the exact worker image against a fresh PostgreSQL 16 database, verifies only
-the three canonical product queues, the single allowed pg-boss infrastructure queue and two
-canonical schedules, exercises maintenance, drains on SIGTERM,
-restarts and catches up queued work.
+R1A2 passed on immutable candidate revision
+`5eadfa584ee4791286d4488a3fcf4810f3a65a86` in GitHub Actions run
+[`39126749699`](https://github.com/man-D4wn/Market-research/actions/runs/39126749699). The run built
+both revision-labelled Docker targets and uploaded artifact
+`r1a2-image-inspection-5eadfa584ee4791286d4488a3fcf4810f3a65a86` (artifact ID
+`12136377274`) with these immutable identifiers:
 
-The final CI run and commit are recorded here only after that candidate has passed. Until then this
-document describes the required evidence, not a production-support claim.
+- web image: `sha256:a743484327ea82e22baf8da41f7d6d78cd1c7e99c89f392764c7b2b197eb264c`;
+- worker image: `sha256:9d250a191c275ce77b0aefdb094f6a11b5edfa904d3a0cdaa204f3136cd5d9b0`;
+- worker artifact SHA-256:
+  `5195aed6383de6ed6d6b11e73946067c596abf29dd41019e22ec12af1f43372d`.
+
+The uploaded inspection report records `noPython: true`, `noVendoredEngine: true`, 20 removed
+legacy/monitoring routes returning 404, and a permission-gated neutral cancellation route. It also
+records exactly these product queues:
+
+- `market-research-canonical-maintenance`;
+- `market-research-source-acquisition`;
+- `market-research-synthesis-maintenance`.
+
+The only additional queue is pg-boss infrastructure queue `__pgboss__send-it`. The two expected
+schedules are `market-research-canonical-maintenance` and
+`market-research-synthesis-maintenance`; the retired monitoring schedule is absent. The same exact
+worker image completed deterministic in-flight SIGTERM drain and restart catch-up checks, recorded
+as `gracefulDrain: true` and `restartCatchUp: true`.
+
+## Conclusion
+
+**R1A2 passed.** Executable legacy code, user-facing legacy/monitoring surfaces and legacy packaging
+are removed. Canonical behavior remains green, and legacy schema, migrations and rows remain
+unchanged and operator-readable pending the separately approved R1B disposition.

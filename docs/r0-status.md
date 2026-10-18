@@ -2,7 +2,7 @@
 
 Updated: 2026-10-18
 Blueprint: 2.1.0
-Status: **R0A passed; R0B passed; R0 complete**
+Status: **R0 complete; R1A2 passed; R1B decision-gated**
 
 R0 now has machine-readable product governance:
 
@@ -78,10 +78,16 @@ consumer exists, so the current estate is recorded as verified-zero. Martin has 
 temporary accountable roles; discovery of contrary estate evidence reopens the installation
 inventory immediately.
 
-The dependency audit found no canonical import of the detachable legacy runtime cluster. R1A2 adds
-an idempotent retirement call for the old monitoring schedule, a standalone canonical worker image,
-and immutable CI inspection/lifecycle evidence. The read-only inventory's foreign-key and view
-catalog is intentionally not treated as complete dependency evidence.
+The dependency audit found no canonical import of the detachable legacy runtime cluster. R1A2
+passed on candidate revision `5eadfa584ee4791286d4488a3fcf4810f3a65a86` in GitHub Actions run
+`39126749699`, including immutable production-image inspection, idempotent retirement of the old
+monitoring schedule, standalone canonical worker lifecycle, graceful drain and restart catch-up.
+The read-only inventory's foreign-key and view catalog is intentionally not treated as complete
+dependency evidence.
+
+R1B has not started. Its schema/data contraction is destructive and remains blocked by the explicit
+`legacy-data-disposition` decision, followed by the Roadmap's migration recovery and go/no-go
+controls. R1A2 approval does not authorize that work.
 
 ## Safe R1 boundary already identified
 
