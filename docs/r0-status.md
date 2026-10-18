@@ -2,7 +2,7 @@
 
 Updated: 2026-10-18
 Blueprint: 2.1.0
-Status: **R0 complete; R1A2 passed; R1B candidate verification pending**
+Status: **R0 complete; R1A2 and R1B passed; R2 is next**
 
 R0 now has machine-readable product governance:
 
@@ -65,8 +65,8 @@ R1A1b bounded-maintenance contract is approved in [its decision record](r1a1b-bo
 and its additive migration and repository-verifiable runtime exit gate are implemented and green in
 CI run `39109678811`. The separate preservation/access, cleanup-objective and zero-estate index-
 deployment decisions are accepted and R1A2 has passed. Martin approved the verified-zero
-`legacy-data-disposition` in `docs/r1b-data-disposition.md`; R1B is implemented as candidate
-migration `0020` and remains open until its immutable CI, recovery and forward-fix evidence passes.
+`legacy-data-disposition` in `docs/r1b-data-disposition.md`; R1B migration `0020` and its immutable
+CI, recovery and forward-again evidence passed in run `39130855147`.
 R3 separately requires the `primary-host` and `oauth-reference-flow` decisions.
 
 The current repository-visible discovery is recorded in
@@ -85,10 +85,11 @@ monitoring schedule, standalone canonical worker lifecycle, graceful drain and r
 The read-only inventory's foreign-key and view catalog is intentionally not treated as complete
 dependency evidence.
 
-R1B has started under the explicit verified-zero `legacy-data-disposition`. Its candidate removes
-only the 12 approved legacy tables and three enums in dependency order without `CASCADE`. It is not
-passed until fresh/upgrade, fail-closed dependency, native restore/forward-again and canonical
-regression evidence is green. Contrary estate discovery reopens installation-specific approval.
+R1B passed under the explicit verified-zero `legacy-data-disposition`. It removes only the 12
+approved legacy tables and three enums in dependency order without `CASCADE`. Fresh/upgrade,
+fail-closed dependency, native restore/forward-again and canonical regression evidence is green in
+run `39130855147`; details are in `docs/r1b-removal-evidence.md`. Contrary estate discovery reopens
+installation-specific approval. R2 parking and contract normalization is the next roadmap gate.
 
 ## Safe R1 boundary already identified
 
