@@ -2,7 +2,7 @@
 
 Updated: 2026-10-18
 Blueprint: 2.1.0
-Status: **R0A passed; R0B open**
+Status: **R0A passed; R0B passed; R0 complete**
 
 R0 now has machine-readable product governance:
 
@@ -33,7 +33,7 @@ R0 now has machine-readable product governance:
 - The old `last30days` path remains fail-closed and still ships in CI/Docker; the transitional worker
   still subscribes to its queue until R1A2, but it no longer owns the shared PgBoss lifecycle.
 
-## Why R0 is still open
+## R0 closure
 
 The installation, upgrade and recovery checks are now complete for the pre-deployment state:
 
@@ -45,9 +45,10 @@ The installation, upgrade and recovery checks are now complete for the pre-deplo
    tenant/project/artifact data, and the current build completed an authenticated database-backed
    read in CI run `39114254560`.
 
-R0 remains open only because all accountable owner-role assignments in `product-decisions.json`
-are still pending. The primary host and OAuth reference flow are later R3 entry decisions and do
-not keep R0B open.
+Martin accepted all nine temporary pre-pilot accountable roles on 2026-10-18. The acceptance scope,
+limitations and annual review point are recorded in `docs/r0b-owner-acceptance.json`. This closes
+R0B and therefore R0. The primary host and OAuth reference flow are later R3 entry decisions and
+were not decided by this acceptance.
 
 R0A passed in remote CI run `39021713019`, including a fresh checkout of the annotated pre-trim tag.
 Read-only R1A1 discovery and the neutral worker-runtime extraction may now run to produce R0B
@@ -61,8 +62,8 @@ Production-image removal proof is a separate R1A2 candidate/exit check, not a pr
 R1A2. These repository artifacts do not complete R1A1 for real installations. The
 R1A1b bounded-maintenance contract is approved in [its decision record](r1a1b-bounded-maintenance-decision.md),
 and its additive migration and repository-verifiable runtime exit gate are implemented and green in
-CI run `39109678811`. R1A2 still waits for accountable role acceptance plus the separate
-preservation/access, cleanup-objective and zero-estate index-deployment decisions. Destructive schema
+CI run `39109678811`. The separate preservation/access, cleanup-objective and zero-estate index-
+deployment decisions are accepted, so R1A2 implementation may begin. Destructive schema
 work in R1B additionally requires the `legacy-data-disposition` decision and installation-specific
 migration recovery controls. R3 separately requires the `primary-host` and
 `oauth-reference-flow` decisions. A later R1B test must prove the new contraction migration from
@@ -73,8 +74,9 @@ The current repository-visible discovery is recorded in
 configured installation credentials or deployment manifest beyond the Dockerfile, and repository-
 scoped GitHub queries returned no environments, deployments, variables, secrets or releases. The
 project sponsor subsequently confirmed that no permanent installation, database, backup or
-consumer exists, so the current estate is recorded as verified-zero. All nine role assignments
-remain pending; discovery of contrary evidence reopens the installation inventory immediately.
+consumer exists, so the current estate is recorded as verified-zero. Martin has accepted all nine
+temporary accountable roles; discovery of contrary estate evidence reopens the installation
+inventory immediately.
 
 The dependency audit found no canonical import of the detachable legacy runtime cluster. Before
 R1A2, the handling of the persisted transitional-monitoring schedule must be owner-approved; the

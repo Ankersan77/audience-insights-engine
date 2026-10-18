@@ -3,8 +3,8 @@
 This runbook produces one read-only, aggregate legacy inventory artifact for one known
 single-tenant installation. It does **not** complete R0B, approve either the preservation/access
 disposition needed before R1A2 or the destructive disposition reserved for R1B, or authorize R1A2.
-R1A2 remains blocked until R1A1b passes and every installation and every separate R0B gate has
-accepted evidence.
+R1A2 was blocked until R1A1b, the verified-zero installation path and the separate R0B gates had
+accepted evidence; those prerequisites are now complete. Any discovered installation reopens them.
 
 ## Preconditions
 

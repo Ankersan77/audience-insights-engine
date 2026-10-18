@@ -216,28 +216,25 @@ exist. An unknown installation, consumer or process is a failing state.
 
 - [x] Repository import graph, dynamic SQL, tracked schema, queue declarations and packaging were
       reviewed and recorded in this document.
-- [ ] The authoritative installation registry is accepted as complete by the data owner and
+- [x] The authoritative installation registry is accepted as complete by the data owner and
       operations owner, with neither unknown nor `not supplied` entries. If it contains zero
       installations, the verified-zero route above is fully evidenced and accepted.
-- [ ] Every registered installation has a complete, checksum-verified legacy inventory.
-- [ ] Trigger, function/procedure, view/materialized-view and PgBoss queries above are recorded for
-      every installation; all returned dependencies have an approved disposition.
-- [ ] `research-run` has zero `created`, `retry` and `active` jobs and no external or old-revision
-      producer can enqueue new work.
-- [ ] Handling of the deferred monitoring schedule and any pending jobs is approved for the R1A2
+- [x] No registered installation exists, so no per-installation checksum inventory is applicable.
+- [x] No installation exists on which catalog or PgBoss queries can apply; they become mandatory if
+      any database is discovered.
+- [x] No installed `research-run` queue or producer exists in the verified-zero estate.
+- [x] Handling of the deferred monitoring schedule and any pending jobs is approved for the R1A2
       cutover without changing canonical schedules.
-- [ ] Route/API traffic, external consumers, deployment/process definitions and secret-store
-      references are inventoried with no unknown owner, including any operator use or configuration
-      of the standalone legacy purge.
-- [ ] Every legacy data class has an owner-approved R1A2 preservation/access disposition that keeps
-      required data operator-readable and unchanged through controlled SQL or an approved export.
-      It authorizes no destructive schema or data change; final export/retention/tombstone/deletion
-      approval remains the separate R1B `legacy-data-disposition` gate.
-- [ ] The representative pre-`0018` upgrade with legacy rows passes through the current
+- [x] No route traffic, external consumer, deployment/process definition, installation secret or
+      standalone purge invocation exists; discovery of one reopens the gate.
+- [x] The zero-estate preservation/access decision is accepted in
+      `docs/r1a2-entry-decisions.md`; it authorizes no schema/data destruction.
+- [x] The representative pre-`0018` upgrade with legacy rows passes through the current
       `0019_r1a1b_bounded_retention` head and is owner-accepted.
-- [ ] R0B recovery and accountable owner acceptance are independently complete, including the
-      timed PostgreSQL-native restore, cleanup service objective and applicable installation index
-      build method or future-installation policy.
+- [x] R0B recovery and accountable owner acceptance are independently complete, including the
+      timed PostgreSQL-native restore.
+- [x] The separate R1A2 cleanup-objective and index-deployment decisions are accepted for the
+      verified-zero estate and reopen before the first installation.
 
 ## R1A2 candidate and exit evidence
 
@@ -260,10 +257,8 @@ prerequisite checklist above passes:
 
 ## R1A2 gate conclusion
 
-**Blocked at the prerequisites-to-start gate.** The repository review identifies a bounded removal
-cluster and no canonical import of that cluster. The current estate is now sponsor-declared and
-repository-corroborated as verified-zero, and the technical R0B upgrade/restore exercises pass.
-Accountable role acceptance and the separate preservation/access, cleanup objective and index
-deployment decisions remain open. This document is not approval to start R1A2. Candidate image,
-removal-guard and post-change lifecycle proof belong to the separate R1A2 exit gate above and are
-not reasons to prevent R1A2 from starting once its actual prerequisites close.
+**Passed at the prerequisites-to-start gate.** The repository review identifies a bounded removal
+cluster and no canonical import of that cluster. The estate is verified-zero, R0B and R1A1b pass,
+and the preservation/access, cleanup objective, index-deployment and empty-fleet cutover decisions
+are accepted. R1A2 implementation may begin. Candidate image, removal-guard and post-change
+lifecycle proof remain mandatory R1A2 exit evidence and are not pre-claimed here.

@@ -1,6 +1,6 @@
 # R0B installation evidence and owner attestation
 
-Status: **verified-zero estate; blocked only on accountable role acceptance**
+Status: **passed — verified-zero estate and accountable role acceptance**
 
 Assessment date: 2026-10-18
 
@@ -16,8 +16,8 @@ installation. It must not contain credentials, connection strings, secret values
 database rows, job payloads, request bodies or unredacted logs.
 
 Repository evidence is discovery input, not proof that an external installation does not exist.
-The installation estate is now owner-declared and repository-corroborated as verified-zero. R0B
-remains blocked until the accountable roles accept their assignments with durable evidence.
+The installation estate is owner-declared and repository-corroborated as verified-zero. Martin has
+accepted all nine temporary pre-pilot accountable roles with durable scope and limitations.
 
 ## Repository-visible discovery
 
@@ -54,8 +54,8 @@ environment output or credentials into this file.
 
 | Evidence item | Durable object identifier | SHA-256 | Verified at | Verified by role |
 | --- | --- | --- | --- | --- |
-| Redacted zero-estate declaration and repository discovery | `docs/r0b-zero-estate-evidence.json` | `48c84565d964358f0e1d06f24149de79645735e786951e1bf78ac66bf43467c5` | 2026-10-18 | project sponsor; accountable roles pending |
-| GitHub repository metadata summary | `docs/r0b-zero-estate-evidence.json` | `48c84565d964358f0e1d06f24149de79645735e786951e1bf78ac66bf43467c5` | 2026-10-18 | project sponsor; accountable roles pending |
+| Redacted zero-estate declaration and repository discovery | `docs/r0b-zero-estate-evidence.json` | `48c84565d964358f0e1d06f24149de79645735e786951e1bf78ac66bf43467c5` | 2026-10-18 | Martin, temporary accountable owner |
+| GitHub repository metadata summary | `docs/r0b-zero-estate-evidence.json` | `48c84565d964358f0e1d06f24149de79645735e786951e1bf78ac66bf43467c5` | 2026-10-18 | Martin, temporary accountable owner |
 
 ## Limitation and decision rule
 
@@ -76,18 +76,18 @@ values. Enter `none found`, an opaque installation ID, or `blocked`; never leave
 
 | Authoritative scope | Account/system scope identifier | Read-only method and observation window | Result | Durable evidence reference and digest | Owner role | Accepted at |
 | --- | --- | --- | --- | --- | --- | --- |
-| D4WN source and infrastructure repositories, including archived/private repositories | Current project scope | Sponsor declaration plus repository discovery | `none declared` | This record; 2026-10-18 | `operations-owner` pending assignment | 2026-10-18 |
-| GitHub organization Actions environments, secrets/variables by name, deployments, releases and packages | Current repository | Sponsor declaration plus repository-scoped GitHub metadata | `none found or declared` | This record; 2026-10-18 | `operations-owner` pending assignment | 2026-10-18 |
-| Cloud and hosting organizations/projects/accounts | Current project scope | Sponsor whole-estate declaration | `none exist` | This record; 2026-10-18 | `operations-owner` pending assignment | 2026-10-18 |
-| Managed PostgreSQL providers and self-hosted PostgreSQL servers | Current project scope | Sponsor whole-estate declaration | `none exist` | This record; 2026-10-18 | `operations-owner` pending assignment | 2026-10-18 |
-| Database snapshots, backups, PITR archives and exported data | Current project scope | Sponsor whole-estate declaration | `none exist` | This record; 2026-10-18 | `data-owner` pending assignment | 2026-10-18 |
-| Container registries, orchestrators and serverless platforms | Current project scope | Sponsor whole-estate declaration | `none exist` | This record; 2026-10-18 | `operations-owner` pending assignment | 2026-10-18 |
-| DNS zones, reverse proxies, certificates and known application origins | Current project scope | Sponsor whole-estate declaration | `none exist` | This record; 2026-10-18 | `operations-owner` pending assignment | 2026-10-18 |
-| Identity-provider applications and OAuth/OIDC clients | Current project scope | Sponsor whole-estate declaration | `none exist for this product` | This record; 2026-10-18 | `security-owner` pending assignment | 2026-10-18 |
-| Secret stores and CI/CD stores, checking names/references only | Current project scope | Sponsor declaration plus repository-scoped GitHub metadata | `none exist for an installation` | This record; 2026-10-18 | `security-owner` pending assignment | 2026-10-18 |
-| Process managers, cron/schedulers, webhook jobs and operator machines | Current project scope | Sponsor whole-estate declaration | `none exist` | This record; 2026-10-18 | `operations-owner` pending assignment | 2026-10-18 |
-| API clients, BI/reporting jobs, copied scripts and manual procedures | Current project scope | Sponsor whole-estate declaration | `none exist` | This record; 2026-10-18 | `data-owner` pending assignment | 2026-10-18 |
-| Legacy route traffic evidence for `/brands`, `/runs`, `/insights` and their APIs | Current project scope | No deployment exists, therefore no reachable route or traffic source exists | `not applicable — zero estate` | This record; 2026-10-18 | `operations-owner` pending assignment | 2026-10-18 |
+| D4WN source and infrastructure repositories, including archived/private repositories | Current project scope | Sponsor declaration plus repository discovery | `none declared` | This record; 2026-10-18 | Martin, `operations-owner` | 2026-10-18 |
+| GitHub organization Actions environments, secrets/variables by name, deployments, releases and packages | Current repository | Sponsor declaration plus repository-scoped GitHub metadata | `none found or declared` | This record; 2026-10-18 | Martin, `operations-owner` | 2026-10-18 |
+| Cloud and hosting organizations/projects/accounts | Current project scope | Sponsor whole-estate declaration | `none exist` | This record; 2026-10-18 | Martin, `operations-owner` | 2026-10-18 |
+| Managed PostgreSQL providers and self-hosted PostgreSQL servers | Current project scope | Sponsor whole-estate declaration | `none exist` | This record; 2026-10-18 | Martin, `operations-owner` | 2026-10-18 |
+| Database snapshots, backups, PITR archives and exported data | Current project scope | Sponsor whole-estate declaration | `none exist` | This record; 2026-10-18 | Martin, `data-owner` | 2026-10-18 |
+| Container registries, orchestrators and serverless platforms | Current project scope | Sponsor whole-estate declaration | `none exist` | This record; 2026-10-18 | Martin, `operations-owner` | 2026-10-18 |
+| DNS zones, reverse proxies, certificates and known application origins | Current project scope | Sponsor whole-estate declaration | `none exist` | This record; 2026-10-18 | Martin, `operations-owner` | 2026-10-18 |
+| Identity-provider applications and OAuth/OIDC clients | Current project scope | Sponsor whole-estate declaration | `none exist for this product` | This record; 2026-10-18 | Martin, `security-owner` | 2026-10-18 |
+| Secret stores and CI/CD stores, checking names/references only | Current project scope | Sponsor declaration plus repository-scoped GitHub metadata | `none exist for an installation` | This record; 2026-10-18 | Martin, `security-owner` | 2026-10-18 |
+| Process managers, cron/schedulers, webhook jobs and operator machines | Current project scope | Sponsor whole-estate declaration | `none exist` | This record; 2026-10-18 | Martin, `operations-owner` | 2026-10-18 |
+| API clients, BI/reporting jobs, copied scripts and manual procedures | Current project scope | Sponsor whole-estate declaration | `none exist` | This record; 2026-10-18 | Martin, `data-owner` | 2026-10-18 |
+| Legacy route traffic evidence for `/brands`, `/runs`, `/insights` and their APIs | Current project scope | No deployment exists, therefore no reachable route or traffic source exists | `not applicable — zero estate` | This record; 2026-10-18 | Martin, `operations-owner` | 2026-10-18 |
 
 For this pre-deployment project, the sponsor's explicit whole-estate declaration can mark a scope
 `none exist`; repository-visible systems are additionally checked where they exist. `Not supplied`,
@@ -174,7 +174,7 @@ or before a future upgrade of the first installation.
 | Legacy row/queue preservation checks | Complete before/after JSONB snapshots of representative legacy rows were identical |
 | Failure, rollback/forward-fix observations | Test database and temporary migration folder destroyed in `finally`; no production target |
 | Durable report identifier and SHA-256 | GitHub Actions run `39109907282`; test digest above |
-| Data-owner acceptance as migration owner, with timestamp | Covered by the separate pending accountable-role acceptance gate |
+| Data-owner acceptance as migration owner, with timestamp | Martin; 2026-10-18T11:05:39Z; `docs/r0b-owner-acceptance.json` |
 
 ## PostgreSQL-native backup and restore exercise
 
@@ -193,7 +193,7 @@ artifacts without ad-hoc schema changes.
 | Release startup/health verification | Current build started against restore target and completed authenticated tenant-scoped `GET /api/projects` |
 | Cleanup/destruction evidence for the exercise target | Source and restore databases dropped and temporary dump removed in test cleanup |
 | Durable report identifier and SHA-256 | GitHub Actions run `39114254560`; test digest `4c01e8052f823c0b5bdee1fd0d4edcda214571fd3dc108595051c4587c1182e8` |
-| Operations-owner acceptance and timestamp | Covered by the separate pending accountable-role acceptance gate |
+| Operations-owner acceptance and timestamp | Martin; 2026-10-18T11:05:39Z; `docs/r0b-owner-acceptance.json` |
 
 ## R1A2-entry canonical-maintenance decisions
 
@@ -204,9 +204,9 @@ part of R0B and cannot keep the machine-readable R0B gate open after its own req
 
 | Decision | Status | Approved value or N/A rationale | Measurement/evidence reference | Owner role | Accepted at | Review trigger |
 | --- | --- | --- | --- | --- | --- | --- |
-| Cleanup service objective | `blocked` | _required_ | _required_ | `operations-owner` | _required_ | first installation or material volume change |
-| `0019` index-build maintenance window/method | `blocked` | _required_ | _required_ | `operations-owner` | _required_ | each installation and database-size change |
-| Canonical-maintenance alert thresholds/escalation | `blocked` | _required_ | _required_ | `operations-owner` | _required_ | first installation or incident review |
+| Cleanup service objective | `accepted — N/A zero estate` | No production backlog exists; measure and approve before first installation | `docs/r1a2-entry-decisions.md` | `operations-owner` | 2026-10-18T11:05:39Z | first installation or material volume change |
+| `0019` index-build maintenance window/method | `accepted — N/A zero estate` | Fresh databases apply `0019` before work; installed/imported/restored databases reopen the gate | `docs/r1a2-entry-decisions.md` | `operations-owner` | 2026-10-18T11:05:39Z | each installation and database-size change |
+| Canonical-maintenance alert thresholds/escalation | `accepted — deferred to first install` | No production alert can be measured; cadence, threshold and escalation are mandatory before first install | `docs/r1a2-entry-decisions.md` | `operations-owner` | 2026-10-18T11:05:39Z | first installation or incident review |
 
 ## Owner acceptance
 
@@ -215,15 +215,15 @@ email addresses or other personal data in this repository record.
 
 | Accountable role | Decision being accepted | Status | Durable acceptance reference and digest | Accepted at | Review/expiry |
 | --- | --- | --- | --- | --- | --- |
-| `operations-owner` | Complete installation perimeter, deployment evidence and recovery | `pending` | _required_ | _required_ | _required_ |
-| `data-owner` | Complete database/backup perimeter and R1A2 preservation/access plan | `pending` | _required_ | _required_ | _required_ |
-| `security-owner` | Identity, secret-store and access perimeter | `pending` | _required_ | _required_ | _required_ |
-| `privacy-owner` | Retention, legal hold and destruction responsibilities | `pending` | _required_ | _required_ | _required_ |
-| `d4wn-product-owner` | R0B conclusion and accountable role assignment | `pending` | _required_ | _required_ | _required_ |
-| `commercial-owner` | Acceptance of the accountable commercial role recorded for later gates | `pending` | _required_ | _required_ | _required_ |
-| `research-product-owner` | Acceptance of the accountable research-product role recorded for later gates | `pending` | _required_ | _required_ | _required_ |
-| `source-integration-owner` | Acceptance of the accountable source-integration role recorded for later gates | `pending` | _required_ | _required_ | _required_ |
-| `source-rights-owner` | Acceptance of the accountable source-rights role recorded for later gates | `pending` | _required_ | _required_ | _required_ |
+| `operations-owner` | Complete installation perimeter, deployment evidence and recovery | `accepted` | `docs/r0b-owner-acceptance.json`; `sha256:69238242ee0199fb999023bc2719f4daeb432b663bb3f1a6226ab18985c381b9` | 2026-10-18T11:05:39Z | 2027-10-18 |
+| `data-owner` | Complete database/backup perimeter and accept responsibility for later data decisions | `accepted` | same acceptance record and digest | 2026-10-18T11:05:39Z | 2027-10-18 |
+| `security-owner` | Identity, secret-store and access perimeter | `accepted` | same acceptance record and digest | 2026-10-18T11:05:39Z | 2027-10-18 |
+| `privacy-owner` | Retention, legal hold and destruction responsibilities | `accepted` | same acceptance record and digest | 2026-10-18T11:05:39Z | 2027-10-18 |
+| `d4wn-product-owner` | R0B conclusion and accountable role assignment | `accepted` | same acceptance record and digest | 2026-10-18T11:05:39Z | 2027-10-18 |
+| `commercial-owner` | Acceptance of the accountable commercial role recorded for later gates | `accepted` | same acceptance record and digest | 2026-10-18T11:05:39Z | 2027-10-18 |
+| `research-product-owner` | Acceptance of the accountable research-product role recorded for later gates | `accepted` | same acceptance record and digest | 2026-10-18T11:05:39Z | 2027-10-18 |
+| `source-integration-owner` | Acceptance of the accountable source-integration role recorded for later gates | `accepted` | same acceptance record and digest | 2026-10-18T11:05:39Z | 2027-10-18 |
+| `source-rights-owner` | Acceptance of the accountable source-rights role recorded for later gates | `accepted` | same acceptance record and digest | 2026-10-18T11:05:39Z | 2027-10-18 |
 
 The current governance validator requires all nine assignments in `product-decisions.json` to be
 accepted before R0B can pass. Acceptance of a role does not decide the later decisions owned by that
@@ -236,12 +236,13 @@ role; each decision still remains governed by its own `requiredBefore` gate.
 | Installation registry | `passed — verified-zero` | Reopen immediately if any installation, database, backup or consumer is discovered |
 | Representative upgrade | `passed` | Synthetic pre-`0018` through `0019` fixture in CI run `39109907282` |
 | PostgreSQL restore | `passed` | Native isolated recovery and authenticated read in CI run `39114254560` |
-| Owner acceptance | `blocked` | All nine registered roles accepted with timestamps and durable evidence |
-| R0B overall | **blocked — accountable role acceptance only** | All nine role assignments accepted |
+| Owner acceptance | `passed` | All nine temporary pre-pilot roles accepted by Martin with durable evidence |
+| R0B overall | **passed** | Reopen if the estate changes, acceptance expires or contrary evidence appears |
 
-Even after R0B passes, R1A2 remains blocked until the separate canonical-maintenance decisions in
-the section above and every other R1A2 entry prerequisite are accepted.
+The separate zero-estate R1A2 entry decisions are accepted in `docs/r1a2-entry-decisions.md`.
+Installation-specific gates reopen before the first installation or if contrary estate evidence
+appears.
 
 The sponsor declaration and repository discovery close only the empty-estate inventory. CI closes
-the technical upgrade and restore exercises. Neither assigns accountable people, approves the
-separate R1A2 decisions nor authorizes R1A2 while owner acceptance remains open.
+the technical upgrade and restore exercises. Role acceptance closes R0B but does not approve the
+separate R1A2 decisions; each still requires its own decision evidence.

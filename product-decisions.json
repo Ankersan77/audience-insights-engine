@@ -4,15 +4,15 @@
   "updated": "2026-10-18",
   "statusRule": "A proposal is not an approval. Open decisions remain blockers at their requiredBefore gate.",
   "ownerAssignments": [
-    { "role": "commercial-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
-    { "role": "d4wn-product-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
-    { "role": "data-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
-    { "role": "operations-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
-    { "role": "privacy-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
-    { "role": "research-product-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
-    { "role": "security-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
-    { "role": "source-integration-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
-    { "role": "source-rights-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null }
+    { "role": "commercial-owner", "status": "accepted", "acceptedBy": "Martin", "acceptedAt": "2026-10-18T11:05:39.000Z", "acceptanceEvidence": { "ref": "docs/r0b-owner-acceptance.json", "digest": "sha256:69238242ee0199fb999023bc2719f4daeb432b663bb3f1a6226ab18985c381b9", "verifiedAt": "2026-10-18T11:05:39.000Z", "expiresAt": "2027-10-18T00:00:00.000Z" } },
+    { "role": "d4wn-product-owner", "status": "accepted", "acceptedBy": "Martin", "acceptedAt": "2026-10-18T11:05:39.000Z", "acceptanceEvidence": { "ref": "docs/r0b-owner-acceptance.json", "digest": "sha256:69238242ee0199fb999023bc2719f4daeb432b663bb3f1a6226ab18985c381b9", "verifiedAt": "2026-10-18T11:05:39.000Z", "expiresAt": "2027-10-18T00:00:00.000Z" } },
+    { "role": "data-owner", "status": "accepted", "acceptedBy": "Martin", "acceptedAt": "2026-10-18T11:05:39.000Z", "acceptanceEvidence": { "ref": "docs/r0b-owner-acceptance.json", "digest": "sha256:69238242ee0199fb999023bc2719f4daeb432b663bb3f1a6226ab18985c381b9", "verifiedAt": "2026-10-18T11:05:39.000Z", "expiresAt": "2027-10-18T00:00:00.000Z" } },
+    { "role": "operations-owner", "status": "accepted", "acceptedBy": "Martin", "acceptedAt": "2026-10-18T11:05:39.000Z", "acceptanceEvidence": { "ref": "docs/r0b-owner-acceptance.json", "digest": "sha256:69238242ee0199fb999023bc2719f4daeb432b663bb3f1a6226ab18985c381b9", "verifiedAt": "2026-10-18T11:05:39.000Z", "expiresAt": "2027-10-18T00:00:00.000Z" } },
+    { "role": "privacy-owner", "status": "accepted", "acceptedBy": "Martin", "acceptedAt": "2026-10-18T11:05:39.000Z", "acceptanceEvidence": { "ref": "docs/r0b-owner-acceptance.json", "digest": "sha256:69238242ee0199fb999023bc2719f4daeb432b663bb3f1a6226ab18985c381b9", "verifiedAt": "2026-10-18T11:05:39.000Z", "expiresAt": "2027-10-18T00:00:00.000Z" } },
+    { "role": "research-product-owner", "status": "accepted", "acceptedBy": "Martin", "acceptedAt": "2026-10-18T11:05:39.000Z", "acceptanceEvidence": { "ref": "docs/r0b-owner-acceptance.json", "digest": "sha256:69238242ee0199fb999023bc2719f4daeb432b663bb3f1a6226ab18985c381b9", "verifiedAt": "2026-10-18T11:05:39.000Z", "expiresAt": "2027-10-18T00:00:00.000Z" } },
+    { "role": "security-owner", "status": "accepted", "acceptedBy": "Martin", "acceptedAt": "2026-10-18T11:05:39.000Z", "acceptanceEvidence": { "ref": "docs/r0b-owner-acceptance.json", "digest": "sha256:69238242ee0199fb999023bc2719f4daeb432b663bb3f1a6226ab18985c381b9", "verifiedAt": "2026-10-18T11:05:39.000Z", "expiresAt": "2027-10-18T00:00:00.000Z" } },
+    { "role": "source-integration-owner", "status": "accepted", "acceptedBy": "Martin", "acceptedAt": "2026-10-18T11:05:39.000Z", "acceptanceEvidence": { "ref": "docs/r0b-owner-acceptance.json", "digest": "sha256:69238242ee0199fb999023bc2719f4daeb432b663bb3f1a6226ab18985c381b9", "verifiedAt": "2026-10-18T11:05:39.000Z", "expiresAt": "2027-10-18T00:00:00.000Z" } },
+    { "role": "source-rights-owner", "status": "accepted", "acceptedBy": "Martin", "acceptedAt": "2026-10-18T11:05:39.000Z", "acceptanceEvidence": { "ref": "docs/r0b-owner-acceptance.json", "digest": "sha256:69238242ee0199fb999023bc2719f4daeb432b663bb3f1a6226ab18985c381b9", "verifiedAt": "2026-10-18T11:05:39.000Z", "expiresAt": "2027-10-18T00:00:00.000Z" } }
   ],
   "decisions": [
     {
@@ -158,12 +158,17 @@
     {
       "id": "legacy-code-removal-data-access",
       "question": "How will each installation retain controlled access to legacy records after the R1A2 application surfaces and workers are removed?",
-      "status": "needs_context",
+      "status": "decided",
       "proposal": "For the verified-zero current estate, no installation records require preservation or access. Keep the legacy schema unchanged in the test baseline until the separate R1B disposition decision.",
       "owner": "data-owner",
       "requiredBefore": "R1A2",
-      "blocker": "The verified-zero preservation/access outcome still requires data-owner acceptance before R1A2.",
-      "decisionEvidence": null
+      "blocker": "Reopen before R1A2 if any installation or retained data copy is discovered; R1B disposition remains separate.",
+      "decisionEvidence": {
+        "ref": "docs/r1a2-entry-decisions.md",
+        "digest": "sha256:642dff749d2e1d433d2595f3efd90937388b9d9ed10af351ccb36ad9f44cd717",
+        "verifiedAt": "2026-10-18T11:05:39.000Z",
+        "expiresAt": "2027-10-18T00:00:00.000Z"
+      }
     },
     {
       "id": "canonical-maintenance-bounds",
@@ -172,7 +177,7 @@
       "proposal": "Use the R1A1b contract: 240-second handler, 10-second statements, 1-second locks, fixed row/chunk limits, 256-KiB/100-reference artifacts, O(1) revocation with cleanupPending and mandatory fail-closed artifact projection.",
       "owner": "operations-owner",
       "requiredBefore": "R1A1b",
-      "blocker": "The decision and repository implementation are complete, but they do not authorize R1A2 without the separate cleanup SLO, installation-specific index deployment and R0B/R1A1 evidence.",
+      "blocker": "The separate verified-zero R1A2 entry decisions are now accepted; reopen installation-specific operations gates before the first installation.",
       "decisionEvidence": {
         "ref": "docs/r1a1b-bounded-maintenance-decision.md",
         "digest": "sha256:421a144974536c97bd949a95b27a5f6fdc0df6f4cb41e3bac0b909acd2a52fd7",
@@ -183,22 +188,32 @@
     {
       "id": "canonical-cleanup-slo",
       "question": "What maximum canonical-cleanup backlog age and incident threshold apply before legacy removal?",
-      "status": "needs_context",
-      "proposal": null,
+      "status": "decided",
+      "proposal": "Not applicable to the verified-zero current fleet. Before the first installation, approve a measured cleanup cadence, maximum backlog age, alert threshold and escalation path.",
       "owner": "operations-owner",
       "requiredBefore": "R1A2",
-      "blocker": "No installation-aware cleanup cadence, maximum backlog age, alert threshold or accountable response has been accepted.",
-      "decisionEvidence": null
+      "blocker": "Reopen before the first installation or a material volume change; this decision makes no production SLO claim.",
+      "decisionEvidence": {
+        "ref": "docs/r1a2-entry-decisions.md",
+        "digest": "sha256:642dff749d2e1d433d2595f3efd90937388b9d9ed10af351ccb36ad9f44cd717",
+        "verifiedAt": "2026-10-18T11:05:39.000Z",
+        "expiresAt": "2027-10-18T00:00:00.000Z"
+      }
     },
     {
       "id": "r1a1b-index-deployment",
       "question": "Which measured maintenance window will apply migration 0019 indexes for each installation?",
-      "status": "needs_context",
-      "proposal": "Use a measured maintenance window per installation; any concurrent rollout requires a separately reviewed forward migration.",
+      "status": "decided",
+      "proposal": "Not applicable to the verified-zero current fleet. Fresh databases apply 0019 before work; any import, restore or discovered installation requires sizing and an approved maintenance method.",
       "owner": "operations-owner",
       "requiredBefore": "R1A2",
-      "blocker": "No authoritative installation inventory, sizing result or accepted maintenance window exists.",
-      "decisionEvidence": null
+      "blocker": "Reopen for any installed/imported/restored database; a concurrent rollout requires a separately reviewed forward migration and must not edit 0019.",
+      "decisionEvidence": {
+        "ref": "docs/r1a2-entry-decisions.md",
+        "digest": "sha256:642dff749d2e1d433d2595f3efd90937388b9d9ed10af351ccb36ad9f44cd717",
+        "verifiedAt": "2026-10-18T11:05:39.000Z",
+        "expiresAt": "2027-10-18T00:00:00.000Z"
+      }
     }
   ]
 }

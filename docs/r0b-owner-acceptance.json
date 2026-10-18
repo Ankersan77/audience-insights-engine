@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "project": "market-research",
+  "acceptedBy": "Martin",
+  "acceptedAt": "2026-10-18T11:05:39.000Z",
+  "acceptanceScope": "Temporary accountable role assignment for the pre-pilot project",
+  "roles": [
+    "commercial-owner",
+    "d4wn-product-owner",
+    "data-owner",
+    "operations-owner",
+    "privacy-owner",
+    "research-product-owner",
+    "security-owner",
+    "source-integration-owner",
+    "source-rights-owner"
+  ],
+  "limitations": [
+    "Role acceptance does not approve any decision that remains proposed or needs_context.",
+    "Production, legal, privacy, security, source-rights and research-quality decisions require their own evidence gates.",
+    "Roles may be reassigned to qualified specialists before the gate that requires their substantive approval."
+  ],
+  "source": "Direct project-sponsor confirmation in the current Codex project thread on 2026-10-18",
+  "reviewBy": "2027-10-18T00:00:00.000Z"
+}
