@@ -203,8 +203,8 @@ test("PostgreSQL-native backup restores data and supports an authenticated relea
     const projectsResponse = await http.request("/api/projects", token);
     const projectsText = await projectsResponse.text();
     assert.equal(projectsResponse.status, 200, projectsText);
-    const projectsBody = JSON.parse(projectsText) as { projects: { id: number; name: string }[] };
-    assert.ok(projectsBody.projects.some((item) => item.id === project.id && item.name === "Restore verification"),
+    const projectsBody = JSON.parse(projectsText) as { projects: { id: string; name: string }[] };
+    assert.ok(projectsBody.projects.some((item) => item.id === String(project.id) && item.name === "Restore verification"),
       "the current release must complete an authenticated database-backed read after restore");
     const syntheticRecoveryDurationMs = Date.now() - recoveryStartedAt;
 
