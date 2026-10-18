@@ -20,6 +20,15 @@ type Fixture = {
   input: Parameters<typeof import("../src/db/queries/canonical_evidence").persistAcquisition>[0];
 };
 
+function errorChainIncludes(error: unknown, expected: string) {
+  let current = error;
+  while (current instanceof Error) {
+    if (current.message.includes(expected)) return true;
+    current = current.cause;
+  }
+  return false;
+}
+
 export async function runBoundedRetentionCases(
   t: TestContext,
   db: typeof import("../src/db/client").db,
@@ -95,7 +104,10 @@ export async function runBoundedRetentionCases(
       const collectionCase = await expiredEvidence();
       await db.update(evidenceCollection).set({ expiresAt: new Date(Date.now() - 1_000) })
         .where(eq(evidenceCollection.id, collectionCase.collectionId));
-      await assert.rejects(enforceCanonicalRetention(new Date(), collectionCase.f.tenant.id), /synthetic retention audit failure/);
+      await assert.rejects(
+        enforceCanonicalRetention(new Date(), collectionCase.f.tenant.id),
+        (error) => errorChainIncludes(error, "synthetic retention audit failure"),
+      );
       const [collectionAfter] = await db.select().from(evidenceCollection)
         .where(eq(evidenceCollection.id, collectionCase.collectionId));
       assert.notEqual(collectionAfter.lifecycle, "expired");
@@ -117,7 +129,10 @@ export async function runBoundedRetentionCases(
         synthesisBy: "human",
         decayAt: new Date(Date.now() - 1_000),
       }).returning();
-      await assert.rejects(enforceCanonicalRetention(new Date(), intelligenceFixture.tenant.id), /synthetic retention audit failure/);
+      await assert.rejects(
+        enforceCanonicalRetention(new Date(), intelligenceFixture.tenant.id),
+        (error) => errorChainIncludes(error, "synthetic retention audit failure"),
+      );
       const [recordAfter] = await db.select().from(intelligenceRecord).where(eq(intelligenceRecord.id, record.id));
       assert.equal(recordAfter.lifecycle, "live");
     } finally {

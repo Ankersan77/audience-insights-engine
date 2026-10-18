@@ -1241,8 +1241,11 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
         assert.equal((await finishLearning()).state, "learning_reviewed");
         assert.equal((await listCampaignWorkspace(f.tenant.id))[0].payload.reviewedLearningId, learnings[0].id);
         await db.update(canonicalEvidence).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(canonicalEvidence.id, observations[1].evidenceId));
-        const projected = (await listCampaignWorkspace(f.tenant.id))[0].latestAssessments.post!.assessment as CampaignResultAssessment;
-        assert.equal(projected.comparisons[0].expired, true, "read-time projection suppresses expired copies before the worker runs");
+        const projected = (await listCampaignWorkspace(f.tenant.id))[0].latestAssessments.post!;
+        assert.equal(projected.basisStatus, "stale");
+        assert.equal(projected.quarantined, true);
+        assert.equal(projected.assessment.status, "needs_context");
+        assert.equal("comparisons" in projected.assessment, false, "read-time projection withholds copied results before the worker runs");
         await enforceCanonicalRetention(new Date(), f.tenant.id);
         const [redacted] = await db.select().from(researchArtifact).where(eq(researchArtifact.id, post.id));
         const comparison = (redacted.payloadJson as { assessment: CampaignResultAssessment }).assessment.comparisons[0];
