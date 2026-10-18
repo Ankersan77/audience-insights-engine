@@ -311,7 +311,7 @@
     { "id": "licensed-listening", "state": "designed", "productionAdapters": [] }
   ],
   "transition": {
-    "legacyLast30days": "pending_removal",
+    "legacyLast30days": "removed",
     "nonV1Capabilities": "implemented_unsupported",
     "mcp": "not_implemented",
     "productionSourceRegistry": "empty",

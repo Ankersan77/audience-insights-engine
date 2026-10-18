@@ -32,7 +32,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: true
           fetch-depth: 0
 
       - uses: actions/setup-node@v4
@@ -69,3 +68,27 @@ jobs:
           TEST_DATABASE_URL: postgresql://postgres:isolated-test-only@127.0.0.1:5432/market_research_test
           TEST_HTTP: "1"
           TEST_NATIVE_BACKUP_RESTORE: "1"
+
+      - name: Build production web and worker images
+        run: |
+          docker build --target web-runtime --build-arg APPLICATION_VERSION="$GITHUB_SHA" --tag "market-research-web:$GITHUB_SHA" .
+          docker build --target worker-runtime --build-arg APPLICATION_VERSION="$GITHUB_SHA" --tag "market-research-worker:$GITHUB_SHA" .
+
+      - name: Prepare isolated worker-image database
+        run: |
+          PGPASSWORD=isolated-test-only createdb -h 127.0.0.1 -U postgres market_research_worker_test
+          DATABASE_URL=postgresql://postgres:isolated-test-only@127.0.0.1:5432/market_research_worker_test pnpm db:migrate
+
+      - name: Verify production images, removed routes and worker lifecycle
+        run: node scripts/verify-production-images.mjs
+        env:
+          WEB_IMAGE: market-research-web:${{ github.sha }}
+          WORKER_IMAGE: market-research-worker:${{ github.sha }}
+          TEST_WORKER_DATABASE_URL: postgresql://postgres:isolated-test-only@127.0.0.1:5432/market_research_worker_test
+
+      - name: Upload immutable R1A2 image inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1a2-image-inspection-${{ github.sha }}
+          path: artifacts/r1a2-image-inspection.json
+          if-no-files-found: error

@@ -1,6 +1,6 @@
 # ADR 0002: `last30days` runs as a local worker subprocess in the single platform-built image
 
-- Status: Superseded by `BLUEPRINT.md` 2.0.0 and `ROADMAP.md` R1 (2026-10-17)
+- Status: Superseded; runtime removed by `ROADMAP.md` R1A2 (2026-10-18)
 - Date: 2026-10-08
 - Initiative: `init-20261002-audience-insights-engine` (Audience Insights Engine)
 
@@ -33,5 +33,6 @@ This fits the platform's one-image/one-tag convention exactly: no custom CI work
 ## Supersession note
 
 The target product is now AI-native and uses the canonical people-blind source-adapter boundary.
-`last30days` is permanently disabled and scheduled for data-audited removal. This ADR remains only to
-explain historical deployments; it must not be used to justify new dependencies or runtime work.
+`last30days` runtime code, packaging, routes, Python dependency and submodule were removed in R1A2.
+Historical database state remains unchanged pending R1B. This ADR remains only to explain the old
+design; it must not be used to justify new dependencies or runtime work.

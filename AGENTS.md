@@ -32,8 +32,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   initial MCP tools (six maximum), Denmark, and `decision-brief@2`.
 - The application listens on port 3000 and exposes `GET /healthz` for container health checks.
 - Never commit credentials. Read secrets from environment variables and document required variable names in `.env.example`.
-- `vendor/last30days` and its legacy run/evidence path are scheduled for safe removal in Roadmap R1.
-  Do not extend, re-enable, or patch them. Inventory and preserve required data before deletion, use
-  forward migrations, and keep legacy removal separate from MCP feature work.
+- The retired ingestion/runtime path must remain absent. Historical schema and inventory tooling stay
+  read-only until the separately approved R1B forward migration; never edit applied migrations.
 - Before changing Next.js behavior, read the matching guide in `node_modules/next/dist/docs/`.
 - Run lint, type-checks, tests, and a production build before shipping changes that can affect runtime behavior.

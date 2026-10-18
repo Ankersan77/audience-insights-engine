@@ -7,7 +7,6 @@ import type { Role } from "@/src/lib/auth";
 
 const NAV_ITEMS = [
   { label: "Ask / Projects", href: "/projects" },
-  { label: "Market Pulse", href: "/monitoring" },
   { label: "Market Twin", href: "/workspace" },
   { label: "Company context", href: "/company" },
   { label: "Campaign Studies", href: "/campaigns" },

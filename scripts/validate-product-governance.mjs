@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateRemovedRuntime } from "./removed-runtime-guard.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
@@ -482,7 +483,7 @@ if (compatibility.transition?.legacyLast30days === "pending_removal") {
   for (const path of [".gitmodules", "vendor/last30days", "src/workers/runLast30Days.ts", "src/workers/runQueue.ts", "scripts/smoke-last30days.ts"]) requirePath("pending last30days surface", path);
   if (!readFileSync(join(root, "src/lib/featureFlags.ts"), "utf8").includes("return false")) fail("Pending legacy last30days must remain permanently fail-closed.");
 } else if (compatibility.transition?.legacyLast30days === "removed") {
-  for (const path of [".gitmodules", "vendor/last30days", "src/workers/runLast30Days.ts", "src/workers/runQueue.ts", "scripts/smoke-last30days.ts"]) if (existsSync(join(root, path))) fail(`Removed last30days surface still exists: ${path}.`);
+  for (const message of validateRemovedRuntime(root)) fail(message);
 }
 if (compatibility.transition?.productionSourceRegistry === "empty") {
   const registry = readFileSync(join(root, "src/evidence/productionRegistry.ts"), "utf8");

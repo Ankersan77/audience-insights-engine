@@ -33,8 +33,8 @@ Before running the command:
 ### Verified-zero installation route
 
 If the authoritative registry contains zero deployed installations, do not run this command
-without a database and do not invent an installation or empty artifact. The data owner and
-For a project that has never been deployed, the project sponsor may declare the complete current
+without a database and do not invent an installation or empty artifact. For a project that has never
+been deployed, the project sponsor may declare the complete current
 estate verified-zero with timestamp, scope and durable evidence; repository-visible systems are
 checked where they exist. Formal data/operations role acceptance remains the separate R0B owner
 gate. The declaration must record scope, limitations and evidence references.

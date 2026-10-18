@@ -4,7 +4,7 @@ import * as schema from "./schema";
 
 /**
  * Shared Postgres connection pool and Drizzle client, used by every query
- * module and server-side helper (auth, audit, brands, ...). Cached on
+ * module and server-side helper (auth, audit, projects, ...). Cached on
  * `globalThis` in development so Next's module reloading does not open a new
  * pool per request.
  */

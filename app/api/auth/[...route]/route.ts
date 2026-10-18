@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * OneLogin OIDC endpoints (Authorization Code + PKCE):
- *   GET /api/auth/login?returnTo=/brands   — redirects to OneLogin
+ *   GET /api/auth/login?returnTo=/projects — redirects to the configured IdP
  *   GET /api/auth/callback                 — exchanges the code, sets the session
  *   POST /api/auth/logout                  — revokes and clears the session
  */

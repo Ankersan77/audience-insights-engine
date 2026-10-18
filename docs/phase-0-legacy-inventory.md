@@ -1,7 +1,7 @@
 # Phase 0 legacy integration inventory
 
-> Historical inventory. `BLUEPRINT.md` 2.0.0 and Roadmap R1 now require safe removal of the retained
-> `last30days` and identity-bearing legacy path after data and recovery review.
+> Historical inventory. Roadmap R1A2 removed the retained runtime and application surfaces; the
+> identity-bearing legacy schema remains unchanged pending the separate R1B disposition.
 
 Date: 2026-10-16
 Blueprint at time of inventory: pre-2.0 reset
@@ -46,6 +46,6 @@ configuration, navigation, readiness, acceptance, tests, and CI.
 
 - The legacy evidence table still includes `author_handle`. Phase 2 must replace it with the
   people-blind evidence contract and migrate or purge old data before production ingestion.
-- The pinned `last30days` engine is still conditional scaffolding. Phase 2 must verify source
-  rights, provenance, redaction, and cancellation behavior before it is retained.
+- The old engine and its runtime packaging were removed in R1A2. Any future social/listening source
+  must enter through the canonical adapter, rights, provenance and people-blind gates.
 - Legacy database fields are not product requirements and must not be used by new features.

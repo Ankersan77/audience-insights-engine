@@ -65,13 +65,12 @@ target provider-neutral agent identity contract.
 
 ## Transition status
 
-The repository predates Blueprint 2.0.0 and contains implemented campaign, Brand Lift, monitoring
-and legacy `last30days` surfaces. They must not be treated as active v1 product claims.
+The repository predates Blueprint 2.0.0 and still contains implemented campaign, Brand Lift and
+monitoring surfaces. They must not be treated as active v1 product claims.
 
-`last30days` ingestion is permanently fail-closed, but its submodule, Python runtime, worker wrapper,
-legacy routes and identity-bearing legacy schema are still present. Roadmap R1 removes them only
-after a data inventory, recovery baseline and reviewed forward migration. Until R1 completes, local
-and CI builds still need the pinned submodule.
+Roadmap R1A2 removed the `last30days` runtime, Python dependency, submodule, routes and legacy
+application workflow. Historical schema remains unchanged and readable through the controlled
+inventory procedure until the separately approved R1B forward migration.
 
 The canonical production source registry is empty until live adapters pass source-rights,
 people-blind, cost, failure and provider acceptance. Synthetic adapters and fixtures prove contracts,
@@ -82,12 +81,10 @@ not live research quality.
 - Node.js 24
 - pnpm 11
 - PostgreSQL 16+
-- Git submodules until Roadmap R1 completes
 
 ## Local setup
 
 ```bash
-git submodule update --init --recursive
 corepack enable
 pnpm install
 cp .env.example .env.local
@@ -120,8 +117,8 @@ pnpm access grant --client CLIENT_SLUG --subject OIDC_SUBJECT --role ROLE
 OIDC proves identity but never grants product membership automatically. Agent/MCP identity will use
 a separate OAuth bearer path; a human browser cookie must never be reused as an agent credential.
 
-`ENABLE_LEGACY_LAST30DAYS` cannot enable ingestion. New source work must use canonical adapters and
-the minimization policy. `ENABLE_ENV_CREDENTIAL_RESOLVER` remains disabled by default and, when
+New source work must use canonical adapters and the minimization policy.
+`ENABLE_ENV_CREDENTIAL_RESOLVER` remains disabled by default and, when
 explicitly enabled for the current transition runtime, accepts only client-scoped opaque references.
 
 ## Commands
@@ -134,11 +131,17 @@ pnpm test                   # deterministic unit/fixture tests
 pnpm test:integration       # requires dedicated TEST_DATABASE_URL ending in _test
 pnpm check:source-of-truth  # canonical documentation check
 pnpm build                  # production build
-pnpm worker                 # background worker
+pnpm build:worker           # build the standalone canonical worker artifact
+pnpm worker                 # run the built canonical worker artifact
+pnpm worker:dev             # run the canonical worker directly in development
 pnpm db:generate            # create forward migrations
 pnpm db:migrate             # apply migrations
 bash verify.sh              # complete local gate
 ```
+
+Production orchestration must give `worker-runtime` at least 330 seconds between SIGTERM and
+SIGKILL. The worker's bounded maintenance handler may run for 240 seconds and its PgBoss drain
+window is 300 seconds; a shorter container grace period can corrupt the shutdown contract.
 
 ## Current verification boundary
 
@@ -147,14 +150,16 @@ rights, retention, budgets, campaigns, studies and monitoring. Passing those tes
 evidence only. It does not prove remote MCP support, live source coverage, human research quality,
 external OIDC, production restore or commercial readiness.
 
-The CI workflow runs source-of-truth checks, lint, typecheck, deterministic tests, production build
-and PostgreSQL integration/authenticated HTTP tests.
+The CI workflow runs source-of-truth checks, lint, typecheck, deterministic tests, production build,
+PostgreSQL integration/authenticated HTTP tests, both production-image builds, removed-route checks
+and a canonical worker image start/drain/restart exercise.
 
 ## Deployment
 
-The current Dockerfile and deployment checker implement the pre-v2 customer-operated application
-shape. They remain transitional until Roadmap R1-R7 replaces legacy runtime contents, adds remote
-MCP/agent identity and proves the managed single-tenant reference deployment.
+The Dockerfile exposes separate `web-runtime` and `worker-runtime` targets from one revision. Deploy
+the web target with its HTTP health check and the worker target with process-liveness supervision;
+do not override the web image command to run a worker. The broader deployment remains transitional
+until R3-R7 add remote MCP/agent identity and prove the managed single-tenant reference deployment.
 
 Do not describe an installation as production-supported until its current source, quality, host,
 security, recovery and operations evidence is recorded and valid.

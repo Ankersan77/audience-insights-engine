@@ -8,21 +8,21 @@ import { AsyncCombobox, type ComboboxOption } from "@/src/components/AsyncCombob
 import { ConfirmDialog } from "@/src/components/ConfirmDialog";
 import { StatusBadge, ALL_STATUSES } from "@/src/components/StatusBadge";
 
-type SampleRun = {
+type SampleBrief = {
   id: string;
-  brand: string;
+  project: string;
   market: string;
   evidenceCount: number;
 };
 
-const SAMPLE_RUNS: SampleRun[] = [
-  { id: "r1", brand: "Casumo", market: "Sweden", evidenceCount: 42 },
-  { id: "r2", brand: "LeoVegas", market: "Denmark", evidenceCount: 17 },
-  { id: "r3", brand: "Mr Green", market: "Greece", evidenceCount: 5 },
+const SAMPLE_BRIEFS: SampleBrief[] = [
+  { id: "b1", project: "Nordic positioning", market: "Sweden", evidenceCount: 42 },
+  { id: "b2", project: "Category entry", market: "Denmark", evidenceCount: 17 },
+  { id: "b3", project: "Competitor review", market: "Greece", evidenceCount: 5 },
 ];
 
-const RUN_COLUMNS: DataTableColumn<SampleRun>[] = [
-  { key: "brand", header: "Brand", render: (row) => row.brand },
+const BRIEF_COLUMNS: DataTableColumn<SampleBrief>[] = [
+  { key: "project", header: "Project", render: (row) => row.project },
   { key: "market", header: "Market", render: (row) => row.market },
   {
     key: "evidenceCount",
@@ -80,8 +80,8 @@ export default function ShowroomPage() {
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-muted uppercase">Loading</h3>
           <DataTable
-            caption="Runs (loading)"
-            columns={RUN_COLUMNS}
+            caption="Briefs (loading)"
+            columns={BRIEF_COLUMNS}
             rows={[]}
             getRowId={(row) => row.id}
             status="loading"
@@ -91,24 +91,24 @@ export default function ShowroomPage() {
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-muted uppercase">Empty</h3>
           <DataTable
-            caption="Runs (empty)"
-            columns={RUN_COLUMNS}
+            caption="Briefs (empty)"
+            columns={BRIEF_COLUMNS}
             rows={[]}
             getRowId={(row) => row.id}
             status="success"
-            emptyMessage="No runs yet — trigger one from a brand page."
+            emptyMessage="No briefs yet — create a project to begin."
           />
         </div>
 
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-muted uppercase">Error</h3>
           <DataTable
-            caption="Runs (error)"
-            columns={RUN_COLUMNS}
+            caption="Briefs (error)"
+            columns={BRIEF_COLUMNS}
             rows={[]}
             getRowId={(row) => row.id}
             status="error"
-            errorMessage="Couldn't load runs. Try again."
+            errorMessage="Couldn't load briefs. Try again."
           />
         </div>
 
@@ -117,9 +117,9 @@ export default function ShowroomPage() {
             Success — sortable columns, keyboard-navigable rows (Up/Down/Home/End, Enter)
           </h3>
           <DataTable
-            caption="Runs"
-            columns={RUN_COLUMNS}
-            rows={SAMPLE_RUNS}
+            caption="Briefs"
+            columns={BRIEF_COLUMNS}
+            rows={SAMPLE_BRIEFS}
             getRowId={(row) => row.id}
             status="success"
             onRowActivate={noop}

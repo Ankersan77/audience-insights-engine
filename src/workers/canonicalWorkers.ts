@@ -13,7 +13,7 @@ type CanonicalWorkerDependencies = {
   startSynthesis?: typeof startSynthesisMaintenance;
 };
 
-/** Registers only canonical workers. Legacy and transitional monitoring are composed elsewhere. */
+/** Registers the complete production worker set: canonical acquisition and maintenance only. */
 export async function startCanonicalWorkers(boss: PgBoss, dependencies: CanonicalWorkerDependencies = {}): Promise<void> {
   const startAcquisition = dependencies.startAcquisition ?? startAcquisitionWorker;
   const startMaintenance = dependencies.startMaintenance ?? startCanonicalMaintenance;

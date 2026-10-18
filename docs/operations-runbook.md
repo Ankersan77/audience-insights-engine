@@ -34,8 +34,8 @@ Model secrets use `MARKET_RESEARCH_MODEL_KEY_CLIENT_<CLIENT_ID>_<NAME>`; one bin
 with exact client ID and separate synthesis-budget/acceptance gates. The name is a scope guard,
 **not proof of ownership**: a named operator must inspect provider organization/project and
 billing ownership, permission/retention settings, key rotation and the destination of backups.
-Never paste a live key into the repository, solution JSON, chat or a shared shell environment.
-The old Last30Days route cannot be re-enabled with `ENABLE_LEGACY_LAST30DAYS`.
+Never paste a live key into the repository, solution JSON, chat or a shared shell environment. The
+retired ingestion route and its provider credentials are absent from the runtime.
 
 Before a client launch, record the client's hosting and database owner, deployment region,
 database backup/restore result, secret-store operator, OIDC owner, each provider project/account,
@@ -54,8 +54,12 @@ not silently substitute D4WN's identity application.
 4. On a fresh empty database, run `pnpm deployment:bootstrap --slug CLIENT --name NAME`, then
    explicitly grant access with `pnpm access`.
 5. Run `pnpm deployment:check` against the intended client database and environment.
-6. Start the web service and verify `GET /healthz`.
-7. Start the worker, verify queue connectivity, and confirm no circuit is unexpectedly open.
+6. Deploy the Docker `web-runtime` target and verify `GET /healthz`.
+7. Deploy the matching-revision `worker-runtime` target with a termination grace period of at least
+   330 seconds, verify the three canonical queues, and confirm no circuit is unexpectedly open. Do
+   not run the worker from the web target. The worker drains for up to 300 seconds because one
+   canonical maintenance handler may legitimately run for 240 seconds; the orchestrator must not
+   send SIGKILL before that window and safety margin expire.
 8. Confirm `/workspace` shows the expected tenant and canonical record counts.
 9. Activate live connectors only if their external-validation entries are verified.
 
@@ -158,12 +162,13 @@ or more than 20 busy tenants can delay other clients; inspect locks and use the 
 targeted recovery. Never reset attempts or erase the ledger to bypass an unknown provider outcome.
 Worker downtime is caught up from database state after restart; no missed provider call is replayed.
 
-Canonical monitoring creates durable database jobs and dispatches their IDs through pg-boss. The
+Canonical source acquisition creates durable database jobs and dispatches their IDs through pg-boss. The
 worker claims each job once, resolves its adapter through `productionRegistry.ts`, runs bounded
 retry only for classified transient failures, persists canonical evidence and a redacted receipt
 atomically, and reconciles stale leases. Unregistered adapters and unavailable credentials fail
-closed and mark the source degraded. Queued or running jobs may be cancelled from `/monitoring`;
-any later adapter output is discarded rather than retained.
+closed and mark the source degraded. Authorized operators may cancel queued or running jobs through
+`POST /api/acquisition/jobs/:id/cancel`; retries after an unknown client outcome are idempotent, and
+any later adapter output is discarded rather than retained. The former `/monitoring` route is absent.
 
 Source connections are not operational until their policy envelope is complete. Claim-time checks
 enforce health, rights expiry, commercial-use permission, data classification, market/language and
@@ -394,13 +399,17 @@ owned UI signs out via POST, which revokes the stored token before clearing the 
 The canonical worker removes expired/revoked session rows, but enforcement does not depend on
 worker availability. Never log token values, flow cookies or provider error payloads.
 
-## Scheduled review packets
+## Parked scheduled review packets
 
-An administrator enables weekly, monthly and/or quarterly rhythms under Market Pulse. A bound
-sensing profile is required; saving creates a new immutable solution version. Portable packages
-carry these rhythms without tenant IDs. Omitted rhythms are disabled, including in older packages.
+This feature is implemented but unsupported. R1A2 removed its scheduler, navigation, page and API
+routes; direct calls now return 404. The following describes dormant behavior retained only for R2
+disposition review; it is not an activation procedure and there is no supported way to enable it.
 
-The canonical scheduler generates packets every 15 minutes, after monitoring reconciliation and
+The retained model describes weekly, monthly and quarterly rhythms bound to a sensing profile.
+Historical solution packages may still contain those fields, but the production runtime does not
+schedule monitoring or generate review packets from them.
+
+The retired scheduler generated packets every 15 minutes, after monitoring reconciliation and
 qualification. Windows are UTC, end-exclusive and closed before generation. The first window
 begins at solution activation; later windows follow Monday/month/quarter boundaries. Each tick
 catches up at most 12 windows per cadence and active solution. A persisted window end is the
@@ -441,8 +450,8 @@ Never point a restore test at production or reuse production connector credentia
 ### Canonical maintenance kill switch
 
 Set `CANONICAL_MAINTENANCE_DISABLED=true` in the worker's deployment-owned environment and restart
-the worker to remove the `market-research-canonical-maintenance` schedule. This does not enable,
-disable or alter the transitional monitoring schedule. A job already in flight is allowed to drain;
+the worker to remove the `market-research-canonical-maintenance` schedule. The removed monitoring
+schedule is unscheduled independently during every worker startup. A job already in flight is allowed to drain;
 the switch prevents restart from silently recreating the canonical-maintenance cadence. Verify the
 bounded `canonical-maintenance-disabled` event and the absent PgBoss schedule. To re-enable, remove
 the variable (or set it to `false`), restart the worker and verify that the UTC schedule is present.

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { validateRemovedRuntime } from "./removed-runtime-guard.mjs";
 
 const blueprint = readFileSync(new URL("../BLUEPRINT.md", import.meta.url), "utf8");
 const roadmap = readFileSync(new URL("../ROADMAP.md", import.meta.url), "utf8");
@@ -12,6 +14,7 @@ const compatibilityManifest = readFileSync(new URL("../compatibility-manifest.js
 const capabilityRegister = readFileSync(new URL("../product-capabilities.json", import.meta.url), "utf8");
 
 const failures = [];
+for (const failure of validateRemovedRuntime(fileURLToPath(new URL("../", import.meta.url)))) failures.push(failure);
 const versionMatch = blueprint.match(/^\| Blueprint version \|\s*([^|\n]+)\s*\|$/m);
 if (!versionMatch) failures.push("BLUEPRINT.md must declare a Blueprint version table row.");
 if (versionMatch && !roadmap.includes(`BLUEPRINT.md\` version ${versionMatch[1].trim()}`)) {
@@ -60,13 +63,28 @@ for (const path of [
   "../src/lib/rillAllowlist.ts",
   "../app/channels/page.tsx",
   "../.github/workflows/rill-schema-check.yml",
+  "../.gitmodules",
+  "../vendor/last30days",
+  "../src/workers/runLast30Days.ts",
+  "../src/workers/runQueue.ts",
+  "../src/workers/draftInsights.ts",
+  "../src/workers/purgeEvidence.ts",
+  "../src/workers/canonicalQueue.ts",
+  "../src/lib/featureFlags.ts",
+  "../src/lib/parseCompactReport.ts",
+  "../app/brands",
+  "../app/runs",
+  "../app/insights",
+  "../app/api/brands",
+  "../app/api/runs",
+  "../app/api/insights",
 ]) {
   if (existsSync(new URL(path, import.meta.url))) {
     failures.push(`${path.replace("../", "")} is a retired active integration surface.`);
   }
 }
 
-for (const variable of ["SLACK_BOT_TOKEN", "RILL_API_TOKEN", "RILL_API_BASE_URL"]) {
+for (const variable of ["SLACK_BOT_TOKEN", "RILL_API_TOKEN", "RILL_API_BASE_URL", "ENABLE_LEGACY_LAST30DAYS", "EVIDENCE_RETENTION_DAYS", "X_BEARER_TOKEN", "XAI_API_KEY", "SCRAPECREATORS_API_KEY", "ANTHROPIC_API_KEY"]) {
   if (exampleEnvironment.includes(variable)) {
     failures.push(`.env.example must not advertise retired variable ${variable}.`);
   }

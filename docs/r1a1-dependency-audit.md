@@ -1,6 +1,6 @@
 # R1A1 dependency audit
 
-Status: **repository review recorded; installation and external evidence open**
+Status: **R1A2 candidate implemented; immutable CI exit evidence pending**
 
 Reviewed: 2026-10-18
 
@@ -13,6 +13,10 @@ disposition, approve the final destructive R1B disposition, authorize R1A2, or a
 destructive R1B schema migration. The prerequisite evidence in this document must close before
 R1A2 begins. Checks that can only be performed on the changed R1A2 candidate are explicitly
 separated and are R1A2 exit evidence, not prerequisites to start it.
+
+The repository evidence matrix below is the pre-removal snapshot used to define the cut. Current
+candidate evidence is recorded in `docs/r1a2-removal-evidence.md`; the snapshot is retained so the
+review remains reproducible rather than silently rewritten as if the dependencies never existed.
 
 ## Scope and limitations
 
@@ -61,8 +65,8 @@ evidence; they must not recreate an active runtime or packaging dependency.
 ## Verified-zero installation route
 
 An authoritative registry may contain zero deployed installations. That is not the same as an
-unknown inventory and must not be inferred from repository silence. The data owner and operations
-For a project that has never been deployed, the project sponsor may declare the complete current
+unknown inventory and must not be inferred from repository silence. For a project that has never
+been deployed, the project sponsor may declare the complete current
 estate verified-zero with timestamp, scope and durable evidence; repository-visible systems are
 checked where they exist. Formal operations/data role acceptance remains the separate R0B owner
 gate. Do not invent an installation ID or run the inventory command without a database merely to

@@ -3,7 +3,7 @@ import type { SourceAcquisitionJob as DomainAcquisitionJob, SourceAcquisitionReq
 import type { RightsDeclaration, SourceClass, SourceConnectionPolicy } from "@/src/core/contracts";
 import { readSourceConnectionPolicy, sourceClassification, sourcePolicyFailure } from "@/src/connectors/sourcePolicy";
 import { db } from "@/src/db/client";
-import { sourceAcquisitionJob, sourceAcquisitionReceipt, sourceConnection } from "@/src/db/schema";
+import { governanceAudit, sourceAcquisitionJob, sourceAcquisitionReceipt, sourceConnection } from "@/src/db/schema";
 
 export type ClaimedAcquisition = {
   databaseJobId: number;
@@ -284,5 +284,67 @@ export async function cancelAcquisitionJob(input: { clientId: number; id: number
     if (receipt) return false;
     await tx.insert(sourceAcquisitionReceipt).values({ clientId: input.clientId, jobId: input.id, status: "cancelled", acquiredCount: 0, rejectedCount: 0, safeArtifactRefs: [], errorCode: "cancelled-by-user", completedAt: input.now });
     return true;
+  });
+}
+
+export type AcquisitionCancellationResult = "cancelled" | "already_cancelled" | "unavailable";
+
+/**
+ * Tenant-scoped, retry-safe cancellation for the neutral administration API.
+ * A repeated request after an unknown HTTP outcome returns the same successful
+ * state only when the original user-cancellation receipt exists.
+ */
+export async function requestAcquisitionJobCancellation(input: {
+  clientId: number;
+  actorUserId: number;
+  id: number;
+  now: Date;
+}): Promise<AcquisitionCancellationResult> {
+  return db.transaction(async (tx) => {
+    const [job] = await tx.select({ status: sourceAcquisitionJob.status })
+      .from(sourceAcquisitionJob)
+      .where(and(eq(sourceAcquisitionJob.id, input.id), eq(sourceAcquisitionJob.clientId, input.clientId)))
+      .limit(1)
+      .for("update");
+    if (!job) return "unavailable";
+
+    const [receipt] = await tx.select({ errorCode: sourceAcquisitionReceipt.errorCode })
+      .from(sourceAcquisitionReceipt)
+      .where(and(eq(sourceAcquisitionReceipt.jobId, input.id), eq(sourceAcquisitionReceipt.clientId, input.clientId)))
+      .limit(1);
+    if (job.status === "cancelled" && receipt?.errorCode === "cancelled-by-user") return "already_cancelled";
+    if (job.status !== "queued" && job.status !== "running") return "unavailable";
+    if (receipt) return "unavailable";
+
+    const [updated] = await tx.update(sourceAcquisitionJob)
+      .set({ status: "cancelled", cancelledAt: input.now, finishedAt: input.now })
+      .where(and(
+        eq(sourceAcquisitionJob.id, input.id),
+        eq(sourceAcquisitionJob.clientId, input.clientId),
+        inArray(sourceAcquisitionJob.status, ["queued", "running"]),
+      ))
+      .returning({ id: sourceAcquisitionJob.id });
+    if (!updated) return "unavailable";
+
+    await tx.insert(sourceAcquisitionReceipt).values({
+      clientId: input.clientId,
+      jobId: input.id,
+      status: "cancelled",
+      acquiredCount: 0,
+      rejectedCount: 0,
+      safeArtifactRefs: [],
+      errorCode: "cancelled-by-user",
+      completedAt: input.now,
+    });
+    await tx.insert(governanceAudit).values({
+      clientId: input.clientId,
+      actorUserId: input.actorUserId,
+      action: "cancel",
+      entityType: "source_acquisition_job",
+      entityId: String(input.id),
+      redactedAfterJson: { status: "cancelled" },
+      createdAt: input.now,
+    });
+    return "cancelled";
   });
 }

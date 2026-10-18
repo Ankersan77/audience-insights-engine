@@ -30,8 +30,8 @@ R0 now has machine-readable product governance:
   `decision-brief@2` implementation is claimed.
 - The current broad abilities and product surfaces are explicitly unsupported/deferred even though
   code and tests exist.
-- The old `last30days` path remains fail-closed and still ships in CI/Docker; the transitional worker
-  still subscribes to its queue until R1A2, but it no longer owns the shared PgBoss lifecycle.
+- The R0 baseline records the old ingestion path before removal; R1A2 removes its executable code
+  and packaging while preserving the frozen baseline and historical schema for R1B.
 
 ## R0 closure
 
@@ -78,20 +78,16 @@ consumer exists, so the current estate is recorded as verified-zero. Martin has 
 temporary accountable roles; discovery of contrary estate evidence reopens the installation
 inventory immediately.
 
-The dependency audit found no canonical import of the detachable legacy runtime cluster. Before
-R1A2, the handling of the persisted transitional-monitoring schedule must be owner-approved; the
-actual unschedule/restart proof belongs to the R1A2 cutover. The current Docker standalone output
-does not demonstrate a runnable worker entry point, and CI does not yet build and inspect the
-production image; both are R1A2 candidate/exit work. The read-only inventory's foreign-key and view
+The dependency audit found no canonical import of the detachable legacy runtime cluster. R1A2 adds
+an idempotent retirement call for the old monitoring schedule, a standalone canonical worker image,
+and immutable CI inspection/lifecycle evidence. The read-only inventory's foreign-key and view
 catalog is intentionally not treated as complete dependency evidence.
 
 ## Safe R1 boundary already identified
 
-`src/workers/pgBossRuntime.ts` now owns the shared PgBoss lifecycle. Canonical acquisition,
-maintenance and synthesis compose through `src/workers/canonicalWorkers.ts`, independently of the
-legacy run queue and transitional monitoring scheduler. R1A2 may remove `research-run`, the
-transitional monitoring subscription and `last30days` code only after canonical
-acquisition, synthesis, retention, session cleanup and graceful shutdown are proved on that runtime.
+`src/workers/pgBossRuntime.ts` owns the PgBoss lifecycle. Canonical acquisition, maintenance and
+synthesis compose through `src/workers/canonicalWorkers.ts`; the worker entry point registers only
+those queues and retires the removed monitoring schedule before registration.
 
 Legacy evidence and insights are not eligible for automatic promotion. Useful records must be
 re-onboarded through canonical rights, methodology, minimization, applicability and review rules.

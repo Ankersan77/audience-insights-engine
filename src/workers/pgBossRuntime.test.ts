@@ -80,7 +80,7 @@ test("startup failure drains once and exits non-zero", async () => {
 
   assert.deepEqual(calls, [
     ["log", "shutdown-started", { signal: "STARTUP_FAILURE" }],
-    ["stop", { graceful: true, timeout: 11 * 60 * 1000 }],
+    ["stop", { graceful: true, timeout: 5 * 60 * 1000 }],
     ["log", "shutdown-drained", { signal: "STARTUP_FAILURE" }],
     ["exit", 1],
   ]);
@@ -89,12 +89,12 @@ test("startup failure drains once and exits non-zero", async () => {
 test("registration failure stops later registrations and invokes one startup drain", async () => {
   const calls: string[] = [];
   const started = await runWorkerStartup([
-    async () => { calls.push("legacy-registered"); },
+    async () => { calls.push("deployment-retirement-complete"); },
     async () => { calls.push("canonical-started"); throw new Error("private startup detail"); },
     async () => { calls.push("monitoring-must-not-start"); },
   ], async (reason) => { calls.push(`shutdown:${reason}`); }, () => { calls.push("bounded-fatal-log"); });
 
   assert.equal(started, false);
-  assert.deepEqual(calls, ["legacy-registered", "canonical-started", "bounded-fatal-log", "shutdown:STARTUP_FAILURE"]);
+  assert.deepEqual(calls, ["deployment-retirement-complete", "canonical-started", "bounded-fatal-log", "shutdown:STARTUP_FAILURE"]);
   assert.doesNotMatch(JSON.stringify(calls), /private startup detail/);
 });

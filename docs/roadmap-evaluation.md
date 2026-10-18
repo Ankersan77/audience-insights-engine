@@ -161,9 +161,9 @@ evidence, not a substitute for the open external gates below.
   and mobile layout. These bounded checks are not a full client/browser pilot.
   Local in-memory uploads do not
   call a provider and remain subject to the existing source/receipt checks.
-- The PostgreSQL suite now exercises actual authenticated HTTP briefing reads/reviews and the
-  server-rendered Market Pulse with real server sessions for synthetic identities. This does not exercise external
-  OIDC login or interactive browser flows; broader product and browser verification remains open.
+- Earlier PostgreSQL evidence exercised authenticated briefing reads/reviews and the server-rendered
+  Market Pulse with synthetic identities. R1A2 removes those routes from the production graph and
+  replaces that evidence with explicit 404 assertions; the dormant domain remains for R2 disposition.
 - Sessions now use random opaque tokens stored only as hashes, with server-enforced expiry and
   revocation, current membership/role resolution on every request and cascading invalidation when
   membership is removed. Explicit operator provisioning replaces automatic OIDC role grants.

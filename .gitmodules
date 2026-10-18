@@ -1,3 +1,0 @@
-[submodule "vendor/last30days"]
-	path = vendor/last30days
-	url = https://github.com/mvanhorn/last30days-skill

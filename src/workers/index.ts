@@ -1,7 +1,6 @@
 /**
  * Standalone worker entry point (T20), started separately from the Next.js
- * app (`pnpm worker`) — its own process in the same container image (ADR
- * 0002), sharing the Postgres database via pg-boss.
+ * app (`pnpm worker`) — its own process, sharing PostgreSQL through pg-boss.
  *
  * Loads `.env.local` with Node's built-in `process.loadEnvFile` (Node 20.12+,
  * stable here on Node 24 — no new dependency) for local dev convenience; in
@@ -20,27 +19,30 @@ try {
   // No .env.local present — expected in the deployed container.
 }
 
+let startupStage = "deployment-check";
+
 async function main() {
   const { assertClientOwnedDeployment } = await import("../lib/clientOwnedDeployment");
   await assertClientOwnedDeployment();
+  startupStage = "runtime-start";
   const { getWorkerRuntime, installWorkerShutdown, runWorkerStartup } = await import("./pgBossRuntime");
-  const { startRunWorker } = await import("./runQueue");
   const { startCanonicalWorkers } = await import("./canonicalWorkers");
-  const { startMonitoringScheduler } = await import("./canonicalQueue");
+  const { retireRemovedSchedules } = await import("./retiredSchedules");
   const { createProductionAdapterRegistry, createProductionRuntimeContext } = await import("../evidence/productionRegistry");
   const boss = await getWorkerRuntime();
   const shutdown = installWorkerShutdown(boss);
+  startupStage = "queue-registration";
   const started = await runWorkerStartup([
-    () => startRunWorker(boss),
+    () => retireRemovedSchedules(boss),
     () => startCanonicalWorkers(boss, { registry: createProductionAdapterRegistry(), runtime: createProductionRuntimeContext() }),
-    () => startMonitoringScheduler(boss),
   ], shutdown);
   if (started) {
-    console.log(`[worker] subscribed to legacy, canonical and transitional-monitoring queues (pid ${process.pid})`);
+    startupStage = "ready";
+    console.log(`[worker] subscribed to canonical queues (pid ${process.pid})`);
   }
 }
 
 main().catch(() => {
-  console.error("[worker] fatal-startup-error");
+  console.error(`[worker] fatal-startup-error stage=${startupStage}`);
   process.exit(1);
 });

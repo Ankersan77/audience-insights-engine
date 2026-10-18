@@ -20,6 +20,7 @@ npm-debug.log*
 
 # testing
 /coverage
+/artifacts/
 
 # next.js
 /.next/

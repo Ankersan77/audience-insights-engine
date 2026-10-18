@@ -1,10 +1,11 @@
-# People-blind evidence and legacy erasure procedure
+# People-blind evidence and preserved legacy-data procedure
 
 The target product does not need identifiable consumer records. It retains trends, themes,
 statistics, source-level provenance, and the minimum public excerpts needed to support a claim.
 It must not create consumer profiles or cross-platform identity graphs.
 
-The current legacy schema still contains `evidence.author_handle`. This is migration debt, not a
+The preserved legacy schema still contains `evidence.author_handle`. Its application routes and
+workers were removed in R1A2. This is migration debt, not a
 target-product requirement. Until Phase 2 replaces the evidence model, use the procedure below for
 any verified erasure or objection request involving legacy data.
 

@@ -53,7 +53,9 @@ type ShutdownOptions = {
 
 /** Installs an idempotent graceful drain for the standalone worker process. */
 export function installWorkerShutdown(boss: Pick<PgBoss, "stop">, options: ShutdownOptions = {}) {
-  const timeoutMs = options.timeoutMs ?? 11 * 60 * 1000;
+  // Canonical maintenance has a 240-second coordinator ceiling. One extra
+  // minute permits graceful completion without retaining the old 11-minute window.
+  const timeoutMs = options.timeoutMs ?? 5 * 60 * 1000;
   const registerSignal = options.registerSignal ?? ((signal, handler) => process.once(signal, handler));
   const exit = options.exit ?? ((code) => process.exit(code));
   const log = options.log ?? ((event) => console.log(`[worker] ${event}`));

@@ -32,7 +32,7 @@ if (process.env.NODE_ENV === "production") throw new Error("Integration tests mu
 const { db } = await import("../src/db/client");
 const { createSourceConnection, listSourceConnections, revokeSourceConnection } = await import("../src/db/queries/sources");
 const { persistAcquisition, completeExistingAcquisition, failExistingAcquisition, listCanonicalEvidence } = await import("../src/db/queries/canonical_evidence");
-const { ACQUISITION_DISPATCH_LEASE_MS, claimAcquisitionJob, cancelAcquisitionJob } = await import("../src/db/queries/acquisition_execution");
+const { ACQUISITION_DISPATCH_LEASE_MS, claimAcquisitionJob, cancelAcquisitionJob, requestAcquisitionJobCancellation } = await import("../src/db/queries/acquisition_execution");
 const { loadResearchContextSources } = await import("../src/db/queries/research_context");
 const { createActiveSolutionProfile } = await import("../src/db/queries/solution_profiles");
 const { listDecisionBriefs, saveDecisionBrief, createCampaignLearningCandidate, createIntelligenceCandidate, promoteCampaignLearning, reviewIntelligenceRecord } = await import("../src/db/queries/workspace_intelligence");
@@ -300,6 +300,58 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       assert.equal(source.health, "unavailable");
     });
 
+    await t.test("administrative acquisition cancellation is tenant-scoped and unknown-outcome safe", async () => {
+      const owner = await fixture();
+      const outsider = await fixture();
+      const job = await queued(owner);
+      const [user] = await db.insert(appUser).values({ email: `cancellation-${randomUUID()}@example.invalid`, name: "Cancellation researcher", role: "researcher", ssoSubjectId: randomUUID() }).returning();
+      await db.insert(clientMembership).values({ clientId: owner.tenant.id, userId: user.id, role: "researcher" });
+      const now = new Date();
+      assert.equal(await requestAcquisitionJobCancellation({ clientId: outsider.tenant.id, actorUserId: user.id, id: job.id, now }), "unavailable");
+      assert.equal(await requestAcquisitionJobCancellation({ clientId: owner.tenant.id, actorUserId: user.id, id: job.id, now }), "cancelled");
+      assert.equal(await requestAcquisitionJobCancellation({ clientId: owner.tenant.id, actorUserId: user.id, id: job.id, now: new Date(now.getTime() + 1_000) }), "already_cancelled");
+      const receipts = await db.select().from(sourceAcquisitionReceipt).where(and(
+        eq(sourceAcquisitionReceipt.clientId, owner.tenant.id),
+        eq(sourceAcquisitionReceipt.jobId, job.id),
+      ));
+      assert.equal(receipts.length, 1);
+      assert.equal(receipts[0].errorCode, "cancelled-by-user");
+      const audits = await db.select().from(governanceAudit).where(and(
+        eq(governanceAudit.clientId, owner.tenant.id),
+        eq(governanceAudit.entityType, "source_acquisition_job"),
+        eq(governanceAudit.entityId, String(job.id)),
+      ));
+      assert.equal(audits.length, 1, "cancellation and its redacted audit are atomic and retry-safe");
+
+      if (process.env.TEST_HTTP === "1") {
+        const allowedJob = await queued(owner);
+        const foreignJob = await queued(outsider);
+        const [viewer] = await db.insert(appUser).values({ email: `cancellation-viewer-${randomUUID()}@example.invalid`, name: "Cancellation viewer", role: "viewer", ssoSubjectId: randomUUID() }).returning();
+        await db.insert(clientMembership).values({ clientId: owner.tenant.id, userId: viewer.id, role: "viewer" });
+        const token = await createAuthSession(user.id, owner.tenant.id);
+        const viewerToken = await createAuthSession(viewer.id, owner.tenant.id);
+        const server = await startTestHttpServer(url!);
+        try {
+          assert.equal((await server.request(`/api/acquisition/jobs/${allowedJob.id}/cancel`, undefined, {})).status, 403);
+          assert.equal((await server.request(`/api/acquisition/jobs/${allowedJob.id}/cancel`, viewerToken, {})).status, 403);
+          const foreign = await server.request(`/api/acquisition/jobs/${foreignJob.id}/cancel`, token, {});
+          const missing = await server.request("/api/acquisition/jobs/2147483647/cancel", token, {});
+          assert.equal(foreign.status, 409);
+          assert.equal(missing.status, 409);
+          assert.deepEqual(await foreign.json(), await missing.json(), "foreign and missing jobs are non-disclosing");
+          const first = await server.request(`/api/acquisition/jobs/${allowedJob.id}/cancel`, token, {});
+          assert.equal(first.status, 200);
+          assert.equal((await first.json()).replayed, false);
+          const replay = await server.request(`/api/acquisition/jobs/${allowedJob.id}/cancel`, token, {});
+          assert.equal(replay.status, 200);
+          assert.equal((await replay.json()).replayed, true);
+          assert.equal((await server.request(`/api/monitoring/jobs/${allowedJob.id}/cancel`, token, {})).status, 404);
+        } finally {
+          await server.stop();
+        }
+      }
+    });
+
     await t.test("research snapshots reject changed context and expiry during concurrent persistence", async () => {
       const first = await fixture();
       const second = await fixture(first.tenant);
@@ -462,35 +514,27 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       const reviewInput = { clientId: f.tenant.id, id: packet.id, reviewerUserId: user.id, decision: "accepted" as const, now };
       assert.equal(await reviewPeriodicBriefing({ ...reviewInput, clientId: other.tenant.id }), false);
 
-      // Opt-in HTTP proof uses real opaque sessions against the isolated test database.
+      // The dormant domain remains covered directly, while every former production surface stays absent.
       if (process.env.TEST_HTTP === "1") {
         const server = await startTestHttpServer(url!);
         try {
           await db.insert(clientMembership).values([{ userId: user.id, clientId: f.tenant.id, role: "reviewer" }, { userId: user.id, clientId: other.tenant.id, role: "reviewer" }]);
           const session = await createAuthSession(user.id, f.tenant.id);
-          assert.equal((await server.request("/api/monitoring/briefings")).status, 401);
           const viewerIdentity = await setClientAccess({ action: "grant", clientSlug: f.tenant.slug, subject: randomUUID(), role: "viewer" });
           const viewer = await createAuthSession(viewerIdentity.userId!, f.tenant.id);
-          assert.equal((await server.request(`/api/monitoring/briefings/${packet.id}/review`, viewer, { decision: "accepted" })).status, 403);
-          assert.equal((await server.request("/api/monitoring/briefings/settings", session, { profileId: configured.databaseId, cadences: [] })).status, 403);
           const otherSession = await createAuthSession(user.id, other.tenant.id);
-          assert.equal((await server.request(`/api/monitoring/briefings/${packet.id}/review`, otherSession, { decision: "accepted" })).status, 404);
-          const listing = await server.request("/api/monitoring/briefings", viewer);
-          assert.equal(listing.status, 200);
-          assert.equal((await listing.json()).briefings.length, 1);
-          const page = await server.request("/monitoring", viewer);
-          assert.equal(page.status, 200);
-          const html = await page.text();
-          assert.ok(html.includes("Scheduled research reviews"));
-          assert.ok(!html.includes("Save briefing rhythms"));
-          assert.ok(!html.includes("Accept review packet"));
-          assert.equal((await server.request(`/api/monitoring/briefings/${packet.id}/review`, session, { decision: "accepted" })).status, 200);
-          assert.equal((await server.request(`/api/monitoring/briefings/${packet.id}/review`, session, { decision: "rejected" })).status, 404);
+          for (const response of [
+            await server.request("/api/monitoring/briefings"),
+            await server.request("/api/monitoring/briefings", viewer),
+            await server.request(`/api/monitoring/briefings/${packet.id}/review`, session, { decision: "accepted" }),
+            await server.request("/api/monitoring/briefings/settings", session, { profileId: configured.databaseId, cadences: [] }),
+            await server.request(`/api/monitoring/briefings/${packet.id}/review`, otherSession, { decision: "accepted" }),
+            await server.request("/monitoring", viewer),
+          ]) assert.equal(response.status, 404);
         } finally { await server.stop(); }
-      } else {
-        const reviews = await Promise.all([reviewPeriodicBriefing(reviewInput), reviewPeriodicBriefing(reviewInput)]);
-        assert.equal(reviews.filter(Boolean).length, 1);
       }
+      const reviews = await Promise.all([reviewPeriodicBriefing(reviewInput), reviewPeriodicBriefing(reviewInput)]);
+      assert.equal(reviews.filter(Boolean).length, 1);
       assert.equal((await db.select().from(governanceAudit).where(and(eq(governanceAudit.clientId, f.tenant.id), eq(governanceAudit.entityId, String(packet.id)), eq(governanceAudit.action, "briefing_reviewed")))).length, 1);
       assert.equal((await db.select().from(intelligenceRecord).where(eq(intelligenceRecord.clientId, f.tenant.id))).length, 0);
       // A missed week is produced as an explicit gap, not silently called no change.
@@ -538,23 +582,23 @@ test("PostgreSQL source governance, migrations and concurrent transitions", asyn
       if (process.env.TEST_HTTP === "1") {
         const server = await startTestHttpServer(url!);
         try {
-          for (const invalid of [expired, future, token, newSessionToken(), "legacy.signed.payload", active + ".extra"]) assert.equal((await server.request("/api/monitoring/briefings", invalid)).status, 401);
-          assert.equal((await server.request("/api/monitoring/briefings", active)).status, 200);
-          assert.equal((await server.request("/api/monitoring/briefings/999999999/review", active, { decision: "accepted" })).status, 404);
+          for (const invalid of [expired, future, token, newSessionToken(), "legacy.signed.payload", active + ".extra"]) assert.equal((await server.request("/api/projects", invalid)).status, 401);
+          assert.equal((await server.request("/api/projects", active)).status, 200);
+          assert.equal((await server.request("/api/workspace/intelligence/999999999/promote", active, {})).status, 409);
           await setClientAccess({ action: "grant", clientSlug: f.tenant.slug, subject, role: "viewer" });
-          assert.equal((await server.request("/api/monitoring/briefings/999999999/review", active, { decision: "accepted" })).status, 403);
+          assert.equal((await server.request("/api/workspace/intelligence/999999999/promote", active, {})).status, 403);
           for (const origin of [null, "https://foreign.example", "null"]) assert.equal((await server.request("/api/auth/logout", active, {}, origin)).status, 403);
           assert.equal((await server.request("/api/auth/logout", active)).status, 405);
-          assert.equal((await server.request("/api/monitoring/briefings", active)).status, 200);
+          assert.equal((await server.request("/api/projects", active)).status, 200);
           const logout = await server.request("/api/auth/logout", active, {});
           assert.equal(logout.status, 303);
           assert.match(logout.headers.get("set-cookie") ?? "", /market_research_session=;/);
-          assert.equal((await server.request("/api/monitoring/briefings", active)).status, 401);
+          assert.equal((await server.request("/api/projects", active)).status, 401);
           const revoked = await createAuthSession(userId, f.tenant.id);
           await setClientAccess({ action: "revoke", clientSlug: f.tenant.slug, subject });
-          assert.equal((await server.request("/api/monitoring/briefings", revoked)).status, 401);
+          assert.equal((await server.request("/api/projects", revoked)).status, 401);
           await setClientAccess({ action: "grant", clientSlug: f.tenant.slug, subject, role: "reviewer" });
-          assert.equal((await server.request("/api/monitoring/briefings", revoked)).status, 401);
+          assert.equal((await server.request("/api/projects", revoked)).status, 401);
           assert.equal((await server.request("/api/auth/callback?code=synthetic-invalid-code")).status, 403);
         } finally { await server.stop(); }
       } else {
