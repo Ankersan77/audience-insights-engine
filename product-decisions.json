@@ -156,19 +156,49 @@
       "decisionEvidence": null
     },
     {
+      "id": "legacy-code-removal-data-access",
+      "question": "How will each installation retain controlled access to legacy records after the R1A2 application surfaces and workers are removed?",
+      "status": "needs_context",
+      "proposal": "Keep the legacy schema unchanged and operator-readable through controlled SQL or an approved checksum-bearing export until the separate R1B disposition decision.",
+      "owner": "data-owner",
+      "requiredBefore": "R1A2",
+      "blocker": "The authoritative installation register and a per-installation preservation, access and rollback record are not owner-accepted.",
+      "decisionEvidence": null
+    },
+    {
       "id": "canonical-maintenance-bounds",
       "question": "Which resource, artifact and revocation boundaries govern canonical maintenance before legacy removal?",
       "status": "decided",
       "proposal": "Use the R1A1b contract: 240-second handler, 10-second statements, 1-second locks, fixed row/chunk limits, 256-KiB/100-reference artifacts, O(1) revocation with cleanupPending and mandatory fail-closed artifact projection.",
       "owner": "operations-owner",
       "requiredBefore": "R1A1b",
-      "blocker": "The decision is resolved, but R1A1b remains open until its isolated migration, runtime behavior, projection, concurrency tests and rollback evidence pass; cleanup SLO and installation-specific index deployment remain separate open decisions.",
+      "blocker": "The decision and repository implementation are complete, but they do not authorize R1A2 without the separate cleanup SLO, installation-specific index deployment and R0B/R1A1 evidence.",
       "decisionEvidence": {
         "ref": "docs/r1a1b-bounded-maintenance-decision.md",
         "digest": "sha256:421a144974536c97bd949a95b27a5f6fdc0df6f4cb41e3bac0b909acd2a52fd7",
         "verifiedAt": "2026-10-17T22:00:00.000Z",
         "expiresAt": "2027-10-18T00:00:00.000Z"
       }
+    },
+    {
+      "id": "canonical-cleanup-slo",
+      "question": "What maximum canonical-cleanup backlog age and incident threshold apply before legacy removal?",
+      "status": "needs_context",
+      "proposal": null,
+      "owner": "operations-owner",
+      "requiredBefore": "R1A2",
+      "blocker": "No installation-aware cleanup cadence, maximum backlog age, alert threshold or accountable response has been accepted.",
+      "decisionEvidence": null
+    },
+    {
+      "id": "r1a1b-index-deployment",
+      "question": "Which measured maintenance window will apply migration 0019 indexes for each installation?",
+      "status": "needs_context",
+      "proposal": "Use a measured maintenance window per installation; any concurrent rollout requires a separately reviewed forward migration.",
+      "owner": "operations-owner",
+      "requiredBefore": "R1A2",
+      "blocker": "No authoritative installation inventory, sizing result or accepted maintenance window exists.",
+      "decisionEvidence": null
     }
   ]
 }

@@ -40,8 +40,8 @@ Repository tests cannot supply these missing facts:
 1. the inventory of every deployed database and its legacy row/queue state;
 2. an owner-accepted upgrade exercise from a representative pre-`0018` installation snapshot with
    legacy rows through the existing immutable migrations to the current `0019` head; the isolated
-   PostgreSQL 16
-   fixture in `integration/pre0018-upgrade.integration.ts` passed remote CI run `39026361215` and
+   PostgreSQL 16 fixture in `integration/pre0018-upgrade.integration.ts` passed remote CI run
+   `39109907282` and
    supplies repository evidence, but neither the fixture nor that run is installation evidence;
 3. a timed restore from a PostgreSQL-native test backup;
 4. acceptance of the accountable owner roles in `product-decisions.json`;
@@ -53,8 +53,9 @@ evidence. The repository now contains the neutral runtime, isolated canonical ma
 read-only inventory command documented in [the R1A1 legacy inventory runbook](r1a1-legacy-inventory.md).
 The repository portion of the separate dependency review is recorded in
 [the R1A1 dependency audit](r1a1-dependency-audit.md); its live database,
-queue/schedule, deployment, external-consumer, traffic, secret-retirement and production-image
-checks remain open. These repository artifacts do not complete R1A1 for real installations. The
+queue/schedule, deployment, external-consumer, traffic and secret-inventory checks remain open.
+Production-image removal proof is a separate R1A2 candidate/exit check, not a prerequisite to start
+R1A2. These repository artifacts do not complete R1A1 for real installations. The
 R1A1b bounded-maintenance contract is approved in [its decision record](r1a1b-bounded-maintenance-decision.md),
 and its additive migration and repository-verifiable runtime exit gate are implemented and green in
 CI run `39109678811`. This does not supply the installation-specific cleanup objective, index-build
@@ -64,12 +65,20 @@ work in R1B additionally requires the `legacy-data-disposition` decision and ins
 migration recovery controls. R3 additionally requires item 5. A later R1B test must separately prove
 the new contraction migration from `0019`.
 
-The dependency audit found no canonical import of the detachable legacy runtime cluster, but it also
-found two release blockers that require explicit proof: the persisted transitional-monitoring
-schedule must be removed rather than merely left without a worker, and the current Docker standalone
-output does not demonstrate a runnable worker entry point. CI also does not yet build and inspect the
-production image. The read-only inventory's foreign-key and view catalog is intentionally not
-treated as complete dependency evidence.
+The current repository-visible discovery is recorded in
+[the R0B installation evidence record](r0b-installation-evidence.md). The assessed checkout had no
+configured installation credentials or deployment manifest beyond the Dockerfile, and repository-
+scoped GitHub queries returned no environments, deployments, variables, secrets or releases. This
+narrows the search but is not a verified-zero installation claim: the authoritative cloud,
+database/backup, organization, DNS, IdP, secret-store, process-manager and external-consumer
+perimeter still needs owner attestation. All nine role assignments also remain pending.
+
+The dependency audit found no canonical import of the detachable legacy runtime cluster. Before
+R1A2, the handling of the persisted transitional-monitoring schedule must be owner-approved; the
+actual unschedule/restart proof belongs to the R1A2 cutover. The current Docker standalone output
+does not demonstrate a runnable worker entry point, and CI does not yet build and inspect the
+production image; both are R1A2 candidate/exit work. The read-only inventory's foreign-key and view
+catalog is intentionally not treated as complete dependency evidence.
 
 ## Safe R1 boundary already identified
 

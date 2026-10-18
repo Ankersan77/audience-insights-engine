@@ -1,9 +1,10 @@
 # R1A1 legacy inventory operator runbook
 
 This runbook produces one read-only, aggregate legacy inventory artifact for one known
-single-tenant installation. It does **not** complete R0B, approve a legacy-data disposition or
-authorize R1A2. R1A2 remains blocked until R1A1b passes and every installation and every separate
-R0B gate has accepted evidence.
+single-tenant installation. It does **not** complete R0B, approve either the preservation/access
+disposition needed before R1A2 or the destructive disposition reserved for R1B, or authorize R1A2.
+R1A2 remains blocked until R1A1b passes and every installation and every separate R0B gate has
+accepted evidence.
 
 ## Preconditions
 
@@ -28,6 +29,22 @@ Before running the command:
    access-audited and covered by the installation's incident, legal-hold and deletion procedures.
    Do not use the repository, a shared temporary directory, a CI artifact with broad readership,
    chat, email or a ticket attachment. Record an approved expiry/destruction date before the run.
+
+### Verified-zero installation route
+
+If the authoritative registry contains zero deployed installations, do not run this command
+without a database and do not invent an installation or empty artifact. The data owner and
+operations owner must jointly attest, with timestamps and durable evidence, that the registry is
+complete and that the reviewed hosting accounts, database inventories, deployment/IaC repositories,
+process definitions, scheduled tasks and known domains contain no deployed database, web process,
+worker or separately operated copy of this product. The attestation must record the searches,
+scope, limitations and evidence references.
+
+An accepted verified-zero attestation closes only checks that require a target installation. It
+does not waive accountable owner-role acceptance, the representative pre-`0018` upgrade through the
+current `0019_r1a1b_bounded_retention` head, the timed PostgreSQL-native restore exercise, the
+cleanup service objective or the index-build policy for a future installation. No verified-zero
+attestation has been supplied or accepted at the time of this runbook update.
 
 ## Run
 
@@ -111,13 +128,17 @@ These are failing or blocking findings until investigated and durably resolved:
 - an `unknown` stored ability/version relation or a stored active/deferred manifest without an
   explicit disposition;
 - dependent views or other database dependencies without an owner-approved forward-cleanup plan;
-- any legacy rows or identity-bearing field-presence count without a recorded decision to retain for
-  a bounded audit period, tombstone, delete, or perform a separately approved export.
+- any legacy rows or identity-bearing field-presence count without an owner-approved R1A2
+  preservation/access disposition that keeps required data unchanged and operator-readable through
+  controlled SQL or a separately approved export.
 
 A non-zero field-presence count is discovery evidence, not permission to export that field. A zero
-count is not proof that every historical backup or other installation is clear. Completed, cancelled
-or failed queue counts and ordinary legacy row counts are not automatically errors, but they still
-require a documented disposition before destructive schema work.
+count is not proof that every historical backup or other installation is clear. The pre-R1A2
+preservation/access disposition prevents code removal from making required records inaccessible;
+it authorizes no tombstone, deletion or destructive schema change. The final decision to export,
+retain, tombstone or delete data remains the separate R1B `legacy-data-disposition` gate. Completed,
+cancelled or failed queue counts and ordinary legacy row counts are not automatically errors, but
+they still require that final disposition before destructive schema work.
 
 ## Store and close the run
 
@@ -129,8 +150,8 @@ In the installation registry, record:
   verification timestamps, operator and repository/application revision;
 - database migration classification and head, legacy table counts, integrity findings and complete
   `research-run` queue state;
-- owner and disposition for every legacy data class, including shared/unattributable tables and
-  stored ability manifests;
+- data owner acting as migration owner, and the R1A2 preservation/access disposition for every
+  legacy data class, including shared/unattributable tables and stored ability manifests;
 - storage owner, permitted readers, legal-hold status, expiry/destruction date and eventual
   destruction evidence;
 - any blocker, remediation ticket and the later inventory artifact that proves closure.
@@ -139,15 +160,18 @@ In the installation registry, record:
 
 The inventory portion of R0B is complete only when:
 
-- [ ] the authoritative registry is signed off as complete;
+- [ ] the authoritative registry is signed off as complete; if it contains zero installations, the
+      verified-zero route above is fully evidenced and jointly accepted by the data owner and
+      operations owner rather than inferred from missing information;
 - [ ] every registered installation has a successful, checksum-verified artifact and none is
       unknown or `not supplied`;
 - [ ] each artifact records the intended revision, migration head, legacy counts and full
       `research-run` queue state;
 - [ ] anomalies, foreign/malformed scope, pending jobs, dependencies and unknown/deferred manifests
       are resolved or explicitly block progression;
-- [ ] every legacy data class has an owner-approved disposition and no identity-bearing export was
-      created by this procedure;
+- [ ] every legacy data class has an owner-approved R1A2 preservation/access disposition and no
+      identity-bearing export was created by this procedure; final destructive disposition remains
+      an R1B gate;
 - [x] the repository portion of the separate dependency audit is recorded in
       [the R1A1 dependency audit](r1a1-dependency-audit.md), covering imports, dynamic SQL,
       tracked database objects, declared queues/schedules and packaging;
@@ -159,7 +183,11 @@ The inventory portion of R0B is complete only when:
       destruction responsibility are evidenced.
 
 R0B still additionally requires accountable owner-role acceptance with timestamps and durable
-evidence, a representative pre-`0018` upgrade through `0018` with legacy rows, and a timed,
-evidenced PostgreSQL-native backup restore. Completion of this runbook alone therefore neither
-completes R0B nor authorizes R1A2. R1A2 also requires R1A1b to pass and every open item in
-[the R1A1 dependency audit](r1a1-dependency-audit.md) to be complete and owner-accepted.
+evidence, a representative pre-`0018` upgrade through the current
+`0019_r1a1b_bounded_retention` head with legacy rows, and a timed, evidenced PostgreSQL-native
+backup restore. For this work, `migration owner` means the data owner and `deployment owner` means
+the operations owner. Completion of this runbook alone therefore neither completes R0B nor
+authorizes R1A2. R1A2 also requires R1A1b to pass and every prerequisite-to-start item in
+[the R1A1 dependency audit](r1a1-dependency-audit.md) to be complete and owner-accepted. The
+candidate-only checks in that audit are R1A2 exit evidence and cannot be completed before R1A2
+implementation exists.

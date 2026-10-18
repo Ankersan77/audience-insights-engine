@@ -2,14 +2,17 @@
 
 Status: **repository review recorded; installation and external evidence open**
 
-Reviewed: 2026-10-17
+Reviewed: 2026-10-18
 
-Applies before: R1A2 legacy code and packaging removal
+Applies to: the prerequisites for starting R1A2 and the separate R1A2 candidate/exit review
 
 This audit records the dependency evidence that cannot be inferred from the aggregate legacy
 inventory alone. It separates facts visible in this repository from facts that must be collected
-for every installation. It does **not** complete R0B or R1A1, approve a data disposition, authorize
-R1A2, or authorize the destructive R1B schema migration.
+for every installation. It does **not** complete R0B or R1A1, approve the R1A2 preservation/access
+disposition, approve the final destructive R1B disposition, authorize R1A2, or authorize the
+destructive R1B schema migration. The prerequisite evidence in this document must close before
+R1A2 begins. Checks that can only be performed on the changed R1A2 candidate are explicitly
+separated and are R1A2 exit evidence, not prerequisites to start it.
 
 ## Scope and limitations
 
@@ -34,26 +37,44 @@ location defined by `docs/r1a1-legacy-inventory.md`.
 
 ## Repository evidence matrix
 
-| Area | Evidence | Repository conclusion | Closure required before R1A2 |
+| Area | Evidence | Repository conclusion | Required timing |
 | --- | --- | --- | --- |
-| Legacy import graph | `src/workers/index.ts` imports `runQueue`; `src/workers/runQueue.ts` is the only runtime bridge to `runLast30Days`, `draftInsights`, legacy run/evidence queries and the legacy SLO. `app/api/runs/trigger/route.ts` is its only repository queue producer. `src/workers/canonicalWorkers.ts` imports none of those modules. | The runtime path is detachable as one cluster. | Remove the complete cluster in one reviewable release and rerun the canonical worker lifecycle proof. |
-| Legacy web/query surface | `app/brands`, `app/runs`, `app/insights`, their six API routes, and the five legacy query modules are mutually contained. The run trigger is fail-closed, but brand/instruction writes, insight review and run cancellation remain reachable by direct URL. | No canonical runtime import needs these query modules, but the surface is not inert. | Confirm consumers and traffic, establish a write quiesce, remove every route/page, and prove the routes return 404. |
-| Shared modules | `src/lib/audit.ts` contains both legacy `recordAudit` and canonical `recordGovernanceAudit`. `src/lib/metrics.ts` contains shared `logEvent` plus legacy run-SLO code. `src/db/schema.ts` contains both legacy and canonical schema. | Whole-file deletion would regress canonical behavior or prematurely change schema. | Remove only legacy exports/imports in R1A2; retain the Drizzle legacy definitions unchanged until R1B. |
-| Dynamic SQL | `scripts/legacy-inventory.ts` deliberately reads all legacy relations. `scripts/bootstrap-client-owned.ts` dynamically inspects every public table without naming a legacy table. `integration/legacy-inventory-cases.ts` and `integration/pre0018-upgrade.integration.ts` are test-only legacy SQL. | No hidden production dynamic-SQL consumer was found in the repository. | Keep inventory/upgrade evidence until R1B. Recheck application source after the R1A2 edit. |
-| Database objects | `drizzle/meta/0018_snapshot.json` declares no application views or policies. Migrations `0001`-`0018` create no application trigger, function, procedure, view or materialized view. Declarative foreign keys are already captured by the inventory artifact. | Tracked schema history contains no hidden procedural dependency. | Run the catalog checks below on every installation because out-of-band objects are not represented here. |
-| Legacy queue | `research-run` is event-driven, not scheduled. `src/workers/index.ts` still registers its worker. | Removing the subscriber is code-safe only after pending work is resolved. | Require zero `created`, `retry` and `active` jobs and confirm there is no external producer or older web deployment. Do not delete PgBoss rows ad hoc. |
-| Standalone legacy purge | `src/workers/purgeEvidence.ts` is separately executable, reads `EVIDENCE_RETENTION_DAYS` and can delete every matching legacy evidence row in one unbounded statement. It is not currently imported or scheduled by repository runtime code. | Absence from the worker composition does not make the operator entry point or deployment configuration inert. | Inventory operator use and deployment configuration, keep it disabled during R1A1, and remove or redirect it to the bounded canonical retention path in R1A2. |
-| Persisted schedules | Canonical maintenance and synthesis schedules are declared in `src/workers/canonicalMaintenance.ts` and `src/workers/synthesisMaintenance.ts`. `src/workers/canonicalQueue.ts` also persists the deferred monitoring schedule. | Removing a registration call does not delete an existing PgBoss schedule. | Explicitly unschedule `market-research-monitoring-scheduler`, handle its pending jobs and prove the schedule is absent after restart. Preserve canonical schedules. |
-| Docker and Git | `Dockerfile` installs Python and copies `vendor/last30days`; `.gitmodules` owns the gitlink; `.github/workflows/ci.yml` fetches submodules. | All are direct legacy packaging dependencies. | Remove them together and inspect the built image for absence of Python and the vendored engine. |
-| Worker artifact | The current `.next/standalone` output contains neither `src/workers/index.ts` nor `tsx`; the Docker runtime copies only the standalone web output, static/public assets and the vendor directory. | The repository does not currently prove that `pnpm worker` is runnable in the production image. | Define and test the actual canonical worker artifact/entry point before claiming that the final image starts only canonical queues. |
-| CI image proof | CI runs `pnpm build`, not `docker build`, image inspection or an SBOM assertion. | The R1A2 production-image exit gate is not implemented. | Build and inspect the production image in CI; record immutable image evidence. |
-| Documented consumers | `docs/runbook.md` documents legacy research-run mutation; `docs/dsr-procedure.md` reads/deletes legacy evidence; the inventory command remains an intentional reader. | Known operator consumers exist even after UI removal. | Retire the run mutation procedure. Keep controlled inventory and DSR access until the R1B disposition/destruction gate closes. |
-| Governance guard | `scripts/validate-product-governance.mjs` checks only a subset of legacy paths when `legacyLast30days` becomes `removed`. | A partial trim could pass governance. | Reject leftover legacy routes, worker registration, Python/vendor packaging, submodule checkout, query modules, parser, feature flag and direct Anthropic path. |
+| Legacy import graph | `src/workers/index.ts` imports `runQueue`; `src/workers/runQueue.ts` is the only runtime bridge to `runLast30Days`, `draftInsights`, legacy run/evidence queries and the legacy SLO. `app/api/runs/trigger/route.ts` is its only repository queue producer. `src/workers/canonicalWorkers.ts` imports none of those modules. | The runtime path is detachable as one cluster. | **R1A2 exit:** remove the complete cluster in one reviewable release and rerun the canonical worker lifecycle proof. |
+| Legacy web/query surface | `app/brands`, `app/runs`, `app/insights`, their six API routes, and the five legacy query modules are mutually contained. The run trigger is fail-closed, but brand/instruction writes, insight review and run cancellation remain reachable by direct URL. | No canonical runtime import needs these query modules, but the surface is not inert. | **Before R1A2:** confirm consumers and traffic and approve the cutover/write-quiesce plan. **R1A2 exit:** remove every route/page and prove the routes return 404. |
+| Shared modules | `src/lib/audit.ts` contains both legacy `recordAudit` and canonical `recordGovernanceAudit`. `src/lib/metrics.ts` contains shared `logEvent` plus legacy run-SLO code. `src/db/schema.ts` contains both legacy and canonical schema. | Whole-file deletion would regress canonical behavior or prematurely change schema. | **R1A2 implementation:** remove only legacy exports/imports; retain the Drizzle legacy definitions unchanged until R1B. |
+| Dynamic SQL | `scripts/legacy-inventory.ts` deliberately reads all legacy relations. `scripts/bootstrap-client-owned.ts` dynamically inspects every public table without naming a legacy table. `integration/legacy-inventory-cases.ts` and `integration/pre0018-upgrade.integration.ts` are test-only legacy SQL. | No hidden production dynamic-SQL consumer was found in the repository. | **Before R1A2:** preserve inventory/upgrade evidence. **R1A2 exit:** recheck application source. Keep controlled inventory evidence until R1B. |
+| Database objects | `drizzle/meta/0019_snapshot.json` declares no application views or policies. Migrations `0001`-`0019` create no application trigger, function, procedure, view or materialized view. Declarative foreign keys are already captured by the inventory artifact. | Tracked schema history contains no hidden procedural dependency. | **Before R1A2:** run the catalog checks below on every installation because out-of-band objects are not represented here. |
+| Legacy queue | `research-run` is event-driven, not scheduled. `src/workers/index.ts` still registers its worker. | Removing the subscriber is code-safe only after pending work is resolved. | **Before R1A2:** require zero `created`, `retry` and `active` jobs and confirm there is no external producer or older web deployment. Do not delete PgBoss rows ad hoc. **R1A2 exit:** prove the subscriber is absent. |
+| Standalone legacy purge | `src/workers/purgeEvidence.ts` is separately executable, reads `EVIDENCE_RETENTION_DAYS` and can delete every matching legacy evidence row in one unbounded statement. It is not currently imported or scheduled by repository runtime code. | Absence from the worker composition does not make the operator entry point or deployment configuration inert. | **Before R1A2:** inventory operator use and deployment configuration and keep it disabled. **R1A2 exit:** remove it or redirect exclusively to bounded canonical retention. |
+| Persisted schedules | Canonical maintenance and synthesis schedules are declared in `src/workers/canonicalMaintenance.ts` and `src/workers/synthesisMaintenance.ts`. `src/workers/canonicalQueue.ts` also persists the deferred monitoring schedule. | Removing a registration call does not delete an existing PgBoss schedule. | **Before R1A2:** approve handling of the deferred monitoring schedule and its pending jobs. **R1A2 cutover/exit:** explicitly unschedule `market-research-monitoring-scheduler`, prove it remains absent after restart and preserve canonical schedules. |
+| Docker and Git | `Dockerfile` installs Python and copies `vendor/last30days`; `.gitmodules` owns the gitlink; `.github/workflows/ci.yml` fetches submodules. | All are direct legacy packaging dependencies. | **R1A2 exit:** remove them together and inspect the built image for absence of Python and the vendored engine. |
+| Worker artifact | The current `.next/standalone` output contains neither `src/workers/index.ts` nor `tsx`; the Docker runtime copies only the standalone web output, static/public assets and the vendor directory. | The repository does not currently prove that `pnpm worker` is runnable in the production image. | **R1A2 exit:** define and test the canonical worker artifact/entry point before claiming that the final image starts only canonical queues. |
+| CI image proof | CI runs `pnpm build`, not `docker build`, image inspection or an SBOM assertion. | The R1A2 production-image exit gate is not implemented. | **R1A2 exit:** build and inspect the production image in CI; record immutable image evidence. |
+| Documented consumers | `docs/runbook.md` documents legacy research-run mutation; `docs/dsr-procedure.md` reads/deletes legacy evidence; the inventory command remains an intentional reader. | Known operator consumers exist even after UI removal. | **Before R1A2:** inventory their owners and use. **R1A2 exit:** retire the run mutation procedure. Keep controlled inventory and DSR access until the R1B disposition/destruction gate closes. |
+| Governance guard | `scripts/validate-product-governance.mjs` checks only a subset of legacy paths when `legacyLast30days` becomes `removed`. | A partial trim could pass governance. | **R1A2 exit:** reject leftover legacy routes, worker registration, Python/vendor packaging, submodule checkout, query modules, parser, feature flag and direct Anthropic path. |
 
 The defensive rejection of identity-bearing keys such as `author_handle` in
 `src/evidence/policy.ts` is a canonical security control, not a legacy dependency. Preserve it.
 Historical migrations, the frozen R0 baseline/tag and superseded ADRs also remain as historical
 evidence; they must not recreate an active runtime or packaging dependency.
+
+## Verified-zero installation route
+
+An authoritative registry may contain zero deployed installations. That is not the same as an
+unknown inventory and must not be inferred from repository silence. The data owner and operations
+owner must jointly attest, with timestamps and durable evidence, that the registry is complete and
+that the reviewed hosting accounts, database inventories, deployment/IaC repositories,
+process-manager definitions, scheduled tasks and known domains contain no deployed database, web
+process, worker or separately operated copy of this product. Record the searches performed, their
+scope and any limitations; do not invent an installation ID or run the inventory command without a
+database merely to create an empty artifact.
+
+A verified-zero attestation closes only the per-installation inventory, catalog, queue, deployment,
+traffic, consumer and secret checks that have no target installation. It does not waive accountable
+owner acceptance, the representative pre-`0018` upgrade through the current
+`0019_r1a1b_bounded_retention` head, the timed PostgreSQL-native restore exercise, the cleanup
+service objective or the policy for index builds on a future installation. No verified-zero
+attestation has been supplied at the time of this review.
 
 ## Required per-installation read-only checks
 
@@ -161,17 +182,19 @@ ORDER BY name, state;
 ```
 
 The complete result must match the reviewed source inventory. `research-run` requires zero
-`created`, `retry` and `active` jobs before its subscriber is removed. The monitoring schedule must
-be absent after the approved unschedule/restart operation. Do not copy `pgboss.job.data` into audit
-evidence and do not manipulate PgBoss relations directly.
+`created`, `retry` and `active` jobs before its subscriber is removed. Before R1A2, record the
+monitoring schedule and approve handling of it and any pending jobs; the R1A2 cutover/exit evidence
+must prove that the approved unschedule/restart operation leaves it absent. Do not copy
+`pgboss.job.data` into audit evidence and do not manipulate PgBoss relations directly.
 
 ```sql
 ROLLBACK;
 ```
 
-## External and deployment evidence
+## External and deployment evidence required before R1A2
 
-For every installation, the migration owner and deployment owner must jointly record:
+For every installation, the **data owner acting as migration owner** and the **operations owner
+acting as deployment owner** must jointly record:
 
 - deployed web and worker revision/image digest, process commands and replica count;
 - all deployment/IaC repositories, process-manager definitions, scheduled tasks and webhook jobs;
@@ -184,38 +207,64 @@ For every installation, the migration owner and deployment owner must jointly re
   `ANTHROPIC_INSIGHT_MODEL`, `X_BEARER_TOKEN`, `XAI_API_KEY` and
   `SCRAPECREATORS_API_KEY`, plus any `EVIDENCE_RETENTION_DAYS` configuration or manual invocation
   of the standalone legacy purge, including revocation/removal timing and rollback implications;
-- an immutable production-image inspection or SBOM proving no Python executable/package and no
-  `/app/vendor/last30days`, plus a successful canonical worker startup/drain from that artifact;
 - owner, timestamp, durable evidence reference and remediation ticket for every exception.
 
 Repository silence is not evidence that an external consumer, older deployment or secret does not
 exist. An unknown installation, consumer or process is a failing state.
 
-## Closure checklist
+## Prerequisites-to-start checklist
 
 - [x] Repository import graph, dynamic SQL, tracked schema, queue declarations and packaging were
       reviewed and recorded in this document.
-- [ ] The document is rechecked against the immutable R1A2 candidate revision and accepted by the
-      migration owner and deployment owner.
-- [ ] Every authoritative installation has a complete, checksum-verified legacy inventory.
+- [ ] The authoritative installation registry is accepted as complete by the data owner and
+      operations owner, with neither unknown nor `not supplied` entries. If it contains zero
+      installations, the verified-zero route above is fully evidenced and accepted.
+- [ ] Every registered installation has a complete, checksum-verified legacy inventory.
 - [ ] Trigger, function/procedure, view/materialized-view and PgBoss queries above are recorded for
       every installation; all returned dependencies have an approved disposition.
 - [ ] `research-run` has zero `created`, `retry` and `active` jobs and no external or old-revision
       producer can enqueue new work.
-- [ ] The deferred monitoring schedule is explicitly removed and produces no further jobs.
+- [ ] Handling of the deferred monitoring schedule and any pending jobs is approved for the R1A2
+      cutover without changing canonical schedules.
 - [ ] Route/API traffic, external consumers, deployment/process definitions and secret-store
       references are inventoried with no unknown owner, including any operator use or configuration
       of the standalone legacy purge.
-- [ ] The R1A2 candidate production image starts the canonical worker, excludes Python and the
-      vendored engine, and has immutable inspection or SBOM evidence from CI.
-- [ ] Governance rejects every active legacy code, route, queue-registration and packaging path
-      while preserving shared canonical audit, telemetry and identity-field defenses.
-- [ ] R0B recovery, owner acceptance and data-disposition gates are independently complete.
+- [ ] Every legacy data class has an owner-approved R1A2 preservation/access disposition that keeps
+      required data operator-readable and unchanged through controlled SQL or an approved export.
+      It authorizes no destructive schema or data change; final export/retention/tombstone/deletion
+      approval remains the separate R1B `legacy-data-disposition` gate.
+- [ ] The representative pre-`0018` upgrade with legacy rows passes through the current
+      `0019_r1a1b_bounded_retention` head and is owner-accepted.
+- [ ] R0B recovery and accountable owner acceptance are independently complete, including the
+      timed PostgreSQL-native restore, cleanup service objective and applicable installation index
+      build method or future-installation policy.
+
+## R1A2 candidate and exit evidence
+
+These checks require the changed R1A2 candidate and do not block the start of R1A2 after the
+prerequisite checklist above passes:
+
+- [ ] This audit is rechecked against the immutable R1A2 candidate revision and accepted by the data
+      owner acting as migration owner and the operations owner acting as deployment owner.
+- [ ] Every legacy route/page, queue subscriber, legacy purge path and packaging dependency listed
+      above is removed or redirected exactly as the Roadmap requires; legacy routes return 404.
+- [ ] The deferred monitoring schedule is explicitly removed, produces no further jobs and remains
+      absent after restart, while canonical schedules remain present.
+- [ ] The candidate production image starts and drains the canonical worker, starts only approved
+      canonical queues, excludes Python and `/app/vendor/last30days`, and has immutable CI image or
+      SBOM evidence.
+- [ ] The governance check rejects every active legacy code, route, queue-registration and
+      packaging path while preserving shared canonical audit, telemetry and identity-field defenses.
+- [ ] Canonical lifecycle, build and all non-destructive integration verification remain green, and
+      legacy database state remains unchanged and operator-readable pending R1B.
 
 ## R1A2 gate conclusion
 
-**Blocked.** The repository review identifies a bounded removal cluster and no canonical import of
-that cluster, but per-installation catalogs, queue/schedule state, deployment packaging, external
-consumer/traffic evidence, secret retirement, image proof, R0B recovery and accountable acceptance
-remain open. This document may support those decisions; it is not approval to start R1A2.
-Roadmap R1A1b must also pass independently before R1A2 may start.
+**Blocked at the prerequisites-to-start gate.** The repository review identifies a bounded removal
+cluster and no canonical import of that cluster, but no accepted verified-zero attestation or
+complete per-installation catalogs, queue/schedule state, external consumer/traffic evidence,
+secret inventory, R0B recovery and accountable acceptance have been recorded. This document may
+support those decisions; it is not approval to start R1A2. R1A1b's repository gate has passed, but
+does not replace any prerequisite above. Candidate image, removal-guard and post-change lifecycle
+proof belong to the separate R1A2 exit gate above and are not reasons to prevent R1A2 from starting
+once its prerequisites close.

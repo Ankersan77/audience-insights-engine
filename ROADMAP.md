@@ -144,7 +144,7 @@ person's acceptance and durable evidence before R0 can close.
 - apply all migrations to an empty PostgreSQL test database;
 - run integration and authenticated HTTP cases;
 - test an upgrade from a representative pre-`0018` database with legacy rows through the existing
-  immutable history to `0018`;
+  immutable history to the current migration head (presently `0019_r1a1b_bounded_retention`);
 - take and restore a test backup;
 - inventory all active routes, queues, tables and provider dependencies.
 
@@ -161,7 +161,7 @@ person's acceptance and durable evidence before R0 can close.
 
 - Accountable people accept the owner roles with timestamps and durable evidence.
 - Every in-scope installation is inventoried; no unknown or `not supplied` installation remains.
-- Representative pre-`0018` upgrade to `0018` passes with legacy rows.
+- Representative pre-`0018` upgrade through the current migration head passes with legacy rows.
 - PostgreSQL-native backup restore is timed and evidenced.
 
 ### Rollback
@@ -192,12 +192,15 @@ Inventory rows and dependencies for at least:
 - `ability_manifest`, including every stored manifest's relationship to the active and parked
   ability catalogs.
 
-For every known installation, decide whether each class is exported, tombstoned, retained for a
-bounded audit period or deleted. A missing installation is a failing discovery state, not a passing
-exception or implicit waiver. Do not drop brands or markets until canonical dependencies prove they
-are unused. Any identity-bearing export must be encrypted, least-privilege, access-audited,
-checksum-bearing, stored in an approved location, given an expiry/destruction date and covered by
-the same legal-hold and incident rules as the source database.
+For every known installation, inventory each class and approve a preservation/access plan before
+R1A2 so code removal cannot make required records inaccessible. The plan keeps legacy rows unchanged
+and operator-readable through controlled SQL or a separately approved checksum-bearing export; it
+does not authorize tombstoning, deletion or schema changes. The final export/retention/tombstone/
+deletion decision remains the R1B `legacy-data-disposition` gate. A missing installation is a failing
+discovery state, not a passing exception or implicit waiver. Do not drop brands or markets until
+canonical dependencies prove they are unused. Any identity-bearing export must be encrypted,
+least-privilege, access-audited, checksum-bearing, stored in an approved location, given an
+expiry/destruction date and covered by the same legal-hold and incident rules as the source database.
 
 #### Worker extraction
 
@@ -299,6 +302,16 @@ rollback window has closed.
 `last30days` and the legacy brand/instruction/run/insight workflow no longer execute, ship or appear
 as an active product, while legacy database state remains operator-readable through controlled SQL
 or an export artifact for the R1B decision.
+
+#### Entry gate
+
+- R0B, R1A1 and R1A1b have passed with durable evidence; a missing installation is not treated as
+  an implicit zero-installation inventory.
+- `legacy-code-removal-data-access`, `canonical-cleanup-slo` and `r1a1b-index-deployment` are decided
+  and owner-accepted in `product-decisions.json`.
+- Every installation has an approved write-quiesce, pending-job and deferred-monitoring-schedule
+  cutover plan. Actual route removal, unscheduling, image inspection and candidate lifecycle proof
+  remain R1A2 implementation/exit work.
 
 #### Work
 
