@@ -148,12 +148,17 @@
     {
       "id": "legacy-data-disposition",
       "question": "For every installation, which legacy rows are exported, retained, tombstoned or deleted?",
-      "status": "needs_context",
-      "proposal": "Do not auto-promote legacy evidence or insights; reconcile useful brand intent manually.",
+      "status": "decided",
+      "proposal": "For the verified-zero estate, export, retain and tombstone nothing; remove the twelve approved legacy tables and three legacy enums in an explicit forward-only migration without CASCADE, and never auto-promote legacy rows.",
       "owner": "data-owner",
       "requiredBefore": "R1B",
-      "blocker": "The current estate is verified-zero, but the data owner has not accepted whether and how the legacy schema is removed from the product baseline in R1B.",
-      "decisionEvidence": null
+      "blocker": "Any discovered installation, database, backup, export, data copy, external consumer or queued legacy work reopens the decision and requires installation-specific preservation, recovery and go/no-go evidence before migration.",
+      "decisionEvidence": {
+        "ref": "docs/r1b-data-disposition.md",
+        "digest": "sha256:b11faeb57060edbb06d57b96884c022ddfcb5b862320cd03cb2ea975918ec2dc",
+        "verifiedAt": "2026-10-18T13:00:39.000Z",
+        "expiresAt": "2027-10-18T00:00:00.000Z"
+      }
     },
     {
       "id": "legacy-code-removal-data-access",
