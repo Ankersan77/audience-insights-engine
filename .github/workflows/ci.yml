@@ -68,3 +68,4 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://postgres:isolated-test-only@127.0.0.1:5432/market_research_test
           TEST_HTTP: "1"
+          TEST_NATIVE_BACKUP_RESTORE: "1"
