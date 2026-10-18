@@ -4,14 +4,16 @@
 
 | Field | Value |
 |---|---|
-| Status | Decision input; non-normative |
+| Status | Evidence/design input; approved boundaries promoted to Blueprint 2.1.0 and Roadmap R1A1b |
 | Evidence snapshot | Repository working tree reviewed 2026-10-17 |
+| Decision resolution | Approved 2026-10-18; see `docs/r1a1b-bounded-maintenance-decision.md` |
 | Scope | Canonical session cleanup, evidence retention, copied-artifact redaction, stale acquisition reconciliation and queued acquisition dispatch |
 | Out of scope | Implementing code or migrations, changing product scope, changing a capability release state, or claiming production readiness |
 
-This audit records observed bounded-resource gaps and a smallest credible additive design for review.
-It does not amend `BLUEPRINT.md`, `ROADMAP.md`, the capability register, or any locked product
-decision. If this document conflicts with the Blueprint or Roadmap, those canonical documents win.
+This audit records observed bounded-resource gaps and the design input used for the R1A1b decision.
+It does not independently amend `BLUEPRINT.md`, `ROADMAP.md`, the capability register, or any locked
+product decision. The approved bounds now live in Blueprint 2.1.0, Roadmap R1A1b and the linked
+decision record; if this audit conflicts with them, those canonical records win.
 
 The relevant gates remain:
 
@@ -45,8 +47,9 @@ The smallest design that closes the gap without creating a generic workflow syst
 6. an O(1) source-revocation control-plane transition followed by bounded cleanup;
 7. additive result fields that expose backlog without treating expected continuation as failure.
 
-This is a proposal for decision. Batch sizes, payload limits, revocation response semantics and the
-read-projection obligation remain explicit approvals, not assumptions.
+The batch sizes, payload limits, revocation response semantics and read-projection obligation were
+approved on 2026-10-18. Implementation, installation evidence and the remaining open operational
+decisions are not implied by that approval.
 
 ## Current failure modes
 
@@ -452,19 +455,19 @@ to show that:
 These tests remain synthetic operational evidence. They do not satisfy installation sizing, live
 source, recovery or production-support gates.
 
-## Explicit decisions required before implementation
+## Decision resolution and remaining gates
 
-| Decision | Why it cannot be inferred | Proposed starting point |
-|---|---|---|
-| Per-stage row and wall-time budgets | They determine throughput, database load and cleanup SLA | Values in the budget table above |
-| Maximum artifact JSON bytes | One row must have a memory/CPU bound | 256 KiB serialized JSON |
-| Maximum evidence references per artifact | Array processing and GIN cost otherwise remain open-ended | 100 references |
-| Source revocation response | Exact synchronous counts conflict with O(1) control-plane work | Record revocation immediately; return `cleanupPending` |
-| Fail-closed artifact projection | Required to avoid exposure during bounded asynchronous cleanup | Mandatory for every web/MCP artifact DTO |
-| Cleanup service objective | Batch sizes cannot be judged without a maximum acceptable backlog age | Owner to define from privacy/source-rights obligations |
-| PgBoss statement-timeout strategy | A caller timeout alone does not cancel its SQL statement | Connection-level statement timeout with startup compatibility test |
-| Index deployment method per installation | GIN build risk depends on actual table size | Measured maintenance window or recorded concurrent pre-deploy step |
+| Decision | Resolution |
+|---|---|
+| Per-run row, chunk and wall-time budgets | Approved at the values in the budget table above |
+| Maximum artifact JSON bytes | Approved at 256 KiB (262,144 UTF-8 bytes) |
+| Maximum evidence references per artifact | Approved at 100 references |
+| Source revocation response | Approved as immediate O(1) revocation with `cleanupPending` |
+| Fail-closed artifact projection | Approved as mandatory for every web/MCP artifact DTO |
+| SQL timeout strategy | Approved 10-second statement and 1-second lock timeouts, enforced by the database and covered by startup/compatibility tests |
+| Cleanup service objective | Open; owner must define it from privacy/source-rights obligations |
+| Index deployment method per installation | Open; select a measured maintenance window or recorded concurrent pre-deploy step from installation evidence |
 
-Until these decisions are recorded and the required evidence passes, the correct conclusion is not
-that canonical maintenance is production-bounded. The correct conclusion is that its lifecycle and
-isolation have synthetic proof while its resource and continuation design remains pending approval.
+The approved decision permits R1A1b implementation; it does not prove that canonical maintenance is
+production-bounded. Until the required implementation, installation and external evidence passes,
+only lifecycle/isolation have synthetic proof and R1A2 remains closed.

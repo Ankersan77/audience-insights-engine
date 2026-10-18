@@ -6,9 +6,9 @@
 |---|---|
 | Product | Market Research |
 | Repository | `man-D4wn/Market-research` |
-| Blueprint version | 2.0.0 |
+| Blueprint version | 2.1.0 |
 | Status | Canonical product, architecture, governance and release contract |
-| Updated | 2026-10-17 |
+| Updated | 2026-10-18 |
 | Architecture family | AI-native, client-isolated evidence intelligence service |
 
 This blueprint defines what Market Research is, what a client installs, which guarantees the product
@@ -528,6 +528,51 @@ Commercial packaging states implementation fee, subscription/support fee, usage/
 included hosts and sources, customer modification rights and the support consequence of unapproved
 changes. Client content and credentials are never reused as a hidden product-improvement subsidy.
 
+### 15.1 Canonical maintenance resource contract
+
+Canonical maintenance is a bounded, resumable operation rather than an installation-sized
+transaction. One handler invocation has a 240-second wall-clock budget. Database statements have a
+10-second statement timeout and a 1-second lock timeout; a caller-side timeout alone is not
+sufficient. Each stage must preserve enough of the overall budget for later stages or defer cleanly.
+Expected backlog is successful continuation, not a job failure, and must be reported without an
+unbounded exact count.
+
+The approved per-invocation maxima are:
+
+| Operation | Maximum |
+|---|---:|
+| Expired or revoked sessions | 500 rows |
+| Newly discovered evidence-retention work | 100 evidence rows |
+| Evidence-retention work | 20 chunks |
+| Lightweight dependants in one retention chunk | 100 rows |
+| Artifacts in one artifact-retention chunk | 10 rows |
+| Expired evidence collections | 250 rows |
+| Decayed intelligence records | 250 rows |
+| Stale acquisition reconciliations | 100 jobs |
+| Acquisition dispatch attempts | 100 jobs |
+
+One serialized artifact payload is limited to 256 KiB (262,144 UTF-8 bytes) and 100 evidence
+references. Limits are enforced at the central persistence boundary, not merely by UI or host
+instructions. Existing oversize records must be inventoried before database constraints are
+validated.
+
+Source revocation is an O(1) control-plane transition: it records the revoked source state and its
+redacted audit event immediately, blocks new dispatch, evidence use and result persistence
+immediately, and returns `cleanupPending` while bounded durable cleanup proceeds. It must not scan or
+mutate every dependent row synchronously or promise exact immediate affected-row counts. Completion
+and dispatch recheck current source state.
+
+Every web or MCP artifact projection fails closed while cleanup is pending. Before returning copied
+artifact content, the application intersects its evidence basis with current expired or revoked
+evidence, applies the common redaction projection, and marks the basis stale or expired. This
+read-time protection is mandatory and does not replace persistent cleanup.
+
+The durable continuation marker, revocation state and supporting indexes are introduced only in an
+isolated additive forward migration under Roadmap R1A1b. The migration cannot remove or rewrite
+legacy schema, activate a source or ability, or add MCP functionality. The cleanup service objective
+and installation-specific index-build method remain owner/evidence decisions; this contract does
+not close R0B or authorize R1A2.
+
 ## 16. Capability and change governance
 
 ### 16.1 Release states
@@ -643,6 +688,8 @@ This proof does not require campaign lifecycle, Brand Lift or real-time monitori
 14. `last30days` and its legacy runtime/data path are scheduled for safe removal.
 15. Campaign lifecycle, Brand Lift, broad monitoring and additional abilities are deferred until the
     first credible proof passes and product evidence justifies them.
+16. Canonical maintenance follows the bounded R1A1b resource, artifact-projection and O(1)
+    revocation contract in section 15.1 before legacy code removal may begin.
 
 ## 21. Open decisions
 

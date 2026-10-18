@@ -2,7 +2,7 @@
 
 ## 1. Roadmap contract
 
-This roadmap implements `BLUEPRINT.md` version 2.0.0. It replaces the former platform-oriented
+This roadmap implements `BLUEPRINT.md` version 2.1.0. It replaces the former platform-oriented
 roadmap and is the only approved delivery sequence.
 
 The roadmap has two explicit jobs:
@@ -21,8 +21,9 @@ implementation journal.
 ## 2. Delivery rules
 
 1. Follow the explicit dependency table. Later product work cannot bypass an unmet dependency; the
-   only permitted overlap is R1A1 discovery/extraction after the repository baseline while the
-   external installation preflight remains open.
+   only permitted overlap is R1A1 discovery/extraction and, after its repository worker-extraction
+   evidence passes, the isolated R1A1b bounded-maintenance work while the external installation
+   preflight remains open.
 2. Keep legacy removal, schema destruction and new MCP functionality in separate commits and
    releases.
 3. Prefer reversible disable/park steps before destructive deletion.
@@ -43,7 +44,8 @@ implementation journal.
 | R0A | Scope lock, capability register and repository baseline | Blueprint v2 approved |
 | R0B | Installation inventory, recovery proof and owner acceptance | R0A; may use R1A1 inventory tooling |
 | R1A1 | Read-only discovery and neutral worker extraction | R0A |
-| R1A2 | `last30days` code and packaging removal | R0B + R1A1 |
+| R1A1b | Additive bounded canonical maintenance | R1A1 worker-extraction evidence + approved maintenance contract |
+| R1A2 | `last30days` code and packaging removal | R0B + R1A1 + R1A1b |
 | R1B | Forward legacy schema cleanup | R1A2 + disposition approval + migration recovery gate |
 | R2 | One active v1 capability; non-v1 product parked | R1B |
 | R3 | Remote MCP foundation and read-only context tool | R2 |
@@ -75,8 +77,9 @@ Every applicable work item includes:
 ## 5. R0 — Scope lock and safe baseline
 
 R0 has two gates. R0A is repository-verifiable. R0B needs installation/operator evidence. R1A1 may
-run after R0A because its read-only inventory tooling helps produce R0B evidence; R1A2 and R1B may
-not start while R0B is open.
+run after R0A because its read-only inventory tooling helps produce R0B evidence. R1A1b may run after
+the repository worker-extraction portion of R1A1 passes because it is isolated, additive hardening
+and does not dispose of legacy data. R1A2 and R1B may not start while R0B is open.
 
 ### Outcome
 
@@ -168,7 +171,7 @@ backup remain the recovery point for later phases.
 
 ## 6. R1 — Safe legacy removal
 
-R1 is deliberately separate from MCP work. It is delivered as three reviewable releases.
+R1 is deliberately separate from MCP work. It is delivered as four reviewable releases.
 
 ### R1A1 — Inventory and neutral worker extraction
 
@@ -219,6 +222,75 @@ the same legal-hold and incident rules as the source database.
 #### Rollback
 
 Revert the worker extraction. No schema or legacy row has changed.
+
+### R1A1b — Bounded canonical maintenance
+
+#### Outcome
+
+Canonical session cleanup, retention, source revocation, acquisition reconciliation and dispatch
+make bounded, resumable progress without weakening immediate source-policy enforcement or exposing
+copied content while durable cleanup is pending.
+
+#### Approved contract
+
+- 240 seconds overall per maintenance handler invocation;
+- 10 seconds per database statement and 1 second per lock wait, enforced by the database rather
+  than only by a caller-side race;
+- at most 500 sessions, 100 newly discovered evidence work items and 20 retention chunks per run;
+- at most 100 lightweight dependant rows or 10 artifacts per applicable retention chunk;
+- at most 250 collections and 250 intelligence records per run;
+- at most 100 stale acquisition reconciliations and 100 dispatch attempts per run;
+- at most 256 KiB (262,144 UTF-8 bytes) and 100 evidence references per serialized artifact;
+- O(1) source revocation that blocks new work/use immediately and returns `cleanupPending`; and
+- mandatory fail-closed artifact projection on every web and MCP DTO while durable cleanup is
+  incomplete.
+
+#### Work
+
+- add one purpose-built durable evidence-retention continuation table and only the indexes required
+  by the bounded selectors in an isolated forward migration;
+- do not rewrite migrations `0001`–`0018`, modify legacy rows/schema, remove code or introduce MCP
+  behavior in this release;
+- process evidence dependants through idempotent phases with durable progress and `SKIP LOCKED`;
+- make sessions, collections and intelligence self-advancing bounded batches with stable ordering;
+- reserve time for every maintenance stage, report `batchFull`/deferred stages without an exact
+  backlog count and treat expected continuation as success;
+- enforce artifact byte/reference limits at the central persistence service; inventory existing
+  oversize rows before validating database checks;
+- make source revocation update only source state and redacted audit synchronously; exclude revoked
+  sources from dispatch/use/persistence and move job, evidence and collection cleanup to bounded
+  maintenance;
+- add `cleanupPending` without presenting synchronous affected-row counts as complete; preserve a
+  compatibility path for existing callers until they consume the new semantics;
+- apply the common fail-closed redaction projection before any web or MCP artifact DTO is returned;
+- retain the canonical-maintenance kill switch and document additive deployment, rollback-window,
+  drain/forward-fix and installation-specific index-build controls; and
+- update capability evidence without promoting canonical maintenance to production support.
+
+#### Exit gate
+
+- exact-limit and one-over artifact persistence tests pass;
+- repeated and concurrent PostgreSQL runs drain over-limit session, evidence, dependent, artifact,
+  collection, intelligence, stale-job and dispatch backlogs without cross-client work, starvation or
+  unbounded counts;
+- transaction-failure and restart tests prove durable idempotent continuation;
+- revocation/use and revocation/completion races remain fail-closed;
+- artifact output is redacted before persistent cleanup completes;
+- database-enforced statement/lock timeouts and the 240-second coordinator deadline are tested;
+- the real PgBoss lifecycle reports bounded backlog, resumes it on a later job and still proves
+  canonical acquisition, synthesis, cleanup and graceful drain with no legacy/monitoring queue; and
+- migration, rollback, capability register and operations documentation agree.
+
+The cleanup service objective, installation sizing/index-build method, owner acceptance and all R0B
+installation/recovery evidence remain open external gates. Passing R1A1b does not complete R0B or
+authorize R1A2 by itself.
+
+#### Rollback
+
+Disable canonical maintenance, drain or explicitly preserve pending work, and revert the application
+release within its documented writer-compatibility window. The additive table, nullable revocation
+state and indexes may remain inert. Do not down-migrate during an incident; use a forward fix if the
+rollback window has closed.
 
 ### R1A2 — Legacy code and packaging removal
 
@@ -690,14 +762,15 @@ verified with owner, scope, date and durable reference.
 Use one reviewable commit and green gate per boundary:
 
 1. Blueprint, roadmap and baseline manifests;
-2. legacy code/runtime detachment;
-3. legacy schema cleanup migration;
-4. v1 activation and capability parking;
-5. MCP application/auth/context contract;
-6. live sources and competitor/positioning research;
-7. complete review toolset;
-8. second-host portability;
-9. service operations and pilot proof.
+2. bounded canonical maintenance additive migration and runtime;
+3. legacy code/runtime detachment;
+4. legacy schema cleanup migration;
+5. v1 activation and capability parking;
+6. MCP application/auth/context contract;
+7. live sources and competitor/positioning research;
+8. complete review toolset;
+9. second-host portability;
+10. service operations and pilot proof.
 
 Never combine legacy destruction with MCP functionality in the same commit or release. Never push a
 known-red build or a half-applied destructive migration. Tag the verified pre-trim baseline, the
@@ -707,7 +780,8 @@ schema-cleanup release and every production release.
 
 1. Approve Blueprint v2 and this roadmap.
 2. Commit the canonical documentation reset.
-3. Complete R0A; then run R1A1 discovery/extraction while closing R0B. Do not start R1A2 until both
-   R0B and R1A1 pass.
+3. Complete R0A; then run R1A1 discovery/extraction and, after its repository worker-extraction
+   evidence passes, R1A1b bounded-maintenance hardening while closing R0B. Do not start R1A2 until
+   R0B, R1A1 and R1A1b pass.
 4. Name primary/secondary hosts and decision owners.
 5. Produce the legacy data inventory and pre-trim recovery evidence.

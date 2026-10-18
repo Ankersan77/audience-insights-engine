@@ -2,8 +2,8 @@
 
 This runbook produces one read-only, aggregate legacy inventory artifact for one known
 single-tenant installation. It does **not** complete R0B, approve a legacy-data disposition or
-authorize R1A2. R1A2 remains blocked until every installation and every separate R0B gate has
-accepted evidence.
+authorize R1A2. R1A2 remains blocked until R1A1b passes and every installation and every separate
+R0B gate has accepted evidence.
 
 ## Preconditions
 
@@ -161,5 +161,5 @@ The inventory portion of R0B is complete only when:
 R0B still additionally requires accountable owner-role acceptance with timestamps and durable
 evidence, a representative pre-`0018` upgrade through `0018` with legacy rows, and a timed,
 evidenced PostgreSQL-native backup restore. Completion of this runbook alone therefore neither
-completes R0B nor authorizes R1A2. R1A2 also requires every open item in
+completes R0B nor authorizes R1A2. R1A2 also requires R1A1b to pass and every open item in
 [the R1A1 dependency audit](r1a1-dependency-audit.md) to be complete and owner-accepted.

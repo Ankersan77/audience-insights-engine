@@ -9,11 +9,11 @@
   },
   "blueprint": {
     "path": "BLUEPRINT.md",
-    "version": "2.0.0"
+    "version": "2.1.0"
   },
   "roadmap": {
     "path": "ROADMAP.md",
-    "blueprintVersion": "2.0.0"
+    "blueprintVersion": "2.1.0"
   },
   "capabilityRegister": {
     "path": "product-capabilities.json",

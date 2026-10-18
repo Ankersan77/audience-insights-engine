@@ -421,7 +421,7 @@ sameMembers("decision owners/assignments", [...new Set(decisionItems.map((item) 
 for (const [index, decision] of decisionItems.entries()) {
   exactKeys(`decisions[${index}]`, decision, ["id", "question", "status", "proposal", "owner", "requiredBefore", "blocker", "decisionEvidence"]);
   if (!['proposed', 'needs_context', 'decided', 'superseded'].includes(decision.status)) fail(`${decision.id} has unknown status.`);
-  if (!/^R[0-7][AB]?$/.test(decision.requiredBefore ?? "")) fail(`${decision.id} has invalid requiredBefore gate.`);
+  if (!/^(?:R0[AB]|R1A1|R1A1b|R1A2|R1B|R[2-7])$/.test(decision.requiredBefore ?? "")) fail(`${decision.id} has invalid requiredBefore gate.`);
   if (!decision.owner || !decision.blocker) fail(`${decision.id} needs an owner role and explicit blocker.`);
   if (decision.status === "proposed" && !decision.proposal) fail(`${decision.id} proposal status requires a proposal.`);
   if (decision.status === "decided") {

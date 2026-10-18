@@ -218,3 +218,4 @@ exist. An unknown installation, consumer or process is a failing state.
 that cluster, but per-installation catalogs, queue/schedule state, deployment packaging, external
 consumer/traffic evidence, secret retirement, image proof, R0B recovery and accountable acceptance
 remain open. This document may support those decisions; it is not approval to start R1A2.
+Roadmap R1A1b must also pass independently before R1A2 may start.

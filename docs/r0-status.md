@@ -1,7 +1,7 @@
 # R0 scope-lock and baseline status
 
-Updated: 2026-10-17  
-Blueprint: 2.0.0  
+Updated: 2026-10-18
+Blueprint: 2.1.0
 Status: **R0A passed; R0B open**
 
 R0 now has machine-readable product governance:
@@ -18,7 +18,8 @@ R0 now has machine-readable product governance:
 
 ## What the baseline proves
 
-- Blueprint and Roadmap agree on version 2.0.0.
+- The current Blueprint, Roadmap, compatibility manifest and capability register agree on version
+  2.1.0. The frozen pre-trim baseline/tag remains unchanged and does not claim to evidence R1A1b.
 - The database migration head is `0018_large_nick_fury`; Drizzle journal format `7` is not presented
   as the database version.
 - Existing deterministic verification is green, including the empty-database migration and
@@ -50,9 +51,10 @@ read-only inventory command documented in [the R1A1 legacy inventory runbook](r1
 The repository portion of the separate dependency review is recorded in
 [the R1A1 dependency audit](r1a1-dependency-audit.md); its live database,
 queue/schedule, deployment, external-consumer, traffic, secret-retirement and production-image
-checks remain open. These repository artifacts do not complete R1A1 for real installations. R1A2
-waits for those checks, the complete installation inventory, recovery proof and owner acceptance.
-Destructive schema
+checks remain open. These repository artifacts do not complete R1A1 for real installations. The
+R1A1b bounded-maintenance contract is approved in [its decision record](r1a1b-bounded-maintenance-decision.md),
+but its additive migration and runtime evidence are not implemented. R1A2 waits for R1A1b plus those
+checks, the complete installation inventory, recovery proof and owner acceptance. Destructive schema
 work in R1B additionally requires the `legacy-data-disposition` decision and installation-specific
 migration recovery controls. R3 additionally requires item 5. A later R1B test must separately prove
 the new contraction migration from `0018`.

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "product": "market-research",
-  "updated": "2026-10-17",
+  "updated": "2026-10-18",
   "statusRule": "A proposal is not an approval. Open decisions remain blockers at their requiredBefore gate.",
   "ownerAssignments": [
     { "role": "commercial-owner", "status": "pending", "acceptedBy": null, "acceptedAt": null, "acceptanceEvidence": null },
@@ -154,6 +154,21 @@
       "requiredBefore": "R1B",
       "blocker": "Installation inventory, row counts, legal holds, export checksums and restore proof are missing.",
       "decisionEvidence": null
+    },
+    {
+      "id": "canonical-maintenance-bounds",
+      "question": "Which resource, artifact and revocation boundaries govern canonical maintenance before legacy removal?",
+      "status": "decided",
+      "proposal": "Use the R1A1b contract: 240-second handler, 10-second statements, 1-second locks, fixed row/chunk limits, 256-KiB/100-reference artifacts, O(1) revocation with cleanupPending and mandatory fail-closed artifact projection.",
+      "owner": "operations-owner",
+      "requiredBefore": "R1A1b",
+      "blocker": "The decision is resolved, but R1A1b remains open until its isolated migration, runtime behavior, projection, concurrency tests and rollback evidence pass; cleanup SLO and installation-specific index deployment remain separate open decisions.",
+      "decisionEvidence": {
+        "ref": "docs/r1a1b-bounded-maintenance-decision.md",
+        "digest": "sha256:421a144974536c97bd949a95b27a5f6fdc0df6f4cb41e3bac0b909acd2a52fd7",
+        "verifiedAt": "2026-10-17T22:00:00.000Z",
+        "expiresAt": "2027-10-18T00:00:00.000Z"
+      }
     }
   ]
 }

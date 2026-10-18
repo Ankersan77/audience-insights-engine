@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "product": "market-research",
-  "blueprintVersion": "2.0.0",
-  "updated": "2026-10-17",
+  "blueprintVersion": "2.1.0",
+  "updated": "2026-10-18",
   "classifications": ["v1", "supporting", "parked", "remove"],
   "releaseStates": ["designed", "implemented", "externally_validated", "production_supported", "deprecated", "removed"],
   "capabilities": [
@@ -209,11 +209,11 @@
       "dependencies": ["canonical-worker-runtime", "retention-resilience", "source-acquisition-budget"],
       "humanGates": ["operations-review"],
       "evaluationSuite": ["src/workers/canonicalMaintenance.test.ts", "src/workers/canonicalQueue.test.ts", "integration/canonical-worker-runtime-cases.ts"],
-      "evidenceReferences": [{ "kind": "automated_test", "status": "verified", "ref": "integration/canonical-worker-runtime-cases.ts" }],
+      "evidenceReferences": [{ "kind": "automated_test", "status": "verified", "ref": "integration/canonical-worker-runtime-cases.ts" }, { "kind": "document", "status": "verified", "ref": "docs/r1a1b-bounded-maintenance-decision.md" }],
       "supportedHosts": [],
       "operationalRequirements": ["UTC schedule", "idempotency", "bounded catch-up", "monitoring-independent kill switch"],
       "removalCondition": "Never remove while canonical retention or dispatch needs scheduling.",
-      "limitations": ["Production operation still needs installation-specific runtime and restart evidence.", "Session cleanup and high-fanout artifact retention still need a schema-backed bounded continuation marker before this scheduler can be considered production-ready."],
+      "limitations": ["Production operation still needs installation-specific runtime and restart evidence.", "The R1A1b bounded-maintenance contract is approved but its additive schema, runtime, fail-closed projection and verification have not yet been implemented."],
       "inventory": { "paths": ["src/workers/canonicalMaintenance.ts", "src/db/queries/retention.ts", "src/db/queries/auth_sessions.ts", "src/workers/acquisitionQueue.ts"], "routes": [], "tables": ["auth_session", "canonical_evidence", "source_acquisition_job"], "queues": ["market-research-canonical-maintenance", "market-research-source-acquisition"] }
     },
     {
@@ -507,7 +507,7 @@
       "supportedHosts": [],
       "operationalRequirements": ["retention", "bounded retry/circuit policy", "health", "content-safe telemetry"],
       "removalCondition": "Never remove; prove backup/restore and service objectives before production support.",
-      "limitations": ["Circuit-breaker primitives are not wired into every provider path; the independent maintenance scheduler, production backup/restore evidence and service objectives do not exist."],
+      "limitations": ["Circuit-breaker primitives are not wired into every provider path; the approved R1A1b bounded-retention design is not implemented, and production backup/restore evidence and service objectives do not exist."],
       "inventory": { "paths": ["src/operations", "src/db/queries/retention.ts", "app/healthz/route.ts"], "routes": ["app/healthz/route.ts"], "tables": ["auth_session", "canonical_evidence", "evidence_collection", "quantitative_observation", "qualitative_theme", "citation", "research_artifact", "intelligence_record", "governance_audit"], "queues": [] }
     },
     {
